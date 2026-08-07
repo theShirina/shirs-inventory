@@ -1,0 +1,11 @@
+<Bindings>
+  <Binding name="SHIRSINVENTORY_TOGGLE" header="SHIRSINVENTORY">
+    ShirsInventory_BindingToggle();
+  </Binding>
+  <Binding name="SHIRSINVENTORY_SORT">
+    ShirsInventory_BindingSort();
+  </Binding>
+  <Binding name="SHIRSINVENTORY_SELL_JUNK">
+    ShirsInventory_BindingSellJunk();
+  </Binding>
+</Bindings>

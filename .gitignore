@@ -1,0 +1,12 @@
+# Local client/API reference extracts; do not redistribute.
+references/
+
+# Runtime and editor artifacts.
+*.log
+*.tmp
+*.bak
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+dist/

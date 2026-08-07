@@ -1,0 +1,10 @@
+local uiPath, settingsPath = arg[1], arg[2]
+local ui = assert(io.open(uiPath, "rb")):read("*a")
+local settings = assert(io.open(settingsPath, "rb")):read("*a")
+assert(string.find(ui, 'RegisterEvent("PLAYER_LOGIN")', 1, true), "bag conflict scan is not deferred to PLAYER_LOGIN")
+assert(string.find(settings, "Choose Your Bag Inventory", 1, true), "conflict chooser title is missing")
+assert(string.find(settings, "Use Shir's Bag UI", 1, true), "Shir provider button is missing")
+assert(string.find(settings, "Keep Other Bag Addon", 1, true), "other provider button is missing")
+assert(string.find(ui, 'command == "bagui"', 1, true), "/si bagui entry point is missing")
+assert(string.find(settings, "Choose Bag UI...", 1, true), "Settings re-entry button is missing")
+print("BAG_ADDON_CONFLICT_UI_TEST=PASS")

@@ -1,0 +1,15 @@
+## Interface: 11200
+## Title: Shir's Inventory
+## Notes: One combined bag UI with sorting and manual junk selling
+## Author: Stefán
+## Version: 0.3.24
+## SavedVariablesPerCharacter: ShirsInventoryDB
+## SavedVariables: ShirsInventoryAccountDB
+ShirsInventoryCore.lua
+ShirsInventorySortEngine.lua
+ShirsInventorySorter.lua
+ShirsInventoryJunk.lua
+ShirsInventoryUI.lua
+ShirsInventorySettings.lua
+ShirsInventoryAccount.lua
+Bindings.lua

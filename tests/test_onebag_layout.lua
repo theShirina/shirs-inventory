@@ -1,0 +1,11 @@
+local uiPath = arg[1]
+assert(loadfile(uiPath))()
+assert(type(ShirsInventory_GetOneBagLayout) == "function", "OneBag layout model is missing")
+local layout = ShirsInventory_GetOneBagLayout()
+assert(layout.singleInventory, "adapted layout must remain one flat inventory")
+assert(layout.freeSlots == "close-left", "free slots must sit immediately left of the close button")
+assert(layout.headerBags == "second-row-left", "bags must sit below the inventory name")
+assert(layout.headerActions == "second-row-right", "actions must align to the inventory's right edge")
+assert(layout.footerMoney == "right", "money must live at the right of the footer")
+assert(layout.keepShirsSkin, "Bagshui structure must retain Shir's backdrop and colors")
+print("ONEBAG_LAYOUT_TEST=PASS")
