@@ -77,6 +77,8 @@ function ShirsInventory_SortEnginePlan(slots, direction)
           sortKey = value.sortKey or {},
           class = value.class,
           edgeAnchor = value.edgeAnchor and true or false,
+          edgeRank = value.edgeRank,
+          oppositeEdgeAnchor = value.oppositeEdgeAnchor and true or false,
         }
         table.insert(itemKeys, groupKey)
       end
@@ -89,16 +91,31 @@ function ShirsInventory_SortEnginePlan(slots, direction)
   end)
 
   local edgeKeys = {}
+  local oppositeEdgeKeys = {}
   local regularKeys = {}
   local orderedKeyIndex
   for orderedKeyIndex = 1, table.getn(itemKeys) do
     local orderedKey = itemKeys[orderedKeyIndex]
     if itemsByKey[orderedKey].edgeAnchor then
       table.insert(edgeKeys, orderedKey)
+    elseif itemsByKey[orderedKey].oppositeEdgeAnchor then
+      table.insert(oppositeEdgeKeys, orderedKey)
     else
       table.insert(regularKeys, orderedKey)
     end
   end
+
+  table.sort(edgeKeys, function(leftKey, rightKey)
+    local left = itemsByKey[leftKey]
+    local right = itemsByKey[rightKey]
+    local leftRank = left.edgeRank or 999
+    local rightRank = right.edgeRank or 999
+    if leftRank ~= rightRank then
+      if direction == "bottom" then return leftRank > rightRank end
+      return leftRank < rightRank
+    end
+    return ItemLess(left, right)
+  end)
 
   local function assign(slotNumber, item)
     local remaining = totals[item.key] or 0
@@ -128,18 +145,18 @@ function ShirsInventory_SortEnginePlan(slots, direction)
     end
   end
 
-  local stackCount = 0
-  local keyIndex
-  for keyIndex = 1, table.getn(itemKeys) do
-    local item = itemsByKey[itemKeys[keyIndex]]
-    local remaining = totals[item.key] or 0
-    if remaining > 0 then stackCount = stackCount + math.ceil(remaining / item.maxStack) end
+  local function countStacks(keys)
+    local count = 0
+    local keyIndex
+    for keyIndex = 1, table.getn(keys) do
+      local item = itemsByKey[keys[keyIndex]]
+      local remaining = totals[item.key] or 0
+      if remaining > 0 then count = count + math.ceil(remaining / item.maxStack) end
+    end
+    return count
   end
 
-  local first = 1
-  if direction == "bottom" then first = table.getn(normalSlots) - stackCount + 1 end
-  if first < 1 then first = 1 end
-  local normalIndex = first
+  local normalIndex = 1
 
   local function assignKeyList(keys)
     local listIndex
@@ -153,11 +170,17 @@ function ShirsInventory_SortEnginePlan(slots, direction)
   end
 
   if direction == "bottom" then
+    normalIndex = table.getn(normalSlots) - countStacks(oppositeEdgeKeys) -
+      countStacks(regularKeys) - countStacks(edgeKeys) + 1
+    if normalIndex < 1 then normalIndex = 1 end
+    assignKeyList(oppositeEdgeKeys)
     assignKeyList(regularKeys)
     assignKeyList(edgeKeys)
   else
+    normalIndex = 1
     assignKeyList(edgeKeys)
     assignKeyList(regularKeys)
+    assignKeyList(oppositeEdgeKeys)
   end
 
   return plan

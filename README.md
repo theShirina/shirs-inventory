@@ -2,11 +2,14 @@
 
 A standalone bag addon made and tested for Microbot's WoW 1.12.1 client. It should also work on other WoW 1.12.x clients and private servers, but those have not been tested.
 
+Current release: **0.3.25** — keeps profession tools beside the Hearthstone, handles specialty bags from native metadata, restores the merchant sell cursor, and can group quest-bordered items at the opposite end of the occupied sorted block.
+
 ## What it does
 
 - Combines the Backpack and equipped bags into one continuous grid.
 - Sorts bags and the bank by item type or rarity.
 - Sorts from the top or bottom and merges partial stacks.
+- Keeps quest-bordered items at the opposite end of the occupied sorted block by default: last when sorting from the top, or first when sorting from the bottom. This can be disabled in settings.
 - Keeps specialty-bag items in compatible bags using the client's item and bag metadata.
 - Shows quest and rarity borders, cooldowns, stack counts, money, and normal item tooltips.
 - Marks items as junk and sells gray or marked junk through a guarded merchant queue.

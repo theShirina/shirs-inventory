@@ -5,6 +5,15 @@ MainMenuBarBackpackButton = { name = "MainMenuBarBackpackButton" }
 assert(loadfile(corePath))()
 assert(loadfile(uiPath))()
 
+assert(type(ShirsInventory_GetInventoryTitle) == "function",
+  "player inventory title helper is missing")
+assert(ShirsInventory_GetInventoryTitle("Shir") == "Shir's Inventory",
+  "inventory title does not use the player name")
+local titleFrame = { title = {} }
+function titleFrame.title:SetText(text) self.text = text end
+assert(ShirsInventory_RefreshInventoryTitle(titleFrame, "Shir") == "Shir's Inventory" and
+  titleFrame.title.text == "Shir's Inventory", "inventory frame title was not refreshed")
+
 local frame = { points = {} }
 function frame:ClearAllPoints() self.cleared = true end
 function frame:SetPoint(point, relativeTo, relativePoint, x, y)

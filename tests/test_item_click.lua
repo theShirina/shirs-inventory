@@ -14,6 +14,10 @@ function PickupContainerItem() picked = picked + 1 end
 function CursorHasItem() return false end
 function ClearCursor() end
 MerchantFrame = { selectedTab = 1, IsShown = function() return false end }
+local sellCursorBag, sellCursorSlot, inspectCursor, resetCursor
+function ShowContainerSellCursor(bag, slot) sellCursorBag, sellCursorSlot = bag, slot end
+function ShowInspectCursor() inspectCursor = true end
+function ResetCursor() resetCursor = true end
 
 assert(loadfile(corePath))()
 assert(loadfile(junkPath))()
@@ -36,5 +40,19 @@ assert(used == 1, "right-click should not sell while buyback is selected")
 MerchantFrame.IsShown = function() return false end
 ShirsInventory_HandleItemClick(button, "LeftButton")
 assert(picked == 1, "plain left-click should preserve native pickup behavior")
+
+MerchantFrame.IsShown = function() return true end
+MerchantFrame.selectedTab = 1
+ShirsInventory_UpdateItemCursor(button, false, false)
+assert(sellCursorBag == 0 and sellCursorSlot == 1, "merchant hover should show the native sell cursor")
+
+sellCursorBag, sellCursorSlot = nil, nil
+MerchantFrame.selectedTab = 2
+ShirsInventory_UpdateItemCursor(button, false, true)
+assert(not sellCursorBag and inspectCursor, "buyback hover should not show a sell cursor")
+
+inspectCursor, resetCursor = nil, nil
+ShirsInventory_UpdateItemCursor(button, false, false)
+assert(resetCursor, "ordinary item hover should reset the cursor when no special cursor applies")
 
 print("ITEM_CLICK_TEST=PASS")

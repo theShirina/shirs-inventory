@@ -15,6 +15,21 @@ end
 if ShirsInventory_GetDirection() ~= "bottom" then
   error("default direction must be bottom")
 end
+if type(ShirsInventory_GetQuestItemsOppositeEdge) ~= "function" or
+  type(ShirsInventory_SetQuestItemsOppositeEdge) ~= "function" then
+  error("quest opposite-edge setting API is missing")
+end
+if not ShirsInventory_GetQuestItemsOppositeEdge() then
+  error("quest items must default to the opposite edge")
+end
+if ShirsInventory_SetQuestItemsOppositeEdge(false) ~= false or
+  ShirsInventory_GetQuestItemsOppositeEdge() then
+  error("quest opposite-edge setting could not be disabled")
+end
+if ShirsInventory_SetQuestItemsOppositeEdge(true) ~= true or
+  not ShirsInventory_GetQuestItemsOppositeEdge() then
+  error("quest opposite-edge setting could not be re-enabled")
+end
 if ShirsInventory_SetDirection("top") ~= true or ShirsInventory_GetDirection() ~= "top" then
   error("top direction was not persisted")
 end

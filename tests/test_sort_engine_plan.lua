@@ -1,8 +1,17 @@
 local enginePath = arg[1]
 assert(loadfile(enginePath))()
 
-local function item(key, count, maxStack, sortKey, class)
-  return { key = key, count = count, maxStack = maxStack, sortKey = sortKey, class = class }
+local function item(key, count, maxStack, sortKey, class, edgeRank, oppositeEdge)
+  return {
+    key = key,
+    count = count,
+    maxStack = maxStack,
+    sortKey = sortKey,
+    class = class,
+    edgeAnchor = edgeRank and true or false,
+    edgeRank = edgeRank,
+    oppositeEdgeAnchor = oppositeEdge and true or false,
+  }
 end
 
 local function slot(container, position, class, value)
@@ -64,6 +73,11 @@ assert(target(planned, 4) == "arrow:200", "ammo was not kept in its specialty sl
 assert(target(planned, 5) == "empty", "ammo slot received an incompatible item")
 assert(target(planned, 1) == "stone:3", "normal item did not remain available to normal slots")
 assert(target(planned, 6) == "empty", "specialty items leaked into normal slots while specialty capacity remained")
+local plannedBottom = ShirsInventory_SortEnginePlan(specialty, "bottom")
+assert(target(plannedBottom, 4) == "arrow:200" and target(plannedBottom, 5) == "empty",
+  "bottom sort moved arrows out of their specialty bag")
+assert(target(plannedBottom, 6) == "stone:3" and target(plannedBottom, 1) == "empty",
+  "bottom sort tried to place a normal item in a specialty bag")
 
 -- Stackable copies can have different instance IDs while the client still
 -- accepts them in one stack. The shared merge key must drive consolidation.
@@ -100,5 +114,57 @@ assert(target(ignoredBottom, 1) == "gray-junk:1", "bottom moved ignored gray jun
 assert(target(ignoredBottom, 2) == "empty", "bottom did not leave the leading free slot empty")
 assert(target(ignoredBottom, 3) == "marked-junk:1", "bottom moved manually marked junk")
 assert(target(ignoredBottom, 4) == "A:1" and target(ignoredBottom, 5) == "B:1", "bottom free-slot order is wrong")
+
+-- Edge ranks keep profession tools next to the Hearthstone while changing the
+-- group order at the selected edge: Hearthstone then tools for Top, tools then
+-- Hearthstone for Bottom.
+local edgeAnchors = {
+  slot(0, 1, nil, item("ordinary", 1, 1, {1}, nil, nil)),
+  slot(0, 2, nil, item("salt-shaker", 1, 1, {4}, nil, 2)),
+  slot(0, 3, nil, item("hearthstone", 1, 1, {3}, nil, 1)),
+  slot(0, 4, nil, item("runed-rod", 1, 1, {2}, nil, 2)),
+  slot(0, 5, nil, nil),
+}
+local edgeTop = ShirsInventory_SortEnginePlan(edgeAnchors, "top")
+assert(target(edgeTop, 1) == "hearthstone:1", "Top did not put Hearthstone first")
+assert(target(edgeTop, 2) == "runed-rod:1" and target(edgeTop, 3) == "salt-shaker:1",
+  "Top did not place profession tools directly after Hearthstone")
+assert(target(edgeTop, 4) == "ordinary:1" and target(edgeTop, 5) == "empty",
+  "Top edge anchors displaced the normal window incorrectly")
+local edgeBottom = ShirsInventory_SortEnginePlan(edgeAnchors, "bottom")
+assert(target(edgeBottom, 1) == "empty" and target(edgeBottom, 2) == "ordinary:1",
+  "Bottom did not preserve the leading empty slot and normal item")
+assert(target(edgeBottom, 3) == "runed-rod:1" and target(edgeBottom, 4) == "salt-shaker:1",
+  "Bottom did not place profession tools directly before Hearthstone")
+assert(target(edgeBottom, 5) == "hearthstone:1", "Bottom did not put Hearthstone last")
+
+-- Quest items sit at the opposite end of the occupied sorted block, not at
+-- the opposite physical edge of the inventory.
+local oppositeAnchors = {
+  slot(0, 1, nil, item("ordinary-B", 1, 1, {2}, nil, nil, false)),
+  slot(0, 2, nil, item("quest-D", 1, 1, {4}, nil, nil, true)),
+  slot(0, 3, nil, item("hearthstone", 1, 1, {0}, nil, 1, false)),
+  slot(0, 4, nil, item("ordinary-A", 1, 1, {1}, nil, nil, false)),
+  slot(0, 5, nil, item("quest-C", 1, 1, {3}, nil, nil, true)),
+  slot(0, 6, nil, item("profession-tool", 1, 1, {5}, nil, 2, false)),
+  slot(0, 7, nil, nil),
+}
+local oppositeTop = ShirsInventory_SortEnginePlan(oppositeAnchors, "top")
+assert(target(oppositeTop, 1) == "hearthstone:1" and target(oppositeTop, 2) == "profession-tool:1",
+  "Top selected-edge anchors moved away from the top")
+assert(target(oppositeTop, 3) == "ordinary-A:1" and target(oppositeTop, 4) == "ordinary-B:1" and
+  target(oppositeTop, 5) == "quest-C:1" and target(oppositeTop, 6) == "quest-D:1",
+  "Top did not put quest items directly after the ordinary sorted items")
+assert(target(oppositeTop, 7) == "empty",
+  "Top placed empty slots inside the occupied sorted block")
+local oppositeBottom = ShirsInventory_SortEnginePlan(oppositeAnchors, "bottom")
+assert(target(oppositeBottom, 1) == "empty",
+  "Bottom placed quest items at the physical top instead of bottom-aligning the sorted block")
+assert(target(oppositeBottom, 2) == "quest-C:1" and target(oppositeBottom, 3) == "quest-D:1",
+  "Bottom did not put quest items first inside the occupied sorted block")
+assert(target(oppositeBottom, 4) == "ordinary-A:1" and target(oppositeBottom, 5) == "ordinary-B:1",
+  "Bottom did not place ordinary items directly after quest items")
+assert(target(oppositeBottom, 6) == "profession-tool:1" and target(oppositeBottom, 7) == "hearthstone:1",
+  "Bottom selected-edge anchors moved away from the bottom")
 
 print("SORT_ENGINE_PLAN_TEST=PASS")

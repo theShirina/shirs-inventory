@@ -73,6 +73,9 @@ local function ShirsInventory_EnsureDB()
   if ShirsInventoryDB.useCoinIcons == nil then
     ShirsInventoryDB.useCoinIcons = true
   end
+  if ShirsInventoryDB.questItemsOppositeEdge == nil then
+    ShirsInventoryDB.questItemsOppositeEdge = true
+  end
   return ShirsInventoryDB
 end
 
@@ -416,6 +419,15 @@ end
 function ShirsInventory_SetIgnoreJunkSorting(enabled)
   ShirsInventory_EnsureDB().ignoreJunkSorting = enabled and true or false
   return true
+end
+
+function ShirsInventory_GetQuestItemsOppositeEdge()
+  return ShirsInventory_EnsureDB().questItemsOppositeEdge and true or false
+end
+
+function ShirsInventory_SetQuestItemsOppositeEdge(enabled)
+  ShirsInventory_EnsureDB().questItemsOppositeEdge = enabled and true or false
+  return ShirsInventory_GetQuestItemsOppositeEdge()
 end
 
 function ShirsInventory_GetSortDelay()

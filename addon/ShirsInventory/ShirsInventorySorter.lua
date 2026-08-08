@@ -117,18 +117,58 @@ function ShirsInventory_GetSpecialtyBagClass(bagName, itemSubType)
   return nil
 end
 
-local function SpecialtyClassForContainer(container)
+function ShirsInventory_GetSpecialtyClassForContainer(container)
   if container == 0 or container == BANK_CONTAINER or type(GetBagName) ~= "function" then return nil end
   local bagName = GetBagName(container)
   if not bagName then return nil end
-  local info = {GetItemInfo(bagName)}
+  local itemQuery = bagName
+  if type(ContainerIDToInventoryID) == "function" and type(GetInventoryItemLink) == "function" then
+    local inventoryID = ContainerIDToInventoryID(container)
+    local equippedLink = inventoryID and GetInventoryItemLink("player", inventoryID) or nil
+    local equippedItemID = equippedLink and ShirsInventory_GetItemId(equippedLink) or nil
+    if equippedItemID then itemQuery = equippedItemID end
+  end
+  local info = {GetItemInfo(itemQuery)}
   local itemSubType = type(info[5]) == "string" and info[6] or info[7]
   return ShirsInventory_GetSpecialtyBagClass(bagName, itemSubType)
 end
 
-local function FixedRank(itemID)
+local professionToolIDs = {
+  [2901] = true,  -- Mining Pick
+  [4471] = true,  -- Flint and Tinder
+  [5956] = true,  -- Blacksmith Hammer
+  [6218] = true,  -- Runed Copper Rod
+  [6219] = true,  -- Arclight Spanner
+  [6339] = true,  -- Runed Silver Rod
+  [7005] = true,  -- Skinning Knife
+  [9149] = true,  -- Philosopher's Stone
+  [10498] = true, -- Gyromatic Micro-Adjustor
+  [11130] = true, -- Runed Golden Rod
+  [11145] = true, -- Runed Truesilver Rod
+  [15846] = true, -- Salt Shaker
+  [16207] = true, -- Runed Arcanite Rod
+}
+
+function ShirsInventory_GetEdgeAnchorRank(itemID, itemName, itemType, itemSubType)
   if itemID == 6948 then return 1 end
+  if professionToolIDs[itemID] or itemID == 19727 then return 2 end
+  local name = string.lower(itemName or "")
+  local subType = string.lower(itemSubType or "")
+  if itemType == AUCTION_CLASSES[1] then
+    if string.find(subType, "fishing pole", 1, true) or
+      string.find(name, "fishing pole", 1, true) or
+      string.find(name, "fishing rod", 1, true) or
+      string.find(name, "mining pick", 1, true) then
+      return 2
+    end
+  end
   return nil
+end
+
+function ShirsInventory_IsQuestBorderItem(itemType, quality)
+  local questType = itemType == "Quest" or (ITEM_CLASS_QUEST and itemType == ITEM_CLASS_QUEST)
+  if not questType then return false end
+  return not (type(quality) == "number" and quality >= 2)
 end
 
 local function ReadItem(container, position, count)
@@ -159,12 +199,14 @@ local function ReadItem(container, position, count)
   end
   if quality == nil or itemType == nil or maxStack == nil then return nil, "item-info" end
   local charges, usable, soulbound, quest, conjured = TooltipFacts(container, position)
+  local questBorderItem = ShirsInventory_IsQuestBorderItem(itemType, quality)
   local material = ShirsInventory_GetMaterialCategory(itemID, itemType, itemSubType)
   local specialtyClass = ShirsInventory_GetSpecialtyItemClass(itemInfo[1], itemType, itemSubType, material)
   local isConsumable = (usable and itemType ~= AUCTION_CLASSES[1] and itemType ~= AUCTION_CLASSES[2] and itemType ~= AUCTION_CLASSES[8]) or itemType == AUCTION_CLASSES[4]
+  local edgeRank = ShirsInventory_GetEdgeAnchorRank(itemID, itemInfo[1], itemType, itemSubType)
   local categoryRank = ShirsInventory_GetPrimaryCategoryRank(
-    FixedRank(itemID), quality, specialtyClass == "soul", conjured,
-    itemType == AUCTION_CLASSES[9], quest, material, soulbound, isConsumable
+    edgeRank, quality, specialtyClass == "soul", conjured,
+    itemType == AUCTION_CLASSES[9], questBorderItem, material, soulbound, isConsumable
   )
   local sortKey = ShirsInventory_BuildGeneralSortKey(
     ShirsInventory_GetSortMode(), quality, categoryRank,
@@ -195,7 +237,9 @@ local function ReadItem(container, position, count)
     maxStack = stackSize,
     sortKey = sortKey,
     class = specialtyClass,
-    edgeAnchor = itemID == 6948,
+    edgeAnchor = edgeRank and true or false,
+    edgeRank = edgeRank,
+    oppositeEdgeAnchor = questBorderItem and ShirsInventory_GetQuestItemsOppositeEdge() or false,
     ignoreSort = ignoreSort and true or false,
   }
 end
@@ -205,7 +249,7 @@ local function ScanSlots()
   local containerIndex
   for containerIndex = 1, table.getn(activeContainers) do
     local container = activeContainers[containerIndex]
-    local containerClass = SpecialtyClassForContainer(container)
+    local containerClass = ShirsInventory_GetSpecialtyClassForContainer(container)
     local position
     for position = 1, GetContainerNumSlots(container) do
       local texture, count, locked = GetContainerItemInfo(container, position)

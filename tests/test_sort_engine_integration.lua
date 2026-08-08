@@ -67,6 +67,7 @@ function GetContainerItemLink(container, position)
   return "|cffffffff|Hitem:" .. value.id .. ":0:0:0|h[item]|h|r"
 end
 function GetItemInfo(itemID)
+  if type(itemID) ~= "number" then return nil end
   if itemID == 400 then
     return "Gray Junk", "link", 0, 1, "Miscellaneous", "Junk", 1, "", "texture"
   end
@@ -92,7 +93,16 @@ function GetItemInfo(itemID)
   end
   return nil
 end
-function GetBagName() return nil end
+local equippedBagLink
+function GetBagName(container)
+  if container == 1 and equippedBagLink then return "Ribbly's Quiver" end
+  return nil
+end
+function ContainerIDToInventoryID(container) return 19 + container end
+function GetInventoryItemLink(_, inventoryID)
+  if inventoryID == 20 then return equippedBagLink end
+  return nil
+end
 function CursorHasItem() return cursorItem ~= nil end
 function ClearCursor() cursorItem = nil end
 function UnitAffectingCombat() return false end
@@ -152,6 +162,43 @@ assert(ShirsInventory_GetSpecialtyBagClass("Felcloth Bag", "Soul Bag") == "soul"
   "soul bag subtype was not recognized")
 assert(ShirsInventory_GetSpecialtyBagClass("Enchanted Mageweave Pouch", "Bag") == nil,
   "normal bag display name caused false specialty classification")
+assert(ShirsInventory_GetEdgeAnchorRank(6948) == 1, "Hearthstone edge rank is wrong")
+assert(ShirsInventory_GetEdgeAnchorRank(6218) == 2, "Runed Copper Rod was not classified as a profession tool")
+assert(ShirsInventory_GetEdgeAnchorRank(15846) == 2, "Salt Shaker was not classified as a profession tool")
+assert(ShirsInventory_GetEdgeAnchorRank(9149) == 2, "Philosopher's Stone was not classified as a profession tool")
+assert(ShirsInventory_GetEdgeAnchorRank(19727, "Blood Scythe", "Trade Goods", "Herb") == 2,
+  "Blood Scythe was not classified as a profession tool")
+assert(ShirsInventory_GetEdgeAnchorRank(19022, "Nat Pagle's Extreme Angler FC-5000", "Weapon", "Fishing Pole") == 2,
+  "fishing-pole subtype was not classified as a profession tool")
+assert(ShirsInventory_GetEdgeAnchorRank(3567, "Dwarven Fishing Pole", "Weapon", "Two-Handed Axes") == 2,
+  "Microbot fishing-pole name fallback was not classified as a profession tool")
+assert(ShirsInventory_GetEdgeAnchorRank(26471, "Apprentice Mining Pick", "Weapon", "Miscellaneous") == 2,
+  "Microbot apprentice mining pick was not classified as a profession tool")
+assert(ShirsInventory_GetEdgeAnchorRank(26474, "Artisan Mining Pick", "Weapon", "Miscellaneous") == 2,
+  "Microbot artisan mining pick was not classified as a profession tool")
+assert(ShirsInventory_GetEdgeAnchorRank(2454, "Elixir of Lion's Strength", "Consumable", "Consumable") == nil,
+  "ordinary item became an edge anchor")
+assert(ShirsInventory_IsQuestBorderItem("Quest", 1),
+  "common native Quest item was not matched to the visible quest border")
+assert(not ShirsInventory_IsQuestBorderItem("Quest", 2),
+  "uncommon Quest item with a rarity border was treated as quest-bordered")
+assert(not ShirsInventory_IsQuestBorderItem("Weapon", 1),
+  "tooltip-only or ordinary item was treated as quest-bordered")
+
+equippedBagLink = "|cffffffff|Hitem:2101:0:0:0|h[Light Quiver]|h|r"
+local originalGetItemInfo = GetItemInfo
+GetItemInfo = function(query)
+  -- Microbot does not resolve a colored hyperlink passed directly to
+  -- GetItemInfo. The adapter must extract the item ID first.
+  if query == 2101 then
+    return "Light Quiver", equippedBagLink, 1, 1, "Quiver", "Quiver", 6, "INVTYPE_BAG", "texture"
+  end
+  return originalGetItemInfo(query)
+end
+assert(ShirsInventory_GetSpecialtyClassForContainer(1) == "arrow",
+  "equipped quiver link was not used to reserve its slots for arrows")
+GetItemInfo = originalGetItemInfo
+equippedBagLink = nil
 
 local function tickUntilDone()
   local tick

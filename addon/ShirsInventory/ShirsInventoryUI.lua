@@ -151,6 +151,12 @@ function ShirsInventory_IsQuestItemType(itemType)
   return false
 end
 
+function ShirsInventory_IsQuestBorderItem(itemType, quality)
+  if not ShirsInventory_IsQuestItemType(itemType) then return false end
+  return not (type(quality) == "number" and
+    quality >= ShirsInventory_GetRarityBorderLayout().minimumQuality)
+end
+
 function ShirsInventory_ResolveItemQuality(containerQuality, itemInfoQuality)
   if type(containerQuality) == "number" and containerQuality > 0 then return containerQuality end
   if type(itemInfoQuality) == "number" then return itemInfoQuality end
@@ -163,7 +169,7 @@ function ShirsInventory_GetItemBorderModel(texture, quality, itemType, enabled)
     local color = ShirsInventory_GetQualityColor(quality)
     if color then return {kind = "rarity", r = color.r, g = color.g, b = color.b, a = 1} end
   end
-  if ShirsInventory_IsQuestItemType(itemType) then
+  if ShirsInventory_IsQuestBorderItem(itemType, quality) then
     return {kind = "quest", r = 1, g = 0.8, b = 0.2, a = 0.8}
   end
   return nil
@@ -805,6 +811,18 @@ function ShirsInventory_OnModeButtonClick()
   return mode
 end
 
+function ShirsInventory_GetInventoryTitle(playerName)
+  if type(playerName) ~= "string" or playerName == "" then return "Player's Inventory" end
+  return playerName .. "'s Inventory"
+end
+
+function ShirsInventory_RefreshInventoryTitle(frame, playerName)
+  if not frame or not frame.title or not frame.title.SetText then return nil end
+  local title = ShirsInventory_GetInventoryTitle(playerName)
+  frame.title:SetText(title)
+  return title
+end
+
 function ShirsInventory_SetInventoryFrameAnchor(frame, point, relativeTo, relativePoint, x, y, save)
   if not frame or not point or not relativePoint then return false end
   frame:ClearAllPoints()
@@ -842,6 +860,16 @@ local function ShirsInventory_UpdateCooldown(button)
   CooldownFrame_SetTimer(button.cooldown, start, duration, enable)
 end
 
+function ShirsInventory_UpdateItemCursor(button, locked, readable)
+  if MerchantFrame and MerchantFrame:IsShown() and MerchantFrame.selectedTab == 1 and not locked then
+    if ShowContainerSellCursor then ShowContainerSellCursor(button.bag, button.slot) end
+  elseif readable or (IsControlKeyDown and IsControlKeyDown() and button.hasItem) then
+    if ShowInspectCursor then ShowInspectCursor() end
+  elseif ResetCursor then
+    ResetCursor()
+  end
+end
+
 local function ShirsInventory_OnItemEnter(button)
   if not button.hasItem then return end
   if button:GetRight() >= GetScreenWidth() / 2 then
@@ -851,7 +879,7 @@ local function ShirsInventory_OnItemEnter(button)
   end
   GameTooltip:SetBagItem(button.bag, button.slot)
   local itemId = ShirsInventory_GetItemId(GetContainerItemLink(button.bag, button.slot))
-  local _, _, _, quality = GetContainerItemInfo(button.bag, button.slot)
+  local _, _, locked, quality, readable = GetContainerItemInfo(button.bag, button.slot)
   if (not ShirsInventory_IsFeatureEnabled or ShirsInventory_IsFeatureEnabled("junk")) and
     ShirsInventory_IsJunk(itemId, quality, ShirsInventory_GetJunkItems()) then
     if quality == 0 then
@@ -863,6 +891,7 @@ local function ShirsInventory_OnItemEnter(button)
     GameTooltip:AddLine("Alt-right-click to mark as junk", 0.55, 0.8, 1)
   end
   GameTooltip:Show()
+  ShirsInventory_UpdateItemCursor(button, locked, readable)
 end
 
 local function ShirsInventory_CreateItemButton(index)
@@ -1173,7 +1202,7 @@ local function ShirsInventory_CreateMainFrame()
 
   frame.title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
   frame.title:SetPoint("TOPLEFT", frame, "TOPLEFT", 14, -13)
-  frame.title:SetText("Shir's Inventory")
+  ShirsInventory_RefreshInventoryTitle(frame, UnitName and UnitName("player"))
   frame.freeText = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
   frame.freeText:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -35, -16)
 
@@ -1214,6 +1243,7 @@ local function ShirsInventory_CreateMainFrame()
   frame.settingsButton:SetScript("OnClick", function() ShirsInventory_ShowSettings() end)
 
   frame:SetScript("OnShow", function()
+    ShirsInventory_RefreshInventoryTitle(this, UnitName and UnitName("player"))
     ShirsInventory_HideNativeNormalBags()
     ShirsInventory_SetBagChecks(1)
     ShirsInventory_Update()

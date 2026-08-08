@@ -2,7 +2,7 @@
 
 The combined inventory UI, junk marking, sale queue, tests, and 1.12 integration were written for Shir's Inventory.
 
-Early private builds used a sorting engine derived from SortBags by shirsig. No redistribution license was found for that source, so it was removed. The current planner and WoW adapter were written for Shir's Inventory and do not include SortBags source or curated item tables.
+Early private builds used a sorting engine derived from SortBags by shirsig. No redistribution license was found for that source, so it was removed. The current planner and WoW adapter were written for Shir's Inventory and do not include SortBags source or item tables inherited from SortBags. The small item-ID mappings that remain cover project-specific profession-tool compatibility and are tested in this repository.
 
 The header/footer arrangement adapts the general OneBag window structure from Bagshui 1.0.5 by veechs/absir (MIT): compact header actions, footer bag slots and free-space status, and footer money placement. Shir's keeps its own flat-grid renderer, colors, controls, sorting, junk behavior, and item visuals. No Bagshui modules or assets are included. Bagshui's notice is preserved in `THIRD_PARTY_NOTICES.md`.
 
