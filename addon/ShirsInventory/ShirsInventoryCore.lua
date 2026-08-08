@@ -464,6 +464,32 @@ function ShirsInventory_ResetInventoryFramePosition()
   return true
 end
 
+function ShirsInventory_GetBankFramePosition()
+  local position = ShirsInventory_EnsureDB().bankPosition
+  if type(position) ~= "table" then return nil end
+  return position
+end
+
+function ShirsInventory_SaveBankFramePosition(frame)
+  if not frame or type(frame.GetLeft) ~= "function" or type(frame.GetBottom) ~= "function" then
+    return false
+  end
+  local left, bottom = frame:GetLeft(), frame:GetBottom()
+  if type(left) ~= "number" or type(bottom) ~= "number" then return false end
+  ShirsInventory_EnsureDB().bankPosition = {
+    point = "BOTTOMLEFT",
+    relativePoint = "BOTTOMLEFT",
+    x = left,
+    y = bottom,
+  }
+  return true
+end
+
+function ShirsInventory_ResetBankFramePosition()
+  ShirsInventory_EnsureDB().bankPosition = nil
+  return true
+end
+
 function ShirsInventory_BuildGeneralSortKey(mode, quality, categoryRank, typeKey, subTypeKey, invTypeKey, itemID, direction)
   local rarityOrder = -quality
   if mode == "rarity" and direction == "bottom" then rarityOrder = quality end

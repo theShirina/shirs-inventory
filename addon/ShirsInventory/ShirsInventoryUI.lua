@@ -1494,7 +1494,8 @@ end
 
 function ShirsInventory_ApplyBankFrameAnchor(frame)
   if not frame then return false end
-  local anchor = ShirsInventory_GetBankFrameAnchor()
+  local anchor = ShirsInventory_GetBankFramePosition and ShirsInventory_GetBankFramePosition() or nil
+  if not anchor then anchor = ShirsInventory_GetBankFrameAnchor() end
   frame:ClearAllPoints()
   frame:SetPoint(anchor.point, UIParent, anchor.relativePoint, anchor.x, anchor.y)
   return true
@@ -1503,12 +1504,10 @@ end
 function ShirsInventory_OnBankDragStop(frame)
   if not frame then return false end
   if frame.StopMovingOrSizing then frame:StopMovingOrSizing() end
-  if not frame.GetLeft or not frame.GetBottom then return false end
-  local left, bottom = frame:GetLeft(), frame:GetBottom()
-  if left == nil or bottom == nil then return false end
-  frame:ClearAllPoints()
-  frame:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", left, bottom)
-  return true
+  if not ShirsInventory_SaveBankFramePosition or not ShirsInventory_SaveBankFramePosition(frame) then
+    return false
+  end
+  return ShirsInventory_ApplyBankFrameAnchor(frame)
 end
 
 local function ShirsInventory_CreateBankBagButton(frame, index)
@@ -1595,6 +1594,12 @@ function ShirsInventory_UpdateBankBagBar(frame, slotCounts)
   return true
 end
 
+function ShirsInventory_IsDepositBoxGossipOption(optionText, optionType)
+  if optionType ~= "banker" then return false end
+  return optionText == "I would like to check my deposit box." or
+    optionText == "I would like to check my deposit box"
+end
+
 function ShirsInventory_TryOpenBankFromGossip()
   if type(GetGossipOptions) ~= "function" or type(SelectGossipOption) ~= "function" then
     return false
@@ -1602,8 +1607,7 @@ function ShirsInventory_TryOpenBankFromGossip()
   local options = {GetGossipOptions()}
   local rawIndex
   for rawIndex = 1, table.getn(options), 2 do
-    local optionType = string.lower(tostring(options[rawIndex + 1] or ""))
-    if optionType == "banker" then
+    if ShirsInventory_IsDepositBoxGossipOption(options[rawIndex], options[rawIndex + 1]) then
       SelectGossipOption((rawIndex + 1) / 2)
       return true
     end
@@ -1718,6 +1722,7 @@ function ShirsInventory_CreateBankFrame()
   ShirsInventory_CreateBankActionButtons(frame)
 
   frame:SetScript("OnShow", function()
+    ShirsInventory_ApplyBankFrameAnchor(this)
     this.title:SetText(ShirsInventory_GetBankTitle(UnitName and UnitName("player")))
     ShirsInventory_SuppressOtherBankFrames()
     ShirsInventory_RefreshBankButtonStyles()

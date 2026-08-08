@@ -186,6 +186,26 @@ selectedGossip = nil
 GetGossipOptions = function() return "Tell me a story", "gossip" end
 assert(not ShirsInventory_HandleBankEvent("GOSSIP_SHOW", frame) and selectedGossip == nil,
   "non-banker gossip was selected automatically")
+selectedGossip = nil
+GetGossipOptions = function() return "Browse your goods", "banker", "Tell me a story", "gossip" end
+assert(not ShirsInventory_HandleBankEvent("GOSSIP_SHOW", frame) and selectedGossip == nil,
+  "banker-typed gossip without the explicit deposit-box dialogue was selected automatically")
+selectedGossip = nil
+GetGossipOptions = function() return "I WOULD LIKE TO CHECK MY DEPOSIT BOX.", "banker" end
+assert(not ShirsInventory_HandleBankEvent("GOSSIP_SHOW", frame) and selectedGossip == nil,
+  "case-changed banker text was accepted instead of the exact deposit-box dialogue")
+selectedGossip = nil
+GetGossipOptions = function() return " I would like to check my deposit box.", "banker" end
+assert(not ShirsInventory_HandleBankEvent("GOSSIP_SHOW", frame) and selectedGossip == nil,
+  "whitespace-prefixed banker text was accepted instead of the exact deposit-box dialogue")
+selectedGossip = nil
+GetGossipOptions = function() return "I would like  to check my deposit box.", "banker" end
+assert(not ShirsInventory_HandleBankEvent("GOSSIP_SHOW", frame) and selectedGossip == nil,
+  "whitespace-changed banker text was accepted instead of the exact deposit-box dialogue")
+selectedGossip = nil
+GetGossipOptions = function() return "I would like to check my deposit box", "banker" end
+assert(ShirsInventory_HandleBankEvent("GOSSIP_SHOW", frame) and selectedGossip == 1,
+  "explicit deposit-box dialogue without terminal punctuation was not selected")
 
 frame:Show()
 ShirsInventoryBankFrame = frame
@@ -248,6 +268,33 @@ assert(ShirsInventory_ApplyBankFrameAnchor(anchorFrame), "bank bottom-left ancho
 assert(anchorFrame.pointsCleared and anchorFrame.anchor[1] == "BOTTOMLEFT" and
   anchorFrame.anchor[2] == UIParent and anchorFrame.anchor[3] == "BOTTOMLEFT" and
   anchorFrame.anchor[4] == 20 and anchorFrame.anchor[5] == 20,
-  "bank frame is not anchored to the screen's bottom-left")
+  "bank frame is not anchored to the screen's bottom-left by default")
+
+local movedBank = {}
+function movedBank:StopMovingOrSizing() self.stopped = true end
+function movedBank:GetLeft() return 145 end
+function movedBank:GetBottom() return 275 end
+function movedBank:ClearAllPoints() self.cleared = true end
+function movedBank:SetPoint(point, relativeTo, relativePoint, x, y)
+  self.anchor = {point, relativeTo, relativePoint, x, y}
+end
+assert(type(ShirsInventory_GetBankFramePosition) == "function", "bank saved-position getter is missing")
+assert(type(ShirsInventory_OnBankDragStop) == "function", "bank drag-stop handler is missing")
+assert(ShirsInventory_OnBankDragStop(movedBank), "moved bank position was not saved")
+local savedBank = ShirsInventory_GetBankFramePosition()
+assert(savedBank and savedBank.point == "BOTTOMLEFT" and savedBank.relativePoint == "BOTTOMLEFT" and
+  savedBank.x == 145 and savedBank.y == 275,
+  "bank position was not stored in the per-character SavedVariables table")
+assert(movedBank.stopped and movedBank.cleared and movedBank.anchor[4] == 145 and movedBank.anchor[5] == 275,
+  "bank drag stop did not immediately normalize the saved anchor")
+local restoredBank = {}
+function restoredBank:ClearAllPoints() self.cleared = true end
+function restoredBank:SetPoint(point, relativeTo, relativePoint, x, y)
+  self.anchor = {point, relativeTo, relativePoint, x, y}
+end
+assert(ShirsInventory_ApplyBankFrameAnchor(restoredBank), "saved bank anchor was not restored")
+assert(restoredBank.anchor[1] == "BOTTOMLEFT" and restoredBank.anchor[2] == UIParent and
+  restoredBank.anchor[3] == "BOTTOMLEFT" and restoredBank.anchor[4] == 145 and restoredBank.anchor[5] == 275,
+  "recreated bank frame did not restore the per-character saved position")
 
 print("BANK_UI_TEST=PASS")

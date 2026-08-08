@@ -2,7 +2,7 @@
 
 A standalone bag addon made and tested for Microbot's WoW 1.12.1 client.
 
-Current release: **0.5.1** — adds the combined bank, direct banker opening, bank-bag slot highlighting, and stable per-character inventory positioning.
+Current release: **0.5.2** — limits automatic gossip selection to the explicit banker deposit-box option and saves separate per-character inventory and bank positions.
 
 ## What it does
 
@@ -26,7 +26,7 @@ Current release: **0.5.1** — adds the combined bank, direct banker opening, ba
 
 ## Download and install
 
-1. Download the ZIP from the [v0.5.1 release page](https://github.com/theShirina/shirs-inventory/releases/tag/v0.5.1).
+1. Download the ZIP from the [v0.5.2 release page](https://github.com/theShirina/shirs-inventory/releases/tag/v0.5.2).
 2. Extract the `ShirsInventory` folder into your client's `Interface/AddOns` folder.
 3. Restart the client.
 
