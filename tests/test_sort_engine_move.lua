@@ -19,6 +19,26 @@ local targets = {
 }
 local move = ShirsInventory_SortEngineChooseMove(slots, targets)
 assert(move and move.source == 2 and move.destination == 1 and move.reason == "target", "simple swap move was not selected")
+assert(type(ShirsInventory_SortEngineApplyMove) == "function", "optimistic move model is missing")
+assert(ShirsInventory_SortEngineApplyMove(slots, move), "optimistic swap was rejected")
+assert(slots[1].item and slots[1].item.key == "A" and slots[2].item and slots[2].item.key == "B",
+  "optimistic swap produced the wrong model")
+
+local mergeSlots = {
+  slot(nil, item("A", 10)),
+  slot(nil, item("A", 15)),
+}
+assert(ShirsInventory_SortEngineApplyMove(mergeSlots, { source = 1, destination = 2 }),
+  "optimistic stack merge was rejected")
+assert(mergeSlots[1].item and mergeSlots[1].item.count == 5,
+  "optimistic partial merge lost the source remainder")
+assert(mergeSlots[2].item and mergeSlots[2].item.count == 20,
+  "optimistic partial merge did not fill the destination")
+
+slots = {
+  slot(nil, item("B", 1)),
+  slot(nil, item("A", 1)),
+}
 
 slots[2].locked = true
 assert(ShirsInventory_SortEngineChooseMove(slots, targets) == nil, "locked source was selected")

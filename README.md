@@ -2,28 +2,32 @@
 
 A standalone bag addon made and tested for Microbot's WoW 1.12.1 client. It should also work on other WoW 1.12.x clients and private servers, but those have not been tested.
 
-Current release: **0.3.25** — keeps profession tools beside the Hearthstone, handles specialty bags from native metadata, restores the merchant sell cursor, and can group quest-bordered items at the opposite end of the occupied sorted block.
+Current release: **0.4.1** — a full-suite build with faster confirmed sorting, fixed Top and Bottom groups, visible item cooldowns, and a compact merchant junk-sale control.
 
 ## What it does
 
 - Combines the Backpack and equipped bags into one continuous grid.
 - Sorts bags and the bank by item type or rarity.
 - Sorts from the top or bottom and merges partial stacks.
-- Keeps quest-bordered items at the opposite end of the occupied sorted block by default: last when sorting from the top, or first when sorting from the bottom. This can be disabled in settings.
+- Waits for each exact bag-state update before submitting the next cursor move.
+- Keeps quest-bordered items at the opposite end of the occupied sorted block by default, with conjured items directly outside them.
+- Keeps Hearthstone, field services, adjacent pets and mounts, and profession tools together at the selected edge.
+- Keeps the four Microbot world-buff scrolls next to each other in either sort mode and direction.
 - Keeps specialty-bag items in compatible bags using the client's item and bag metadata.
-- Shows quest and rarity borders, cooldowns, stack counts, money, and normal item tooltips.
+- Shows quest and rarity borders, native cooldown sweeps with compact remaining-time labels, stack counts, money, and normal item tooltips.
 - Marks items as junk and sells gray or marked junk through a guarded merchant queue.
+- Adds a bordered Sell Junk icon beside the merchant repair buttons.
 - Tracks gold across characters on the same account.
-- Lets each character use Shir's full bag window or keep another bag addon and use only the sorting and junk tools.
-- Coexists with pfUI, Bagnon, Bagshui, and other replacement bag providers without editing them.
+- Ships as one full suite: combined bags, sorting, and junk tools stay enabled together.
+- Reclaims the bag bar from other loaded bag replacements; running two bag UIs together is not supported.
 
 ## Download and install
 
-1. Download the ZIP from the [latest release](https://github.com/theShirina/shirs-inventory/releases/latest).
+1. Download the ZIP from the [v0.4.1 release page](https://github.com/theShirina/shirs-inventory/releases/tag/v0.4.1).
 2. Extract the `ShirsInventory` folder into your client's `Interface/AddOns` folder.
 3. Restart the client.
 
-The first login asks which parts of the addon to use and which bag UI should own the bag bar if another provider is loaded.
+Shir's Inventory takes ownership of the bag bar when it loads.
 
 ## Commands
 
@@ -32,7 +36,6 @@ The first login asks which parts of the addon to use and which bag UI should own
 - `/si junk` — start a junk sale while a merchant's main tab is open.
 - `/si mark <item ID or item link>` — mark an item type as junk.
 - `/si unmark <item ID or item link>` — remove a manual junk mark.
-- `/si bagui` — reopen the bag-provider choice.
 - `/si settings` — open Shir's Inventory settings.
 
 ## Source and license

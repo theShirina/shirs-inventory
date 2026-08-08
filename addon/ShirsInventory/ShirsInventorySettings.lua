@@ -1,8 +1,6 @@
--- Per-character feature chooser, settings, and standalone controls.
+-- Full-suite settings and junk-sale controls.
 
 local settingsFrame
-local setupFrame
-local bagConflictFrame
 local standaloneSortButton
 local standaloneModeButton
 local standaloneDirectionButton
@@ -97,88 +95,29 @@ function ShirsInventory_RefreshButtonStyles()
   applyStandalone(standaloneModeButton, "mode")
   applyStandalone(standaloneDirectionButton, "direction")
   applyStandalone(standaloneSettingsButton, "settings")
-  if merchantSellButton then
-    ShirsInventory_ApplyButtonStyle(merchantSellButton, {
-      text = "Sell Junk",
-      icon = "Interface\\Icons\\INV_Misc_Coin_01",
-    })
-  end
+
   if type(ShirsInventory_RefreshInventoryButtonStyles) == "function" then
     ShirsInventory_RefreshInventoryButtonStyles()
   end
 end
 
-local function ShirsInventory_GetBagAddonTitles(addons)
-  local titles = {}
-  local _, addon
-  for _, addon in ipairs(addons or {}) do table.insert(titles, addon.title or addon.name) end
-  return table.concat(titles, ", ")
-end
-
 local function ShirsInventory_RefreshSettings()
   if not settingsFrame then return end
-  settingsFrame.bagUI:SetChecked(ShirsInventory_IsFeatureEnabled("bagUI") and 1 or nil)
-  settingsFrame.sorter:SetChecked(ShirsInventory_IsFeatureEnabled("sorter") and 1 or nil)
   settingsFrame.ignoreJunkSorting:SetChecked(ShirsInventory_GetIgnoreJunkSorting() and 1 or nil)
   settingsFrame.questItemsOppositeEdge:SetChecked(ShirsInventory_GetQuestItemsOppositeEdge() and 1 or nil)
-  settingsFrame.junk:SetChecked(ShirsInventory_IsFeatureEnabled("junk") and 1 or nil)
   settingsFrame.autoSellJunk:SetChecked(ShirsInventory_GetAutoSellJunk() and 1 or nil)
-
   settingsFrame.showRarityBoxes:SetChecked(ShirsInventory_GetShowRarityBoxes() and 1 or nil)
   settingsFrame.useCoinIcons:SetChecked(ShirsInventory_GetUseCoinIcons() and 1 or nil)
-  if ShirsInventory_IsFeatureEnabled("sorter") then
-    settingsFrame.ignoreJunkSorting:Enable()
-    settingsFrame.ignoreJunkSorting.label:SetTextColor(1, 0.82, 0)
-    settingsFrame.questItemsOppositeEdge:Enable()
-    settingsFrame.questItemsOppositeEdge.label:SetTextColor(1, 0.82, 0)
-  else
-    settingsFrame.ignoreJunkSorting:Disable()
-    settingsFrame.ignoreJunkSorting.label:SetTextColor(0.5, 0.5, 0.5)
-    settingsFrame.questItemsOppositeEdge:Disable()
-    settingsFrame.questItemsOppositeEdge.label:SetTextColor(0.5, 0.5, 0.5)
-  end
-  if ShirsInventory_IsFeatureEnabled("junk") then
-    settingsFrame.autoSellJunk:Enable()
-    settingsFrame.autoSellJunk.label:SetTextColor(1, 0.82, 0)
-  else
-    settingsFrame.autoSellJunk:Disable()
-    settingsFrame.autoSellJunk.label:SetTextColor(0.5, 0.5, 0.5)
-  end
-  local addons = ShirsInventory_GetDetectedBagAddons and ShirsInventory_GetDetectedBagAddons() or {}
-  if table.getn(addons) > 0 then
-    local signature = ShirsInventory_GetDetectedBagSignature()
-    local choice = ShirsInventory_GetBagProviderChoice(signature)
-    local provider = choice == "shirs" and "Shir's Inventory" or
-      (choice == "other" and ShirsInventory_GetBagAddonTitles(addons) or "choice required")
-    settingsFrame.bagProviderText:SetText("Bag UI provider: " .. provider)
-    settingsFrame.bagProviderButton:Enable()
-  else
-    settingsFrame.bagProviderText:SetText("Bag UI provider: Shir's Inventory (no conflict detected)")
-    settingsFrame.bagProviderButton:Disable()
-  end
 end
 
 function ShirsInventory_ShowSettings()
   if not settingsFrame then return end
   ShirsInventory_RefreshSettings()
-  settingsFrame.errorText:SetText("")
   settingsFrame:Show()
 end
 
-local function ShirsInventory_ApplySettingCheck(check)
-  local enabled = check:GetChecked() and true or false
-  if not ShirsInventory_SetFeatureEnabled(check.feature, enabled) then
-    settingsFrame.errorText:SetText("Keep at least one feature enabled.")
-    ShirsInventory_RefreshSettings()
-    return
-  end
-  settingsFrame.errorText:SetText("")
-  ShirsInventory_ApplyFeatureSelection()
-  ShirsInventory_RefreshSettings()
-end
-
 local function ShirsInventory_CreateSettingsFrame()
-  local frame = ShirsInventory_CreatePanel("ShirsInventorySettingsFrame", 390, 490, "DIALOG")
+  local frame = ShirsInventory_CreatePanel("ShirsInventorySettingsFrame", 390, 330, "DIALOG")
   settingsFrame = frame
   frame:SetPoint("CENTER", UIParent, "CENTER", 0, 20)
 
@@ -189,18 +128,13 @@ local function ShirsInventory_CreateSettingsFrame()
   frame.help:SetPoint("TOPLEFT", frame, "TOPLEFT", 24, -48)
   frame.help:SetWidth(340)
   frame.help:SetJustifyH("LEFT")
-  frame.help:SetText("Choose any one feature or any combination. Settings are saved for this character.")
+  frame.help:SetText("The full inventory, sorter, and junk tools are always enabled. Settings are saved for this character.")
 
-  frame.bagUI = ShirsInventory_CreateFeatureCheck(frame, "Full Bag UI", "bagUI", -82)
-  frame.sorter = ShirsInventory_CreateFeatureCheck(frame, "Bag Sorter", "sorter", -122)
-  frame.ignoreJunkSorting = ShirsInventory_CreateFeatureCheck(frame, "Ignore gray + manually marked junk while sorting", "ignoreJunkSorting", -152)
-  frame.questItemsOppositeEdge = ShirsInventory_CreateFeatureCheck(frame, "Keep quest items at the opposite end of sorted items", "questItemsOppositeEdge", -182)
-  frame.junk = ShirsInventory_CreateFeatureCheck(frame, "Sell Junk + manual junk marks", "junk", -212)
-  frame.autoSellJunk = ShirsInventory_CreateFeatureCheck(frame, "Auto-sell gray + manually marked items at vendors", "autoSellJunk", -252)
-  frame.showRarityBoxes = ShirsInventory_CreateFeatureCheck(frame, "Show quest and rarity borders on items", "showRarityBoxes", -282)
-  frame.useCoinIcons = ShirsInventory_CreateFeatureCheck(frame, "Use coin icons for currency (off = g/s/c text)", "useCoinIcons", -312)
-  frame.bagUI:SetScript("OnClick", function() ShirsInventory_ApplySettingCheck(this) end)
-  frame.sorter:SetScript("OnClick", function() ShirsInventory_ApplySettingCheck(this) end)
+  frame.ignoreJunkSorting = ShirsInventory_CreateFeatureCheck(frame, "Ignore gray + manually marked junk while sorting", "ignoreJunkSorting", -82)
+  frame.questItemsOppositeEdge = ShirsInventory_CreateFeatureCheck(frame, "Keep quest items at the opposite end of sorted items", "questItemsOppositeEdge", -112)
+  frame.autoSellJunk = ShirsInventory_CreateFeatureCheck(frame, "Auto-sell gray + manually marked items at vendors", "autoSellJunk", -142)
+  frame.showRarityBoxes = ShirsInventory_CreateFeatureCheck(frame, "Show quest and rarity borders on items", "showRarityBoxes", -172)
+  frame.useCoinIcons = ShirsInventory_CreateFeatureCheck(frame, "Use coin icons for currency (off = g/s/c text)", "useCoinIcons", -202)
   frame.ignoreJunkSorting:SetScript("OnClick", function()
     ShirsInventory_SetIgnoreJunkSorting(this:GetChecked() and true or false)
     ShirsInventory_RefreshSettings()
@@ -209,7 +143,7 @@ local function ShirsInventory_CreateSettingsFrame()
     ShirsInventory_SetQuestItemsOppositeEdge(this:GetChecked() and true or false)
     ShirsInventory_RefreshSettings()
   end)
-  frame.junk:SetScript("OnClick", function() ShirsInventory_ApplySettingCheck(this) end)
+
   frame.autoSellJunk:SetScript("OnClick", function()
     ShirsInventory_SetAutoSellJunk(this:GetChecked() and true or false)
     ShirsInventory_RefreshSettings()
@@ -230,165 +164,14 @@ local function ShirsInventory_CreateSettingsFrame()
     ShirsInventory_RefreshSettings()
   end)
 
-  frame.bagProviderText = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-  frame.bagProviderText:SetPoint("TOPLEFT", frame, "TOPLEFT", 24, -372)
-  frame.bagProviderText:SetWidth(340)
-  frame.bagProviderText:SetJustifyH("LEFT")
-  frame.bagProviderButton = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-  frame.bagProviderButton:SetWidth(128)
-  frame.bagProviderButton:SetHeight(22)
-  frame.bagProviderButton:SetPoint("TOPLEFT", frame, "TOPLEFT", 24, -397)
-  frame.bagProviderButton:SetText("Choose Bag UI...")
-  frame.bagProviderButton:SetScript("OnClick", function()
-    ShirsInventory_ShowBagProviderChoice(ShirsInventory_GetDetectedBagAddons())
-  end)
-
-  frame.errorText = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-  frame.errorText:SetPoint("BOTTOM", frame, "BOTTOM", 0, 53)
-  frame.errorText:SetTextColor(1, 0.25, 0.25)
-
-  frame.fullButton = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-  frame.fullButton:SetWidth(118)
-  frame.fullButton:SetHeight(24)
-  frame.fullButton:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 24, 20)
-  frame.fullButton:SetText("Use Full Addon")
-  frame.fullButton:SetScript("OnClick", function()
-    ShirsInventory_SetFullAddon()
-    ShirsInventory_ApplyFeatureSelection()
-    ShirsInventory_RefreshSettings()
-  end)
-
   frame.closeButton = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
   frame.closeButton:SetWidth(86)
   frame.closeButton:SetHeight(24)
-  frame.closeButton:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -24, 20)
+  frame.closeButton:SetPoint("BOTTOM", frame, "BOTTOM", 0, 20)
   frame.closeButton:SetText("Close")
   frame.closeButton:SetScript("OnClick", function() settingsFrame:Hide() end)
   frame:Hide()
   table.insert(UISpecialFrames, "ShirsInventorySettingsFrame")
-  return frame
-end
-
-local function ShirsInventory_SaveSetup(fullAddon)
-  local ok
-  if fullAddon then
-    ok = ShirsInventory_SetFullAddon()
-  else
-    ok = ShirsInventory_SaveFeatureSelection(
-      setupFrame.bagUI:GetChecked() and true or false,
-      setupFrame.sorter:GetChecked() and true or false,
-      setupFrame.junk:GetChecked() and true or false
-    )
-  end
-  if not ok then
-    setupFrame.errorText:SetText("Select at least one feature.")
-    return
-  end
-  setupFrame.errorText:SetText("")
-  setupFrame:Hide()
-  ShirsInventory_ApplyFeatureSelection()
-  ShirsInventory_RefreshSettings()
-end
-
-local function ShirsInventory_CreateSetupFrame()
-  local frame = ShirsInventory_CreatePanel("ShirsInventorySetupFrame", 430, 330, "FULLSCREEN_DIALOG")
-  setupFrame = frame
-  frame:SetPoint("CENTER", UIParent, "CENTER", 0, 45)
-
-  frame.title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-  frame.title:SetPoint("TOP", frame, "TOP", 0, -20)
-  frame.title:SetText("Choose Shir's Inventory Features")
-  frame.help = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-  frame.help:SetPoint("TOPLEFT", frame, "TOPLEFT", 28, -55)
-  frame.help:SetWidth(374)
-  frame.help:SetJustifyH("LEFT")
-  frame.help:SetText("This appears once for each character. Use the full addon or choose individual features. You can change this later with /si settings.")
-
-  frame.bagUI = ShirsInventory_CreateFeatureCheck(frame, "Full Bag UI", "bagUI", -108)
-  frame.sorter = ShirsInventory_CreateFeatureCheck(frame, "Bag Sorter", "sorter", -148)
-  frame.junk = ShirsInventory_CreateFeatureCheck(frame, "Sell Junk + manual junk marks", "junk", -188)
-  frame.bagUI:SetChecked(1)
-  frame.sorter:SetChecked(1)
-  frame.junk:SetChecked(1)
-
-  frame.errorText = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-  frame.errorText:SetPoint("BOTTOM", frame, "BOTTOM", 0, 62)
-  frame.errorText:SetTextColor(1, 0.25, 0.25)
-
-  frame.fullButton = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-  frame.fullButton:SetWidth(130)
-  frame.fullButton:SetHeight(26)
-  frame.fullButton:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 28, 25)
-  frame.fullButton:SetText("Use Full Addon")
-  frame.fullButton:SetScript("OnClick", function() ShirsInventory_SaveSetup(true) end)
-
-  frame.customButton = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-  frame.customButton:SetWidth(145)
-  frame.customButton:SetHeight(26)
-  frame.customButton:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -28, 25)
-  frame.customButton:SetText("Save Custom Choice")
-  frame.customButton:SetScript("OnClick", function() ShirsInventory_SaveSetup(false) end)
-  frame:Hide()
-  return frame
-end
-
-function ShirsInventory_ChooseBagProvider(choice)
-  local signature = ShirsInventory_GetDetectedBagSignature()
-  if not ShirsInventory_SaveBagProviderChoice(choice, signature) then return false end
-  if choice == "shirs" and ShirsInventory_IsFeatureSelectionComplete() then
-    ShirsInventory_SetFeatureEnabled("bagUI", true)
-  end
-  if bagConflictFrame then bagConflictFrame:Hide() end
-  ShirsInventory_ApplyFeatureSelection()
-  ShirsInventory_RefreshSettings()
-  return true
-end
-
-function ShirsInventory_ShowBagProviderChoice(addons)
-  addons = addons or (ShirsInventory_GetDetectedBagAddons and ShirsInventory_GetDetectedBagAddons()) or {}
-  if table.getn(addons) == 0 then
-    ShirsInventory_Message("No other loaded bag inventory addon was detected.")
-    return false
-  end
-  if not bagConflictFrame then return false end
-  bagConflictFrame.detected:SetText("Detected: " .. ShirsInventory_GetBagAddonTitles(addons))
-  bagConflictFrame:Show()
-  return true
-end
-
-local function ShirsInventory_CreateBagConflictFrame()
-  local frame = ShirsInventory_CreatePanel("ShirsInventoryBagConflictFrame", 455, 290, "FULLSCREEN_DIALOG")
-  bagConflictFrame = frame
-  frame:SetPoint("CENTER", UIParent, "CENTER", 0, 55)
-
-  frame.title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-  frame.title:SetPoint("TOP", frame, "TOP", 0, -20)
-  frame.title:SetText("Choose Your Bag Inventory")
-  frame.help = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-  frame.help:SetPoint("TOPLEFT", frame, "TOPLEFT", 28, -58)
-  frame.help:SetWidth(399)
-  frame.help:SetJustifyH("LEFT")
-  frame.help:SetText("Another bag inventory addon is loaded. Choose which addon owns the bag bar. Sorter and Junk stay independent; with an external bag UI, use /si sort, /si junk, and /si mark <item ID or item link>.")
-  frame.detected = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-  frame.detected:SetPoint("TOPLEFT", frame, "TOPLEFT", 28, -132)
-  frame.detected:SetWidth(399)
-  frame.detected:SetJustifyH("LEFT")
-
-  frame.shirsButton = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-  frame.shirsButton:SetWidth(165)
-  frame.shirsButton:SetHeight(28)
-  frame.shirsButton:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 28, 26)
-  frame.shirsButton:SetText("Use Shir's Bag UI")
-  frame.shirsButton:SetScript("OnClick", function() ShirsInventory_ChooseBagProvider("shirs") end)
-
-  frame.otherButton = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-  frame.otherButton:SetWidth(185)
-  frame.otherButton:SetHeight(28)
-  frame.otherButton:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -28, 26)
-  frame.otherButton:SetText("Keep Other Bag Addon")
-  frame.otherButton:SetScript("OnClick", function() ShirsInventory_ChooseBagProvider("other") end)
-  frame:Hide()
-  table.insert(UISpecialFrames, "ShirsInventoryBagConflictFrame")
   return frame
 end
 
@@ -522,35 +305,21 @@ local function ShirsInventory_AttachStandaloneControls(host, provider)
 end
 
 function ShirsInventory_ShouldUseStandaloneControls()
-  if ShirsInventory_IsBagUIActive then return not ShirsInventory_IsBagUIActive() end
-  return not ShirsInventory_IsFeatureEnabled("bagUI")
+  return false
 end
 
 function ShirsInventory_UpdateStandaloneControls()
   if not standaloneSortButton then return end
-  if not ShirsInventory_IsFeatureSelectionComplete() then
-    standaloneSortButton:Hide()
-    standaloneModeButton:Hide()
-    standaloneDirectionButton:Hide()
-    standaloneSettingsButton:Hide()
-    merchantSellButton:Hide()
-    return
-  end
-  local useStandalone = ShirsInventory_ShouldUseStandaloneControls()
-  local host, provider
-  if useStandalone then host, provider = ShirsInventory_GetStandaloneControlHost() end
-  if host then ShirsInventory_AttachStandaloneControls(host, provider) end
-  if ShirsInventory_IsFeatureEnabled("sorter") and host then
-    standaloneSortButton:Show()
-    standaloneModeButton:Show()
-    standaloneDirectionButton:Show()
+  standaloneSortButton:Hide()
+  standaloneModeButton:Hide()
+  standaloneDirectionButton:Hide()
+  standaloneSettingsButton:Hide()
+  if ShirsInventory_ShouldShowMerchantSellButton() then
+    merchantSellButton:Show()
+    if MerchantRepairText then MerchantRepairText:Hide() end
   else
-    standaloneSortButton:Hide()
-    standaloneModeButton:Hide()
-    standaloneDirectionButton:Hide()
+    merchantSellButton:Hide()
   end
-  if host then standaloneSettingsButton:Show() else standaloneSettingsButton:Hide() end
-  if ShirsInventory_IsFeatureEnabled("junk") then merchantSellButton:Show() else merchantSellButton:Hide() end
 end
 
 local function ShirsInventory_CreateStandaloneControls()
@@ -573,11 +342,20 @@ local function ShirsInventory_CreateStandaloneControls()
     buttons[index]:Hide()
   end
 
-  merchantSellButton = CreateFrame("Button", "ShirsInventoryMerchantSellButton", MerchantFrame, "UIPanelButtonTemplate")
-  merchantSellButton:SetWidth(86)
-  merchantSellButton:SetHeight(24)
-  merchantSellButton:SetPoint("BOTTOMRIGHT", MerchantFrame, "BOTTOMRIGHT", -30, 88)
-  merchantSellButton:SetText("Sell Junk")
+  merchantSellButton = CreateFrame("Button", "ShirsInventoryMerchantSellButton", MerchantFrame, "ItemButtonTemplate")
+  merchantSellButton:SetWidth(36)
+  merchantSellButton:SetHeight(36)
+  merchantSellButton:SetPoint("RIGHT", MerchantRepairItemButton, "LEFT", -2, 0)
+  local sellJunkTexture = getglobal("ShirsInventoryMerchantSellButtonIconTexture")
+  sellJunkTexture:SetTexture("Interface\\Icons\\INV_Misc_Coin_01")
+  sellJunkTexture:SetTexCoord(0, 1, 0, 1)
+  merchantSellButton:SetScript("OnEnter", function()
+    GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
+    GameTooltip:SetText("Sell Junk")
+    GameTooltip:AddLine("Sell gray and manually marked junk.", 1, 1, 1, true)
+    GameTooltip:Show()
+  end)
+  merchantSellButton:SetScript("OnLeave", function() GameTooltip:Hide() end)
   merchantSellButton:SetScript("OnClick", function() ShirsInventory_StartSaleFromButton() end)
   merchantSellButton:Hide()
 
@@ -614,11 +392,8 @@ end
 function ShirsInventory_CreateSettingsUI()
   if settingsFrame then return end
   ShirsInventory_CreateSettingsFrame()
-  ShirsInventory_CreateSetupFrame()
-  ShirsInventory_CreateBagConflictFrame()
   ShirsInventory_CreateStandaloneControls()
   ShirsInventory_InstallNativeJunkHook()
   ShirsInventory_RefreshSettings()
   ShirsInventory_UpdateStandaloneControls()
-  if not ShirsInventory_IsFeatureSelectionComplete() then setupFrame:Show() end
 end

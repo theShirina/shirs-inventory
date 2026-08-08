@@ -96,7 +96,7 @@ assert(flagged == 0, "no line should be flagged current when the character is no
 local linesEmpty, totalEmpty = ShirsInventory_AccountBuildTooltipLines("MissingRealm", "Altsmith")
 assert(table.getn(linesEmpty) == 0 and totalEmpty == 0, "unknown realm should yield no lines and zero total")
 
--- Feature gate: hidden and inert while bagUI is disabled.
+-- Full-suite account display cannot be disabled by obsolete feature state.
 local hidden = false
 local shownCount = 0
 local displayText
@@ -141,24 +141,18 @@ fakeButton.coinRegions = {
 }
 ShirsInventoryFrame = { shirsGoldButton = fakeButton }
 
-ShirsInventoryDB.features.bagUI = false
-assert(ShirsInventory_AccountIsEnabled() == false, "feature should be gated off with bagUI disabled")
-assert(ShirsInventory_AccountRecordCurrentGold() == nil,
-  "recording should be refused while the feature is gated off")
-assert(ShirsInventoryAccountDB.realms["TestRealm"]["Altsmith"] == 1000000,
-  "gated recording must not mutate the account DB")
-ShirsInventory_AccountUpdateDisplay()
-assert(hidden == true, "display should hide while the full-suite feature is disabled")
-
--- Re-enabling the full-suite option restores recording and the display.
-ShirsInventoryDB.features.bagUI = true
-assert(ShirsInventory_AccountIsEnabled() == true, "feature should re-enable with bagUI")
+assert(not ShirsInventory_SetFeatureEnabled("bagUI", false),
+  "obsolete feature API disabled the full-suite account display")
+assert(ShirsInventory_AccountIsEnabled() == true,
+  "account display is not enabled with the full suite")
 currentMoney = 7770000
-assert(ShirsInventory_AccountRecordCurrentGold() == 7770000, "recording should resume when re-enabled")
+assert(ShirsInventory_AccountRecordCurrentGold() == 7770000,
+  "full-suite account recording did not update")
 assert(ShirsInventory_AccountGetGold("TestRealm", "Altsmith") == 7770000,
-  "re-enabled recording should update the entry")
+  "full-suite account recording saved the wrong value")
 ShirsInventory_AccountUpdateDisplay()
-assert(hidden == false and shownCount > 0, "display should show again once re-enabled")
+assert(hidden == false and shownCount > 0,
+  "full-suite account display did not remain visible")
 
 -- Currency supports both compact coin artwork and explicit g/s/c text. Text
 -- mode needs the wider character estimate or the readout clips on large sums.

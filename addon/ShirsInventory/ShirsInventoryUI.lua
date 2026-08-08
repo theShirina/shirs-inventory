@@ -22,11 +22,7 @@ function ShirsInventory_SetDetectedBagAddons(addons)
 end
 
 function ShirsInventory_IsBagUIActive()
-  if ShirsInventory_IsFeatureSelectionComplete and not ShirsInventory_IsFeatureSelectionComplete() then return false end
-  if ShirsInventory_IsFeatureEnabled and not ShirsInventory_IsFeatureEnabled("bagUI") then return false end
-  if not bagProviderScanComplete then return false end
-  if table.getn(detectedBagAddons) == 0 then return true end
-  return ShirsInventory_GetBagProviderChoice(detectedBagSignature) == "shirs"
+  return true
 end
 
 function ShirsInventory_ScanLoadedBagAddons()
@@ -463,37 +459,13 @@ function ShirsInventory_DeactivateBagUI()
 end
 
 function ShirsInventory_ApplyFeatureSelection()
-  if ShirsInventory_IsFeatureSelectionComplete and not ShirsInventory_IsFeatureSelectionComplete() then
-    local frame = ShirsInventory_GetFrame()
-    if frame and frame:IsShown() then frame:Hide() end
-    ShirsInventory_UninstallBagHooks()
-    if ShirsInventory_UpdateStandaloneControls then ShirsInventory_UpdateStandaloneControls() end
-    return
-  end
-  local bagUIRequested = not ShirsInventory_IsFeatureEnabled or ShirsInventory_IsFeatureEnabled("bagUI")
-  local bagUIEnabled = ShirsInventory_IsBagUIActive()
-  if bagUIRequested and bagProviderScanComplete and table.getn(detectedBagAddons) > 0 and
-    not ShirsInventory_GetBagProviderChoice(detectedBagSignature) and ShirsInventory_ShowBagProviderChoice then
-    ShirsInventory_ShowBagProviderChoice(detectedBagAddons)
-  end
-  if bagUIEnabled then
-    ShirsInventory_ActivateBagUI()
-  else
-    ShirsInventory_DeactivateBagUI()
-  end
+  ShirsInventory_ActivateBagUI()
 
   local frame = ShirsInventory_GetFrame()
   if frame and frame.sortButton then
-    local sorterEnabled = not ShirsInventory_IsFeatureEnabled or ShirsInventory_IsFeatureEnabled("sorter")
-    if sorterEnabled then
-      frame.sortButton:Show()
-      frame.modeButton:Show()
-      frame.directionButton:Show()
-    else
-      frame.sortButton:Hide()
-      frame.modeButton:Hide()
-      frame.directionButton:Hide()
-    end
+    frame.sortButton:Show()
+    frame.modeButton:Show()
+    frame.directionButton:Show()
   end
   if ShirsInventory_Update then ShirsInventory_Update() end
   if ShirsInventory_UpdateStandaloneControls then ShirsInventory_UpdateStandaloneControls() end
@@ -854,10 +826,85 @@ function ShirsInventory_ApplyInventoryFramePosition(frame)
   end
 end
 
+function ShirsInventory_FormatCooldownRemaining(remaining)
+  if type(remaining) ~= "number" or remaining <= 0 then return nil end
+  if remaining >= 86400 then return math.ceil(remaining / 86400) .. "d" end
+  if remaining >= 3600 then return math.ceil(remaining / 3600) .. "h" end
+  if remaining >= 60 then return math.ceil(remaining / 60) .. "m" end
+  return tostring(math.ceil(remaining))
+end
+
+function ShirsInventory_GetCooldownRemaining(start, duration, now)
+  start = tonumber(start) or 0
+  duration = tonumber(duration) or 0
+  now = tonumber(now) or 0
+  local remaining = start + duration - now
+  if start > now then
+    -- Vanilla stores cooldown starts in an unsigned 32-bit millisecond timer.
+    -- After that timer wraps, its converted start can sit ahead of GetTime().
+    remaining = remaining - ((2 ^ 32) / 1000)
+  end
+  return remaining
+end
+
+function ShirsInventory_ApplyItemCooldown(button, start, duration, enable, now)
+  if not button or not button.cooldown then return end
+  start = tonumber(start) or 0
+  duration = tonumber(duration) or 0
+  now = tonumber(now) or (GetTime and GetTime()) or 0
+  if CooldownFrame_SetTimer then
+    CooldownFrame_SetTimer(button.cooldown, start, duration, enable or 0)
+  end
+  local remaining = ShirsInventory_GetCooldownRemaining(start, duration, now)
+  if start > 0 and duration > 0 and remaining > 0 then
+    button.cooldownEnd = now + remaining
+    button.cooldownDuration = duration
+    button.cooldownElapsed = 0
+    button.cooldown:Show()
+    local label = duration > 1.5 and ShirsInventory_FormatCooldownRemaining(remaining) or nil
+    if button.cooldownText and label then
+      button.cooldownText:SetText(label)
+      button.cooldownText:Show()
+    elseif button.cooldownText then
+      button.cooldownText:Hide()
+    end
+  else
+    button.cooldownEnd = nil
+    button.cooldownDuration = nil
+    button.cooldownElapsed = 0
+    button.cooldown:Hide()
+    if button.cooldownText then button.cooldownText:Hide() end
+  end
+end
+
+function ShirsInventory_UpdateCooldownDisplay(button, elapsed, now)
+  if not button or not button.cooldownEnd then return end
+  button.cooldownElapsed = (button.cooldownElapsed or 0) + (elapsed or 0)
+  if button.cooldownElapsed < 0.20 then return end
+  button.cooldownElapsed = 0
+  now = tonumber(now) or (GetTime and GetTime()) or 0
+  local remaining = button.cooldownEnd - now
+  if remaining <= 0 then
+    button.cooldownEnd = nil
+    button.cooldownDuration = nil
+    button.cooldown:Hide()
+    if button.cooldownText then button.cooldownText:Hide() end
+    return
+  end
+  local label = (button.cooldownDuration or 0) > 1.5 and
+    ShirsInventory_FormatCooldownRemaining(remaining) or nil
+  if button.cooldownText and label then
+    button.cooldownText:SetText(label)
+    button.cooldownText:Show()
+  elseif button.cooldownText then
+    button.cooldownText:Hide()
+  end
+end
+
 local function ShirsInventory_UpdateCooldown(button)
   if not button.cooldown then return end
   local start, duration, enable = GetContainerItemCooldown(button.bag, button.slot)
-  CooldownFrame_SetTimer(button.cooldown, start, duration, enable)
+  ShirsInventory_ApplyItemCooldown(button, start, duration, enable)
 end
 
 function ShirsInventory_UpdateItemCursor(button, locked, readable)
@@ -904,6 +951,15 @@ local function ShirsInventory_CreateItemButton(index)
 
   button.cooldown = CreateFrame("Model", button:GetName() .. "Cooldown", button, "CooldownFrameTemplate")
   button.cooldown:SetAllPoints(button)
+  if button.cooldown.SetFrameLevel and button.GetFrameLevel then
+    button.cooldown:SetFrameLevel(button:GetFrameLevel() + 1)
+  end
+  button.cooldownText = button.cooldown:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+  button.cooldownText:SetPoint("CENTER", button.cooldown, "CENTER", 0, 0)
+  button.cooldownText:SetTextColor(1, 0.82, 0)
+  if button.cooldownText.SetShadowColor then button.cooldownText:SetShadowColor(0, 0, 0, 1) end
+  if button.cooldownText.SetShadowOffset then button.cooldownText:SetShadowOffset(1, -1) end
+  button.cooldownText:Hide()
   button.bagRangeHighlight = button:CreateTexture(nil, "OVERLAY")
   button.bagRangeHighlight:SetAllPoints(button)
   button.bagRangeHighlight:SetTexture("Interface\\Buttons\\WHITE8X8")
@@ -957,6 +1013,7 @@ local function ShirsInventory_CreateItemButton(index)
     ResetCursor()
   end)
   button:SetScript("OnUpdate", function()
+    ShirsInventory_UpdateCooldownDisplay(this, arg1)
     if GameTooltip:IsOwned(this) then ShirsInventory_OnItemEnter(this) end
   end)
   inventoryButtons[index] = button
@@ -1301,18 +1358,8 @@ function ShirsInventory_HandleSlashCommand(message)
     ShirsInventory_StartJunkSale()
   elseif command == "settings" or command == "options" then
     ShirsInventory_ShowSettings()
-  elseif command == "bagui" then
-    if table.getn(ShirsInventory_GetDetectedBagAddons()) > 0 then
-      ShirsInventory_ShowBagProviderChoice(ShirsInventory_GetDetectedBagAddons())
-    else
-      ShirsInventory_Message("No other loaded bag inventory addon was detected.")
-    end
   else
-    if ShirsInventory_IsBagUIActive() then
-      ToggleBackpack()
-    else
-      ShirsInventory_ShowSettings()
-    end
+    ToggleBackpack()
   end
   return true
 end
@@ -1341,6 +1388,20 @@ function ShirsInventory_HandleLoaderEvent(eventName, addonName, loader)
     ShirsInventory_ScanLoadedBagAddons()
     ShirsInventory_ApplyFeatureSelection()
     if loader and loader.UnregisterEvent then loader:UnregisterEvent("PLAYER_LOGIN") end
+  elseif eventName == "PLAYER_ENTERING_WORLD" then
+    -- Another bag addon can install its handlers during this same event. Reapply
+    -- on the next update so Shir's full-suite ownership wins after every
+    -- handler for PLAYER_ENTERING_WORLD has finished.
+    if loader and loader.SetScript then
+      loader:SetScript("OnUpdate", function()
+        this:SetScript("OnUpdate", nil)
+        ShirsInventory_ScanLoadedBagAddons()
+        ShirsInventory_ApplyFeatureSelection()
+      end)
+    else
+      ShirsInventory_ScanLoadedBagAddons()
+      ShirsInventory_ApplyFeatureSelection()
+    end
   end
 end
 
@@ -1348,6 +1409,7 @@ if CreateFrame then
   local loader = CreateFrame("Frame")
   loader:RegisterEvent("ADDON_LOADED")
   loader:RegisterEvent("PLAYER_LOGIN")
+  loader:RegisterEvent("PLAYER_ENTERING_WORLD")
   loader:SetScript("OnEvent", function()
     ShirsInventory_HandleLoaderEvent(event, arg1, this)
   end)

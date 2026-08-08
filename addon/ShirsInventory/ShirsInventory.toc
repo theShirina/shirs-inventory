@@ -2,7 +2,7 @@
 ## Title: Shir's Inventory
 ## Notes: One combined bag UI with sorting and manual junk selling
 ## Author: Stefán
-## Version: 0.3.25
+## Version: 0.4.1
 ## SavedVariablesPerCharacter: ShirsInventoryDB
 ## SavedVariables: ShirsInventoryAccountDB
 ShirsInventoryCore.lua

@@ -1,7 +1,7 @@
 local enginePath = arg[1]
 assert(loadfile(enginePath))()
 
-local function item(key, count, maxStack, sortKey, class, edgeRank, oppositeEdge)
+local function item(key, count, maxStack, sortKey, class, edgeRank, oppositeEdge, adjacencyGroup)
   return {
     key = key,
     count = count,
@@ -11,6 +11,8 @@ local function item(key, count, maxStack, sortKey, class, edgeRank, oppositeEdge
     edgeAnchor = edgeRank and true or false,
     edgeRank = edgeRank,
     oppositeEdgeAnchor = oppositeEdge and true or false,
+    oppositeEdgeRank = type(oppositeEdge) == "number" and oppositeEdge or (oppositeEdge and 1 or nil),
+    adjacencyGroup = adjacencyGroup,
   }
 end
 
@@ -115,56 +117,162 @@ assert(target(ignoredBottom, 2) == "empty", "bottom did not leave the leading fr
 assert(target(ignoredBottom, 3) == "marked-junk:1", "bottom moved manually marked junk")
 assert(target(ignoredBottom, 4) == "A:1" and target(ignoredBottom, 5) == "B:1", "bottom free-slot order is wrong")
 
--- Edge ranks keep profession tools next to the Hearthstone while changing the
--- group order at the selected edge: Hearthstone then tools for Top, tools then
--- Hearthstone for Bottom.
+-- Edge ranks keep pets, mounts, and field items between the Hearthstone and
+-- profession tools at either selected edge.
 local edgeAnchors = {
   slot(0, 1, nil, item("ordinary", 1, 1, {1}, nil, nil)),
-  slot(0, 2, nil, item("salt-shaker", 1, 1, {4}, nil, 2)),
+  slot(0, 2, nil, item("salt-shaker", 1, 1, {4}, nil, 4)),
   slot(0, 3, nil, item("hearthstone", 1, 1, {3}, nil, 1)),
-  slot(0, 4, nil, item("runed-rod", 1, 1, {2}, nil, 2)),
-  slot(0, 5, nil, nil),
+  slot(0, 4, nil, item("runed-rod", 1, 1, {2}, nil, 4)),
+  slot(0, 5, nil, item("field-item", 1, 1, {2.5}, nil, 2)),
+  slot(0, 6, nil, item("custom-pet", 1, 1, {3.5}, nil, 3)),
+  slot(0, 7, nil, item("custom-mount", 1, 1, {3}, nil, 3)),
+  slot(0, 8, nil, nil),
 }
 local edgeTop = ShirsInventory_SortEnginePlan(edgeAnchors, "top")
 assert(target(edgeTop, 1) == "hearthstone:1", "Top did not put Hearthstone first")
-assert(target(edgeTop, 2) == "runed-rod:1" and target(edgeTop, 3) == "salt-shaker:1",
-  "Top did not place profession tools directly after Hearthstone")
-assert(target(edgeTop, 4) == "ordinary:1" and target(edgeTop, 5) == "empty",
+assert(target(edgeTop, 2) == "field-item:1", "Top did not place field items after Hearthstone")
+assert(target(edgeTop, 3) == "custom-mount:1" and target(edgeTop, 4) == "custom-pet:1",
+  "Top did not keep pets directly beside mounts")
+assert(target(edgeTop, 5) == "runed-rod:1" and target(edgeTop, 6) == "salt-shaker:1",
+  "Top did not place profession tools after pets and mounts")
+assert(target(edgeTop, 7) == "ordinary:1" and target(edgeTop, 8) == "empty",
   "Top edge anchors displaced the normal window incorrectly")
 local edgeBottom = ShirsInventory_SortEnginePlan(edgeAnchors, "bottom")
 assert(target(edgeBottom, 1) == "empty" and target(edgeBottom, 2) == "ordinary:1",
   "Bottom did not preserve the leading empty slot and normal item")
 assert(target(edgeBottom, 3) == "runed-rod:1" and target(edgeBottom, 4) == "salt-shaker:1",
-  "Bottom did not place profession tools directly before Hearthstone")
-assert(target(edgeBottom, 5) == "hearthstone:1", "Bottom did not put Hearthstone last")
+  "Bottom did not put profession tools first inside the selected-edge block")
+assert(target(edgeBottom, 5) == "custom-mount:1" and target(edgeBottom, 6) == "custom-pet:1",
+  "Bottom did not keep pets directly beside mounts")
+assert(target(edgeBottom, 7) == "field-item:1",
+  "Bottom did not keep field items between pets and Hearthstone")
+assert(target(edgeBottom, 8) == "hearthstone:1", "Bottom did not put Hearthstone last")
 
--- Quest items sit at the opposite end of the occupied sorted block, not at
--- the opposite physical edge of the inventory.
+-- Quest items occupy the inner opposite-edge group and conjured items the
+-- outer group. Top reads quest then conjured; Bottom reads conjured then quest.
 local oppositeAnchors = {
   slot(0, 1, nil, item("ordinary-B", 1, 1, {2}, nil, nil, false)),
-  slot(0, 2, nil, item("quest-D", 1, 1, {4}, nil, nil, true)),
+  slot(0, 2, nil, item("quest-D", 1, 1, {4}, nil, nil, 1)),
   slot(0, 3, nil, item("hearthstone", 1, 1, {0}, nil, 1, false)),
   slot(0, 4, nil, item("ordinary-A", 1, 1, {1}, nil, nil, false)),
-  slot(0, 5, nil, item("quest-C", 1, 1, {3}, nil, nil, true)),
-  slot(0, 6, nil, item("profession-tool", 1, 1, {5}, nil, 2, false)),
-  slot(0, 7, nil, nil),
+  slot(0, 5, nil, item("quest-C", 1, 1, {3}, nil, nil, 1)),
+  slot(0, 6, nil, item("profession-tool", 1, 1, {5}, nil, 4, false)),
+  slot(0, 7, nil, item("conjured-E", 1, 1, {6}, nil, nil, 2)),
+  slot(0, 8, nil, nil),
 }
 local oppositeTop = ShirsInventory_SortEnginePlan(oppositeAnchors, "top")
 assert(target(oppositeTop, 1) == "hearthstone:1" and target(oppositeTop, 2) == "profession-tool:1",
   "Top selected-edge anchors moved away from the top")
 assert(target(oppositeTop, 3) == "ordinary-A:1" and target(oppositeTop, 4) == "ordinary-B:1" and
-  target(oppositeTop, 5) == "quest-C:1" and target(oppositeTop, 6) == "quest-D:1",
-  "Top did not put quest items directly after the ordinary sorted items")
-assert(target(oppositeTop, 7) == "empty",
+  target(oppositeTop, 5) == "quest-C:1" and target(oppositeTop, 6) == "quest-D:1" and
+  target(oppositeTop, 7) == "conjured-E:1",
+  "Top did not place conjured items after quest-outlined items")
+assert(target(oppositeTop, 8) == "empty",
   "Top placed empty slots inside the occupied sorted block")
 local oppositeBottom = ShirsInventory_SortEnginePlan(oppositeAnchors, "bottom")
 assert(target(oppositeBottom, 1) == "empty",
-  "Bottom placed quest items at the physical top instead of bottom-aligning the sorted block")
-assert(target(oppositeBottom, 2) == "quest-C:1" and target(oppositeBottom, 3) == "quest-D:1",
-  "Bottom did not put quest items first inside the occupied sorted block")
-assert(target(oppositeBottom, 4) == "ordinary-A:1" and target(oppositeBottom, 5) == "ordinary-B:1",
+  "Bottom placed opposite-edge groups at the physical top instead of bottom-aligning the sorted block")
+assert(target(oppositeBottom, 2) == "conjured-E:1" and
+  target(oppositeBottom, 3) == "quest-C:1" and target(oppositeBottom, 4) == "quest-D:1",
+  "Bottom did not place conjured items before quest-outlined items")
+assert(target(oppositeBottom, 5) == "ordinary-A:1" and target(oppositeBottom, 6) == "ordinary-B:1",
   "Bottom did not place ordinary items directly after quest items")
-assert(target(oppositeBottom, 6) == "profession-tool:1" and target(oppositeBottom, 7) == "hearthstone:1",
+assert(target(oppositeBottom, 7) == "profession-tool:1" and target(oppositeBottom, 8) == "hearthstone:1",
   "Bottom selected-edge anchors moved away from the bottom")
+
+-- All four world-buff scrolls remain contiguous even when rarity or item-type
+-- keys would interleave ordinary items. Two 26085 stacks also prove that stack
+-- consolidation does not break the group.
+local groupedScrolls = {
+  slot(0, 1, nil, item("ordinary-epic", 1, 1,
+    { mode = "rarity", rarity = -4, category = 10, itemType = 2, itemID = 1 })),
+  slot(0, 2, nil, item("scroll-26085", 2, 5,
+    { mode = "rarity", rarity = -3, category = 8, itemType = 4, itemID = 26085 }, nil, nil, nil, "world-buff-scrolls")),
+  slot(0, 3, nil, item("ordinary-uncommon", 1, 1,
+    { mode = "rarity", rarity = -2, category = 10, itemType = 2, itemID = 2 })),
+  slot(0, 4, nil, item("scroll-26086", 1, 1,
+    { mode = "rarity", rarity = -1.8, category = 8, itemType = 4, itemID = 26086 }, nil, nil, nil, "world-buff-scrolls")),
+  slot(0, 5, nil, item("scroll-26087", 1, 1,
+    { mode = "rarity", rarity = -1.6, category = 8, itemType = 4, itemID = 26087 }, nil, nil, nil, "world-buff-scrolls")),
+  slot(0, 6, nil, item("ordinary-common", 1, 1,
+    { mode = "rarity", rarity = -1, category = 10, itemType = 2, itemID = 3 })),
+  slot(0, 7, nil, item("scroll-26088", 1, 1,
+    { mode = "rarity", rarity = 0, category = 8, itemType = 4, itemID = 26088 }, nil, nil, nil, "world-buff-scrolls")),
+  slot(0, 8, nil, item("scroll-26085", 3, 5,
+    { mode = "rarity", rarity = -3, category = 8, itemType = 4, itemID = 26085 }, nil, nil, nil, "world-buff-scrolls")),
+  slot(0, 9, nil, nil),
+}
+
+local function assertGroupedPlan(plan, first, label)
+  assert(target(plan, first) == "ordinary-epic:1" and
+    target(plan, first + 1) == "scroll-26085:5" and
+    target(plan, first + 2) == "scroll-26086:1" and
+    target(plan, first + 3) == "scroll-26087:1" and
+    target(plan, first + 4) == "scroll-26088:1" and
+    target(plan, first + 5) == "ordinary-uncommon:1" and
+    target(plan, first + 6) == "ordinary-common:1",
+    label .. " split or reordered the complete world-buff scroll group")
+end
+
+local function assertIdempotentPlan(sourceSlots, plan, direction, label)
+  local prototypes = {}
+  local index
+  for index = 1, table.getn(sourceSlots) do
+    local value = sourceSlots[index].item
+    if value then prototypes[value.key] = value end
+  end
+  local plannedSlots = {}
+  for index = 1, table.getn(sourceSlots) do
+    local planned = plan[index]
+    local prototype = planned and prototypes[planned.key]
+    local value
+    if planned and prototype then
+      value = item(prototype.key, planned.count, prototype.maxStack, prototype.sortKey,
+        prototype.class, prototype.edgeRank, prototype.oppositeEdgeRank, prototype.adjacencyGroup)
+    end
+    plannedSlots[index] = slot(0, index, nil, value)
+  end
+  local replanned = ShirsInventory_SortEnginePlan(plannedSlots, direction)
+  for index = 1, table.getn(sourceSlots) do
+    assert(target(replanned, index) == target(plan, index), label .. " was not idempotent at slot " .. index)
+  end
+end
+
+local groupedRarityTop = ShirsInventory_SortEnginePlan(groupedScrolls, "top")
+assertGroupedPlan(groupedRarityTop, 1, "rarity Top")
+assert(target(groupedRarityTop, 8) == "empty" and target(groupedRarityTop, 9) == "empty",
+  "rarity Top did not leave trailing slots empty")
+local groupedRarityBottom = ShirsInventory_SortEnginePlan(groupedScrolls, "bottom")
+assert(target(groupedRarityBottom, 1) == "empty" and target(groupedRarityBottom, 2) == "empty",
+  "rarity Bottom did not align the occupied block to the bottom")
+assertGroupedPlan(groupedRarityBottom, 3, "rarity Bottom")
+assertIdempotentPlan(groupedScrolls, groupedRarityBottom, "bottom", "rarity Bottom")
+
+local itemTypeCategories = {1, 2, 3, 4, 6, 5, 8, 2}
+local groupedItemIDs = {
+  ["scroll-26085"] = 26085,
+  ["scroll-26086"] = 26086,
+  ["scroll-26087"] = 26087,
+  ["scroll-26088"] = 26088,
+}
+local groupedIndex
+for groupedIndex = 1, 8 do
+  local value = groupedScrolls[groupedIndex].item
+  value.sortKey = {
+    mode = "itemType",
+    category = itemTypeCategories[groupedIndex],
+    itemType = value.adjacencyGroup and 4 or 2,
+    rarity = value.sortKey.rarity,
+    itemID = groupedItemIDs[value.key] or groupedIndex,
+  }
+end
+local groupedItemTypeTop = ShirsInventory_SortEnginePlan(groupedScrolls, "top")
+assertGroupedPlan(groupedItemTypeTop, 1, "item-type Top")
+local groupedItemTypeBottom = ShirsInventory_SortEnginePlan(groupedScrolls, "bottom")
+assert(target(groupedItemTypeBottom, 1) == "empty" and target(groupedItemTypeBottom, 2) == "empty",
+  "item-type Bottom did not align the occupied block to the bottom")
+assertGroupedPlan(groupedItemTypeBottom, 3, "item-type Bottom")
+assertIdempotentPlan(groupedScrolls, groupedItemTypeBottom, "bottom", "item-type Bottom")
 
 print("SORT_ENGINE_PLAN_TEST=PASS")

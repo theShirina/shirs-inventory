@@ -33,6 +33,35 @@ local function ItemLess(left, right)
   return tostring(left.key) < tostring(right.key)
 end
 
+local function KeepAdjacency(keys, itemsByKey)
+  local members = {}
+  local index
+  for index = 1, table.getn(keys) do
+    local group = itemsByKey[keys[index]].adjacencyGroup
+    if group then
+      if not members[group] then members[group] = {} end
+      table.insert(members[group], keys[index])
+    end
+  end
+
+  local result = {}
+  local inserted = {}
+  for index = 1, table.getn(keys) do
+    local key = keys[index]
+    local group = itemsByKey[key].adjacencyGroup
+    if not group then
+      table.insert(result, key)
+    elseif not inserted[group] then
+      local memberIndex
+      for memberIndex = 1, table.getn(members[group]) do
+        table.insert(result, members[group][memberIndex])
+      end
+      inserted[group] = true
+    end
+  end
+  return result
+end
+
 local function SlotAccepts(slot, item)
   if not item then return true end
   return slot.class == nil or slot.class == item.class
@@ -79,6 +108,8 @@ function ShirsInventory_SortEnginePlan(slots, direction)
           edgeAnchor = value.edgeAnchor and true or false,
           edgeRank = value.edgeRank,
           oppositeEdgeAnchor = value.oppositeEdgeAnchor and true or false,
+          oppositeEdgeRank = value.oppositeEdgeRank,
+          adjacencyGroup = value.adjacencyGroup,
         }
         table.insert(itemKeys, groupKey)
       end
@@ -89,6 +120,7 @@ function ShirsInventory_SortEnginePlan(slots, direction)
   table.sort(itemKeys, function(leftKey, rightKey)
     return ItemLess(itemsByKey[leftKey], itemsByKey[rightKey])
   end)
+  itemKeys = KeepAdjacency(itemKeys, itemsByKey)
 
   local edgeKeys = {}
   local oppositeEdgeKeys = {}
@@ -110,6 +142,18 @@ function ShirsInventory_SortEnginePlan(slots, direction)
     local right = itemsByKey[rightKey]
     local leftRank = left.edgeRank or 999
     local rightRank = right.edgeRank or 999
+    if leftRank ~= rightRank then
+      if direction == "bottom" then return leftRank > rightRank end
+      return leftRank < rightRank
+    end
+    return ItemLess(left, right)
+  end)
+
+  table.sort(oppositeEdgeKeys, function(leftKey, rightKey)
+    local left = itemsByKey[leftKey]
+    local right = itemsByKey[rightKey]
+    local leftRank = left.oppositeEdgeRank or 1
+    local rightRank = right.oppositeEdgeRank or 1
     if leftRank ~= rightRank then
       if direction == "bottom" then return leftRank > rightRank end
       return leftRank < rightRank
@@ -191,6 +235,26 @@ local function SourceHasSurplus(slots, targets, sourceIndex, desiredKey)
   if not item or item.key ~= desiredKey then return false end
   local ownTarget = targets[sourceIndex]
   if ownTarget and ownTarget.key == desiredKey and item.count <= ownTarget.count then return false end
+  return true
+end
+
+function ShirsInventory_SortEngineApplyMove(slots, move)
+  if not slots or not move then return false end
+  local source = slots[move.source]
+  local destination = slots[move.destination]
+  if not source or not destination or not source.item then return false end
+
+  if destination.item and source.item.key == destination.item.key then
+    local maximum = math.max(tonumber(destination.item.maxStack) or tonumber(source.item.maxStack) or 1, 1)
+    local room = maximum - destination.item.count
+    if room <= 0 then return false end
+    local moved = math.min(source.item.count, room)
+    destination.item.count = destination.item.count + moved
+    source.item.count = source.item.count - moved
+    if source.item.count <= 0 then source.item = nil end
+  else
+    source.item, destination.item = destination.item, source.item
+  end
   return true
 end
 

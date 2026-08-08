@@ -10,6 +10,9 @@ runner:Hide()
 local activeContainers
 local activeTargets
 local pendingStateSignature
+local pendingExpectedSignature
+local pendingMoveCount = 0
+local pendingUnexpectedSince
 local deadline
 local elapsed = 0
 local running = false
@@ -66,9 +69,17 @@ function ShirsInventory_ExtractLocalizedCount(text, template)
   return tonumber(string.sub(text, valueStart, valueEnd))
 end
 
+function ShirsInventory_IsPetOrMountTooltipText(text)
+  local value = string.lower(text or "")
+  if not string.find(value, "summon", 1, true) then return false end
+  return string.find(value, "pet", 1, true) ~= nil or
+    string.find(value, "companion", 1, true) ~= nil or
+    string.find(value, "mount", 1, true) ~= nil
+end
+
 local function TooltipFacts(container, position)
   if not tooltip or type(tooltip.SetOwner) ~= "function" then
-    return 1, false, false, false, false
+    return 1, false, false, false, false, false
   end
 
   tooltip:SetOwner(UIParent, "ANCHOR_NONE")
@@ -79,7 +90,7 @@ local function TooltipFacts(container, position)
     tooltip:SetBagItem(container, position)
   end
 
-  local facts = {charges = 1, usable = false, soulbound = false, quest = false, conjured = false}
+  local facts = {charges = 1, usable = false, soulbound = false, quest = false, conjured = false, petOrMount = false}
   local lineCount = tooltip:NumLines()
   local line
   for line = 1, lineCount do
@@ -90,8 +101,9 @@ local function TooltipFacts(container, position)
     if text and ITEM_SOULBOUND and text == ITEM_SOULBOUND then facts.soulbound = true end
     if text and ITEM_BIND_QUEST and text == ITEM_BIND_QUEST then facts.quest = true end
     if text and ITEM_CONJURED and text == ITEM_CONJURED then facts.conjured = true end
+    if ShirsInventory_IsPetOrMountTooltipText(text) then facts.petOrMount = true end
   end
-  return facts.charges, facts.usable, facts.soulbound, facts.quest, facts.conjured
+  return facts.charges, facts.usable, facts.soulbound, facts.quest, facts.conjured, facts.petOrMount
 end
 
 function ShirsInventory_GetSpecialtyItemClass(itemName, itemType, itemSubType, material)
@@ -149,9 +161,43 @@ local professionToolIDs = {
   [16207] = true, -- Runed Arcanite Rod
 }
 
-function ShirsInventory_GetEdgeAnchorRank(itemID, itemName, itemType, itemSubType)
+local middleEdgeItemIDs = {
+  [26061] = true,
+  [26063] = true,
+  [26064] = true,
+  [26065] = true,
+}
+
+local worldBuffScrollIDs = {
+  [26085] = true,
+  [26086] = true,
+  [26087] = true,
+  [26088] = true,
+}
+
+function ShirsInventory_GetAdjacencyGroup(itemID)
+  if worldBuffScrollIDs[itemID] then return "world-buff-scrolls" end
+  return nil
+end
+
+function ShirsInventory_IsPetOrMountItem(itemType, itemSubType, spellName, tooltipPetOrMount)
+  local typeName = string.lower(itemType or "")
+  local subType = string.lower(itemSubType or "")
+  if string.find(typeName, "pet", 1, true) or string.find(typeName, "companion", 1, true) or
+    string.find(typeName, "mount", 1, true) or string.find(subType, "pet", 1, true) or
+    string.find(subType, "companion", 1, true) or string.find(subType, "mount", 1, true) then
+    return true
+  end
+  local spell = string.lower(spellName or "")
+  return itemType == AUCTION_CLASSES[10] and
+    (tooltipPetOrMount or string.find(spell, "summon", 1, true) ~= nil)
+end
+
+function ShirsInventory_GetEdgeAnchorRank(itemID, itemName, itemType, itemSubType, spellName, tooltipPetOrMount)
   if itemID == 6948 then return 1 end
-  if professionToolIDs[itemID] or itemID == 19727 then return 2 end
+  if middleEdgeItemIDs[itemID] then return 2 end
+  if ShirsInventory_IsPetOrMountItem(itemType, itemSubType, spellName, tooltipPetOrMount) then return 3 end
+  if professionToolIDs[itemID] or itemID == 19727 then return 4 end
   local name = string.lower(itemName or "")
   local subType = string.lower(itemSubType or "")
   if itemType == AUCTION_CLASSES[1] then
@@ -159,7 +205,7 @@ function ShirsInventory_GetEdgeAnchorRank(itemID, itemName, itemType, itemSubTyp
       string.find(name, "fishing pole", 1, true) or
       string.find(name, "fishing rod", 1, true) or
       string.find(name, "mining pick", 1, true) then
-      return 2
+      return 4
     end
   end
   return nil
@@ -198,12 +244,22 @@ local function ReadItem(container, position, count)
     inventoryType = itemInfo[9]
   end
   if quality == nil or itemType == nil or maxStack == nil then return nil, "item-info" end
-  local charges, usable, soulbound, quest, conjured = TooltipFacts(container, position)
+  local charges, usable, soulbound, quest, conjured, tooltipPetOrMount = TooltipFacts(container, position)
   local questBorderItem = ShirsInventory_IsQuestBorderItem(itemType, quality)
   local material = ShirsInventory_GetMaterialCategory(itemID, itemType, itemSubType)
   local specialtyClass = ShirsInventory_GetSpecialtyItemClass(itemInfo[1], itemType, itemSubType, material)
   local isConsumable = (usable and itemType ~= AUCTION_CLASSES[1] and itemType ~= AUCTION_CLASSES[2] and itemType ~= AUCTION_CLASSES[8]) or itemType == AUCTION_CLASSES[4]
-  local edgeRank = ShirsInventory_GetEdgeAnchorRank(itemID, itemInfo[1], itemType, itemSubType)
+  local itemSpell
+  if type(GetItemSpell) == "function" then
+    itemSpell = GetItemSpell(itemID)
+    if not itemSpell then itemSpell = GetItemSpell(link) end
+  end
+  local edgeRank = ShirsInventory_GetEdgeAnchorRank(
+    itemID, itemInfo[1], itemType, itemSubType, itemSpell, tooltipPetOrMount
+  )
+  local oppositeEdgeRank = ShirsInventory_GetOppositeEdgeRank(
+    questBorderItem, conjured, ShirsInventory_GetQuestItemsOppositeEdge()
+  )
   local categoryRank = ShirsInventory_GetPrimaryCategoryRank(
     edgeRank, quality, specialtyClass == "soul", conjured,
     itemType == AUCTION_CLASSES[9], questBorderItem, material, soulbound, isConsumable
@@ -239,7 +295,9 @@ local function ReadItem(container, position, count)
     class = specialtyClass,
     edgeAnchor = edgeRank and true or false,
     edgeRank = edgeRank,
-    oppositeEdgeAnchor = questBorderItem and ShirsInventory_GetQuestItemsOppositeEdge() or false,
+    oppositeEdgeAnchor = oppositeEdgeRank and true or false,
+    oppositeEdgeRank = oppositeEdgeRank,
+    adjacencyGroup = ShirsInventory_GetAdjacencyGroup(itemID),
     ignoreSort = ignoreSort and true or false,
   }
 end
@@ -296,6 +354,9 @@ local function Stop(reason, message)
   activeContainers = nil
   activeTargets = nil
   pendingStateSignature = nil
+  pendingExpectedSignature = nil
+  pendingMoveCount = 0
+  pendingUnexpectedSince = nil
   runner:Hide()
   diagnostics.reason = reason
   if message then Message(message) end
@@ -314,6 +375,9 @@ local function Start(containers)
   activeContainers = containers
   activeTargets = nil
   pendingStateSignature = nil
+  pendingExpectedSignature = nil
+  pendingMoveCount = 0
+  pendingUnexpectedSince = nil
   deadline = GetTime() + ShirsInventory_GetSortTimeout()
   elapsed = ShirsInventory_GetSortDelay()
   running = true
@@ -364,12 +428,30 @@ function ShirsInventory_SortBank()
   return Start({-1, 5, 6, 7, 8, 9, 10})
 end
 
-runner:SetScript("OnUpdate", function()
-  if not running then return end
-  elapsed = elapsed + arg1
-  if elapsed < ShirsInventory_GetSortDelay() then return end
-  elapsed = 0
+local function StateSignature(slots)
+  local parts = {}
+  local index
+  for index = 1, table.getn(slots) do
+    local item = slots[index].item
+    if item then
+      parts[index] = item.key .. "=" .. item.count
+    else
+      parts[index] = "-"
+    end
+  end
+  return table.concat(parts, "|")
+end
 
+local function RecordMove(source, destination)
+  local sourceKey = source.item and source.item.key or "empty"
+  local destinationKey = destination.item and destination.item.key or "empty"
+  local moveText = source.container .. ":" .. source.position .. ">" .. destination.container .. ":" .. destination.position ..
+    " " .. sourceKey .. " / " .. destinationKey
+  table.insert(diagnostics.history, moveText)
+  if table.getn(diagnostics.history) > 8 then table.remove(diagnostics.history, 1) end
+end
+
+local function ProcessSortBurst()
   if GetTime() > deadline then
     Stop("timeout", "Sorting stopped after the safety timeout (" .. diagnostics.moves .. " moves, " .. diagnostics.mismatches .. " slots left).")
     return
@@ -385,49 +467,49 @@ runner:SetScript("OnUpdate", function()
 
   local slots, scanError = ScanSlots()
   if not slots then
-    if scanError ~= "item-info" then Stop("scan", "Sorting stopped because an item could not be read.") end
+    if scanError ~= "item-info" then
+      Stop("scan", "Sorting stopped because an item could not be read.")
+    end
     return
   end
   if not activeTargets then
     activeTargets = ShirsInventory_SortEnginePlan(slots, ShirsInventory_GetDirection())
   end
   local targets = activeTargets
+  local stateSignature = StateSignature(slots)
+
+  -- Cursor-empty does not prove that Vanilla exposed the submitted move yet.
+  -- Wait for the exact predicted state before planning another transaction.
+  if pendingStateSignature then
+    if stateSignature == pendingStateSignature then return end
+    if stateSignature ~= pendingExpectedSignature then
+      if not pendingUnexpectedSince then pendingUnexpectedSince = GetTime() end
+      if GetTime() - pendingUnexpectedSince >= 2 then
+        Stop("desync", "Sorting stopped because the bag state did not match the submitted move.")
+      end
+      return
+    end
+    diagnostics.moves = diagnostics.moves + pendingMoveCount
+    pendingStateSignature = nil
+    pendingExpectedSignature = nil
+    pendingMoveCount = 0
+    pendingUnexpectedSince = nil
+    deadline = GetTime() + ShirsInventory_GetSortTimeout()
+  end
+
   diagnostics.mismatches = ShirsInventory_SortEngineCountMismatches(slots, targets)
   if not diagnostics.bestMismatches or diagnostics.mismatches < diagnostics.bestMismatches then
     diagnostics.bestMismatches = diagnostics.mismatches
   end
-
-  local signatureParts = {}
-  local signatureIndex
-  for signatureIndex = 1, table.getn(slots) do
-    local signatureItem = slots[signatureIndex].item
-    if signatureItem then
-      signatureParts[signatureIndex] = signatureItem.key .. "=" .. signatureItem.count
-    else
-      signatureParts[signatureIndex] = "-"
-    end
-  end
-  local stateSignature = table.concat(signatureParts, "|")
-
-  -- Cursor-empty only confirms that the click sequence ended safely. The bag
-  -- snapshot must change before the command counts as progress; legacy clients
-  -- can expose the old snapshot for one or more update ticks.
-  if pendingStateSignature then
-    if stateSignature == pendingStateSignature then return end
-    pendingStateSignature = nil
-    diagnostics.moves = diagnostics.moves + 1
-    deadline = GetTime() + ShirsInventory_GetSortTimeout()
-  end
-
   if IsComplete(slots, targets) then
     Stop("complete", nil)
     return
   end
-
   if diagnostics.seenStates[stateSignature] then
     Stop("cycle", "Sorting stopped because the same inventory state repeated.")
     return
   end
+  diagnostics.seenStates[stateSignature] = true
 
   local move = ShirsInventory_SortEngineChooseMove(slots, targets)
   if not move then
@@ -437,16 +519,26 @@ runner:SetScript("OnUpdate", function()
 
   local source = slots[move.source]
   local destination = slots[move.destination]
-  local sourceKey = source.item and source.item.key or "empty"
-  local destinationKey = destination.item and destination.item.key or "empty"
-  local moveText = source.container .. ":" .. source.position .. ">" .. destination.container .. ":" .. destination.position ..
-    " " .. sourceKey .. " / " .. destinationKey
-  table.insert(diagnostics.history, moveText)
-  if table.getn(diagnostics.history) > 8 then table.remove(diagnostics.history, 1) end
-  if ShirsInventory_MoveCursorItem(source.container, source.position, destination.container, destination.position) then
-    diagnostics.seenStates[stateSignature] = true
-    pendingStateSignature = stateSignature
-  else
+  RecordMove(source, destination)
+  if not ShirsInventory_MoveCursorItem(source.container, source.position, destination.container, destination.position) then
     diagnostics.failedMoves = diagnostics.failedMoves + 1
+    return
   end
+  if not ShirsInventory_SortEngineApplyMove(slots, move) then
+    Stop("model", "Sorting stopped because its private move model could not be updated.")
+    return
+  end
+  pendingStateSignature = stateSignature
+  pendingExpectedSignature = StateSignature(slots)
+  pendingMoveCount = 1
+end
+
+runner:SetScript("OnUpdate", function()
+  if not running then return end
+  elapsed = elapsed + arg1
+  local delay = ShirsInventory_GetSortDelay()
+  if pendingStateSignature then delay = 0.05 end
+  if elapsed < delay then return end
+  elapsed = 0
+  ProcessSortBurst()
 end)

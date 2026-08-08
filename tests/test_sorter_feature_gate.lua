@@ -20,13 +20,17 @@ function GetAuctionItemClasses()
 end
 DEFAULT_CHAT_FRAME = { AddMessage = function() end }
 BankFrame = NewFrame()
+function CursorHasItem() return false end
+function GetCursorInfo() return nil end
+function GetContainerNumSlots() return 0 end
 
 assert(loadfile(corePath))()
 assert(loadfile(sorterPath))()
 
-local ok, status = ShirsInventory_SortBags()
-assert(ok == false and status == "disabled", "disabled sorter should not start a bag sort")
-ok, status = ShirsInventory_SortBank()
-assert(ok == false and status == "disabled", "disabled sorter should not start a bank sort")
+assert(type(ShirsInventory_SortBags) == "function" and type(ShirsInventory_SortBank) == "function",
+  "full-suite sorter entry points are missing")
+assert(ShirsInventory_IsFeatureEnabled("sorter"), "full-suite sorter is disabled")
+assert(not ShirsInventory_SetFeatureEnabled("sorter", false),
+  "obsolete feature API disabled the sorter")
 
 print("SORTER_FEATURE_GATE_TEST=PASS")

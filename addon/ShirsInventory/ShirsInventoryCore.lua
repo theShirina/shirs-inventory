@@ -55,12 +55,12 @@ local function ShirsInventory_EnsureDB()
   if type(ShirsInventoryDB.junkItems) ~= "table" then
     ShirsInventoryDB.junkItems = {}
   end
-  if type(ShirsInventoryDB.features) ~= "table" then
-    ShirsInventoryDB.features = {}
-  end
-  if ShirsInventoryDB.features.bagUI == nil then ShirsInventoryDB.features.bagUI = true end
-  if ShirsInventoryDB.features.sorter == nil then ShirsInventoryDB.features.sorter = true end
-  if ShirsInventoryDB.features.junk == nil then ShirsInventoryDB.features.junk = true end
+  -- 0.3.26 and later ship only as the full suite. Drop obsolete per-character
+  -- feature/provider choices so an old partial install cannot disable anything.
+  ShirsInventoryDB.features = nil
+  ShirsInventoryDB.setupComplete = nil
+  ShirsInventoryDB.bagProviderChoice = nil
+  ShirsInventoryDB.bagProviderSignature = nil
   if ShirsInventoryDB.professionLearning == nil then
     ShirsInventoryDB.professionLearning = true
   end
@@ -80,24 +80,18 @@ local function ShirsInventory_EnsureDB()
 end
 
 function ShirsInventory_IsFeatureSelectionComplete()
-  return ShirsInventory_EnsureDB().setupComplete and true or false
+  ShirsInventory_EnsureDB()
+  return true
 end
 
 function ShirsInventory_IsFeatureEnabled(feature)
-  local features = ShirsInventory_EnsureDB().features
-  return features[feature] and true or false
+  ShirsInventory_EnsureDB()
+  return feature == "bagUI" or feature == "sorter" or feature == "junk"
 end
 
 function ShirsInventory_SaveFeatureSelection(bagUI, sorter, junk)
-  if not bagUI and not sorter and not junk then
-    return false
-  end
-  local db = ShirsInventory_EnsureDB()
-  db.features.bagUI = bagUI and true or false
-  db.features.sorter = sorter and true or false
-  db.features.junk = junk and true or false
-  db.setupComplete = true
-  return true
+  ShirsInventory_EnsureDB()
+  return bagUI and sorter and junk and true or false
 end
 
 function ShirsInventory_SetFullAddon()
@@ -108,21 +102,17 @@ function ShirsInventory_SetFeatureEnabled(feature, enabled)
   if feature ~= "bagUI" and feature ~= "sorter" and feature ~= "junk" then
     return false
   end
-  local db = ShirsInventory_EnsureDB()
-  if not enabled then
-    local otherEnabled = false
-    for name, value in pairs(db.features) do
-      if name ~= feature and value then otherEnabled = true end
-    end
-    if not otherEnabled then return false end
-  end
-  db.features[feature] = enabled and true or false
-  db.setupComplete = true
-  return true
+  ShirsInventory_EnsureDB()
+  return enabled and true or false
 end
 
 function ShirsInventory_GetAutoSellJunk()
   return ShirsInventory_EnsureDB().autoSellJunk and true or false
+end
+
+function ShirsInventory_ShouldShowMerchantSellButton()
+  return MerchantFrame and type(MerchantFrame.IsShown) == "function" and
+    MerchantFrame:IsShown() and MerchantFrame.selectedTab ~= 2
 end
 
 function ShirsInventory_SetAutoSellJunk(enabled)
@@ -180,19 +170,13 @@ function ShirsInventory_GetBagAddonSignature(addons)
 end
 
 function ShirsInventory_GetBagProviderChoice(signature)
-  local db = ShirsInventory_EnsureDB()
-  if type(signature) ~= "string" or signature == "" or db.bagProviderSignature ~= signature then return nil end
-  if db.bagProviderChoice == "shirs" or db.bagProviderChoice == "other" then return db.bagProviderChoice end
-  return nil
+  ShirsInventory_EnsureDB()
+  return "shirs"
 end
 
 function ShirsInventory_SaveBagProviderChoice(choice, signature)
-  if choice ~= "shirs" and choice ~= "other" then return false end
-  if type(signature) ~= "string" or signature == "" then return false end
-  local db = ShirsInventory_EnsureDB()
-  db.bagProviderChoice = choice
-  db.bagProviderSignature = signature
-  return true
+  ShirsInventory_EnsureDB()
+  return choice == "shirs"
 end
 
 local function ShirsInventory_NormalizeMaterialCategory(category)
@@ -431,7 +415,12 @@ function ShirsInventory_SetQuestItemsOppositeEdge(enabled)
 end
 
 function ShirsInventory_GetSortDelay()
-  return 0.35
+  return 0.29
+end
+
+function ShirsInventory_GetSortMovesPerUpdate()
+  -- Never submit another cursor transaction until the prior move is visible.
+  return 1
 end
 
 function ShirsInventory_GetSortTimeout()
@@ -477,6 +466,12 @@ function ShirsInventory_BuildGeneralSortKey(mode, quality, categoryRank, typeKey
     inventoryType = invTypeKey,
     itemID = itemID,
   }
+end
+
+function ShirsInventory_GetOppositeEdgeRank(isQuest, isConjured, groupQuestItems)
+  if isQuest and groupQuestItems then return 1 end
+  if isConjured then return 2 end
+  return nil
 end
 
 function ShirsInventory_GetPrimaryCategoryRank(fixedRank, quality, isSoulShard, isConjured, isReagent, isQuest, materialCategory, soulbound, isConsumable)

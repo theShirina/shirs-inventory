@@ -14,6 +14,7 @@ local cursorItem = nil
 local runnerUpdate
 local slotCount = 5
 local flipMetadata = false
+local tooltipLines = {}
 local bags = {
   [0] = {
     { id = 200, count = 10 },
@@ -34,9 +35,22 @@ local function NewFrame(name)
     if name == "ShirsInventorySortRunner" and scriptName == "OnUpdate" then runnerUpdate = handler end
   end
   function frame:SetOwner() end
-  function frame:ClearLines() end
-  function frame:NumLines() return 0 end
-  function frame:SetBagItem() end
+  function frame:ClearLines() tooltipLines = {} end
+  function frame:NumLines() return table.getn(tooltipLines) end
+  function frame:SetBagItem(container, position)
+    tooltipLines = {}
+    local value = bags[container] and bags[container][position]
+    if value and value.id == 600 then
+      tooltipLines[1] = "Use: Summons your companion pet."
+    end
+    local line
+    for line = 1, table.getn(tooltipLines) do
+      local text = tooltipLines[line]
+      getfenv(0)["ShirsInventorySortTooltipTextLeft" .. line] = {
+        GetText = function() return text end,
+      }
+    end
+  end
   function frame:SetInventoryItem() end
   function frame:RegisterEvent() end
   return frame
@@ -47,6 +61,7 @@ function CreateFrame(_, name)
   if name then getfenv(0)[name] = frame end
   return frame
 end
+function getglobal(name) return getfenv(0)[name] end
 function GetAuctionItemClasses()
   return "Weapon", "Armor", "Container", "Consumable", "Trade Goods", "Projectile", "Quiver", "Recipe", "Reagent", "Miscellaneous"
 end
@@ -73,6 +88,9 @@ function GetItemInfo(itemID)
   end
   if itemID == 500 then
     return "Marked Junk", "link", 2, 1, "Miscellaneous", "Junk", 1, "", "texture"
+  end
+  if itemID == 600 then
+    return "Clockwork Friend", "link", 1, 1, "Miscellaneous", "Custom", 1, "", "texture"
   end
   if itemID == 299 or itemID == 300 then
     local quality
@@ -163,19 +181,54 @@ assert(ShirsInventory_GetSpecialtyBagClass("Felcloth Bag", "Soul Bag") == "soul"
 assert(ShirsInventory_GetSpecialtyBagClass("Enchanted Mageweave Pouch", "Bag") == nil,
   "normal bag display name caused false specialty classification")
 assert(ShirsInventory_GetEdgeAnchorRank(6948) == 1, "Hearthstone edge rank is wrong")
-assert(ShirsInventory_GetEdgeAnchorRank(6218) == 2, "Runed Copper Rod was not classified as a profession tool")
-assert(ShirsInventory_GetEdgeAnchorRank(15846) == 2, "Salt Shaker was not classified as a profession tool")
-assert(ShirsInventory_GetEdgeAnchorRank(9149) == 2, "Philosopher's Stone was not classified as a profession tool")
-assert(ShirsInventory_GetEdgeAnchorRank(19727, "Blood Scythe", "Trade Goods", "Herb") == 2,
+local fieldItemIDs = {26061, 26063, 26064, 26065}
+local fieldIndex
+for fieldIndex = 1, table.getn(fieldItemIDs) do
+  assert(ShirsInventory_GetEdgeAnchorRank(fieldItemIDs[fieldIndex]) == 2,
+    "requested field item was not placed between Hearthstone and profession tools")
+end
+assert(ShirsInventory_IsPetOrMountItem("Miscellaneous", "Pet", nil),
+  "standard pet subtype was not recognized")
+assert(ShirsInventory_IsPetOrMountItem("Miscellaneous", "Companion Pet", nil),
+  "custom companion-pet subtype was not recognized")
+assert(ShirsInventory_IsPetOrMountItem("Miscellaneous", "Mount", nil),
+  "mount subtype was not recognized")
+assert(ShirsInventory_IsPetOrMountItem("Miscellaneous", "Custom", "Summon Tiny Dragon"),
+  "Microbot custom summon spell was not recognized as a pet")
+assert(ShirsInventory_IsPetOrMountTooltipText("Use: Summons and dismisses your companion."),
+  "Microbot custom companion tooltip was not recognized")
+assert(ShirsInventory_IsPetOrMountTooltipText("Use: Teaches you how to summon this mount."),
+  "mount tooltip was not recognized")
+assert(not ShirsInventory_IsPetOrMountTooltipText("Use: Summons a temporary guardian."),
+  "unrelated summon tooltip became a pet or mount")
+assert(ShirsInventory_IsPetOrMountItem("Miscellaneous", "Custom", nil, true),
+  "Microbot custom pet tooltip flag was ignored")
+assert(not ShirsInventory_IsPetOrMountItem("Weapon", "Sword", "Summon Tiny Dragon", true),
+  "non-miscellaneous summon item became a pet anchor")
+assert(ShirsInventory_GetEdgeAnchorRank(90001, "Tiny Dragon", "Miscellaneous", "Custom", "Summon Tiny Dragon") == 3,
+  "Microbot custom pet was not grouped directly with mounts")
+assert(ShirsInventory_GetEdgeAnchorRank(90002, "Clockwork Friend", "Miscellaneous", "Custom", nil, true) == 3,
+  "tooltip-only Microbot custom pet was not grouped directly with mounts")
+assert(ShirsInventory_GetEdgeAnchorRank(6218) == 4, "Runed Copper Rod was not classified as a profession tool")
+assert(ShirsInventory_GetEdgeAnchorRank(15846) == 4, "Salt Shaker was not classified as a profession tool")
+assert(ShirsInventory_GetEdgeAnchorRank(9149) == 4, "Philosopher's Stone was not classified as a profession tool")
+assert(ShirsInventory_GetEdgeAnchorRank(19727, "Blood Scythe", "Trade Goods", "Herb") == 4,
   "Blood Scythe was not classified as a profession tool")
-assert(ShirsInventory_GetEdgeAnchorRank(19022, "Nat Pagle's Extreme Angler FC-5000", "Weapon", "Fishing Pole") == 2,
+assert(ShirsInventory_GetEdgeAnchorRank(19022, "Nat Pagle's Extreme Angler FC-5000", "Weapon", "Fishing Pole") == 4,
   "fishing-pole subtype was not classified as a profession tool")
-assert(ShirsInventory_GetEdgeAnchorRank(3567, "Dwarven Fishing Pole", "Weapon", "Two-Handed Axes") == 2,
+assert(ShirsInventory_GetEdgeAnchorRank(3567, "Dwarven Fishing Pole", "Weapon", "Two-Handed Axes") == 4,
   "Microbot fishing-pole name fallback was not classified as a profession tool")
-assert(ShirsInventory_GetEdgeAnchorRank(26471, "Apprentice Mining Pick", "Weapon", "Miscellaneous") == 2,
+assert(ShirsInventory_GetEdgeAnchorRank(26471, "Apprentice Mining Pick", "Weapon", "Miscellaneous") == 4,
   "Microbot apprentice mining pick was not classified as a profession tool")
-assert(ShirsInventory_GetEdgeAnchorRank(26474, "Artisan Mining Pick", "Weapon", "Miscellaneous") == 2,
+assert(ShirsInventory_GetEdgeAnchorRank(26474, "Artisan Mining Pick", "Weapon", "Miscellaneous") == 4,
   "Microbot artisan mining pick was not classified as a profession tool")
+assert(ShirsInventory_GetAdjacencyGroup(26085) == "world-buff-scrolls" and
+  ShirsInventory_GetAdjacencyGroup(26086) == "world-buff-scrolls" and
+  ShirsInventory_GetAdjacencyGroup(26087) == "world-buff-scrolls" and
+  ShirsInventory_GetAdjacencyGroup(26088) == "world-buff-scrolls",
+  "world-buff scroll adjacency group is incomplete")
+assert(ShirsInventory_GetAdjacencyGroup(26084) == nil,
+  "unrelated item entered the world-buff scroll adjacency group")
 assert(ShirsInventory_GetEdgeAnchorRank(2454, "Elixir of Lion's Strength", "Consumable", "Consumable") == nil,
   "ordinary item became an edge anchor")
 assert(ShirsInventory_IsQuestBorderItem("Quest", 1),
@@ -217,7 +270,58 @@ local function tickOnce()
   runnerUpdate()
 end
 
+-- Exercise the complete tooltip path: named tooltip text region -> TooltipFacts
+-- -> ReadItem -> edge rank. Metadata alone is deliberately too weak here.
+slotCount = 2
+bags[0] = {
+  { id = 100, count = 1 },
+  { id = 600, count = 1 },
+}
+ShirsInventory_SetSortMode("itemType")
+ShirsInventory_SetDirection("top")
 local ok, status = ShirsInventory_SortBags()
+assert(ok and status == "started", "tooltip-only pet sort did not start")
+tickUntilDone()
+assert(bags[0][1] and bags[0][1].id == 600 and bags[0][2] and bags[0][2].id == 100,
+  "tooltip-only custom pet did not propagate into selected-edge placement")
+
+-- Confirmed-move sorting must submit only one cursor transaction, then wait
+-- until the exact result is visible in a fresh bag scan.
+slotCount = 3
+bags[0] = {
+  { id = 103, count = 1 },
+  { id = 101, count = 1 },
+  { id = 102, count = 1 },
+}
+ShirsInventory_SetSortMode("itemType")
+ShirsInventory_SetDirection("top")
+local realBatchMoveCursorItem = ShirsInventory_MoveCursorItem
+local batchSubmissions = 0
+ShirsInventory_MoveCursorItem = function(srcContainer, srcSlot, dstContainer, dstSlot)
+  batchSubmissions = batchSubmissions + 1
+  return realBatchMoveCursorItem(srcContainer, srcSlot, dstContainer, dstSlot)
+end
+local ok, status = ShirsInventory_SortBags()
+assert(ok and status == "started", "confirmed-move sort did not start")
+tickOnce()
+assert(batchSubmissions == 1, "runner submitted a second move before the first was acknowledged")
+tickUntilDone()
+assert(not cursorItem, "confirmed-move sort left an item on the cursor")
+assert(bags[0][1] and bags[0][1].id == 101 and bags[0][2].id == 102 and bags[0][3].id == 103,
+  "confirmed-move sort produced the wrong final order")
+ShirsInventory_MoveCursorItem = realBatchMoveCursorItem
+
+slotCount = 5
+bags[0] = {
+  { id = 200, count = 10 },
+  { id = 100, count = 5 },
+  { id = 100, count = 20 },
+  nil,
+  nil,
+}
+ShirsInventory_SetDirection("top")
+
+ok, status = ShirsInventory_SortBags()
 assert(ok and status == "started", "top sort did not start")
 tickUntilDone()
 assert(not cursorItem, "top sort left an item on the cursor")
@@ -324,36 +428,82 @@ assert(bags[0][2] and bags[0][2].id == 299, "immutable rarity tail changed durin
 flipMetadata = false
 
 -- WoW may expose the old bag snapshot for one or more update ticks after a
--- cursor transaction. Cursor-empty means the command was safely submitted;
--- it does not prove that the bag state has changed yet.
-slotCount = 2
+-- cursor move. Never submit a second cursor transaction until the first move's
+-- exact predicted state is visible. This models the live rarity-to-item-type
+-- failure where only the first move landed before an optimistic burst desynced.
+slotCount = 3
 bags[0] = {
-  { id = 200, count = 1 },
-  { id = 100, count = 1 },
+  { id = 103, count = 1 },
+  { id = 101, count = 1 },
+  { id = 102, count = 1 },
 }
 ShirsInventory_SetSortMode("itemType")
 ShirsInventory_SetDirection("top")
 local realMoveCursorItem = ShirsInventory_MoveCursorItem
-local submittedMove
+local submittedMoves = {}
 ShirsInventory_MoveCursorItem = function(srcContainer, srcSlot, dstContainer, dstSlot)
-  submittedMove = {srcContainer, srcSlot, dstContainer, dstSlot}
+  table.insert(submittedMoves, {srcContainer, srcSlot, dstContainer, dstSlot})
   return true
 end
 ok, status = ShirsInventory_SortBags()
-assert(ok and status == "started", "delayed-acknowledgement sort did not start")
+assert(ok and status == "started", "delayed-burst sort did not start")
 tickOnce()
-assert(submittedMove and ShirsInventory_IsRunning(), "cursor transaction was not submitted")
+assert(table.getn(submittedMoves) == 1 and ShirsInventory_IsRunning(),
+  "runner did not submit exactly one cursor move")
 tickOnce()
 diagnostics = ShirsInventory_GetSortDiagnostics()
-assert(ShirsInventory_IsRunning(), "unchanged first scan was misclassified as a cycle")
-assert(diagnostics.moves == 0, "unacknowledged cursor transaction counted as progress")
+assert(ShirsInventory_IsRunning(), "unchanged move snapshot was misclassified as a cycle")
+assert(diagnostics.moves == 0, "unacknowledged move counted as progress")
+assert(table.getn(submittedMoves) == 1, "unchanged legacy bag snapshot caused a second move")
+local submittedMove = submittedMoves[1]
 local sourceSlot = bags[submittedMove[1]][submittedMove[2]]
+local destinationSlot = bags[submittedMove[3]][submittedMove[4]]
+bags[submittedMove[1]][submittedMove[2]] = nil
+tickOnce()
+diagnostics = ShirsInventory_GetSortDiagnostics()
+assert(ShirsInventory_IsRunning() and diagnostics.moves == 0,
+  "intermediate partial snapshot stopped or acknowledged the submitted move")
+assert(table.getn(submittedMoves) == 1,
+  "intermediate partial snapshot caused a second cursor transaction")
+bags[submittedMove[1]][submittedMove[2]] = destinationSlot
+bags[submittedMove[3]][submittedMove[4]] = sourceSlot
+tickOnce()
+diagnostics = ShirsInventory_GetSortDiagnostics()
+assert(ShirsInventory_IsRunning(), "confirmed first move stopped the sort")
+assert(diagnostics.moves == 1 and table.getn(submittedMoves) == 2,
+  "confirmed first move did not unlock exactly one next move")
+submittedMove = submittedMoves[2]
+sourceSlot = bags[submittedMove[1]][submittedMove[2]]
 bags[submittedMove[1]][submittedMove[2]] = bags[submittedMove[3]][submittedMove[4]]
 bags[submittedMove[3]][submittedMove[4]] = sourceSlot
 tickOnce()
 diagnostics = ShirsInventory_GetSortDiagnostics()
-assert(not ShirsInventory_IsRunning() and diagnostics.reason == "complete", "delayed move was not acknowledged")
-assert(diagnostics.moves == 1, "confirmed delayed move was not counted once")
+assert(not ShirsInventory_IsRunning() and diagnostics.reason == "complete", "delayed moves were not acknowledged")
+assert(diagnostics.moves == 2, "confirmed delayed move count is wrong")
+
+-- A changed state that never becomes the exact predicted state must fail
+-- closed after the grace period and must never submit another transaction.
+slotCount = 3
+bags[0] = {
+  { id = 103, count = 1 },
+  { id = 101, count = 1 },
+  { id = 102, count = 1 },
+}
+submittedMoves = {}
+ok, status = ShirsInventory_SortBags()
+assert(ok and status == "started", "persistent-wrong-state sort did not start")
+tickOnce()
+assert(table.getn(submittedMoves) == 1, "persistent-wrong-state setup did not submit one move")
+submittedMove = submittedMoves[1]
+bags[submittedMove[1]][submittedMove[2]] = nil
+tickOnce()
+local wrongTick
+for wrongTick = 1, 7 do tickOnce() end
+diagnostics = ShirsInventory_GetSortDiagnostics()
+assert(not ShirsInventory_IsRunning() and diagnostics.reason == "desync",
+  "persistent wrong state did not stop with desync")
+assert(table.getn(submittedMoves) == 1,
+  "persistent wrong state caused a second cursor transaction")
 ShirsInventory_MoveCursorItem = realMoveCursorItem
 
 -- A large inventory can require more than 15 seconds at the safe 0.35-second

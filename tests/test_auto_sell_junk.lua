@@ -24,6 +24,19 @@ function UseContainerItem() end
 
 assert(loadfile(corePath))()
 assert(loadfile(junkPath))()
+assert(ShirsInventory_ShouldShowMerchantSellButton(),
+  "Sell Junk should be visible on the merchant's main tab")
+MerchantFrame.selectedTab = 2
+assert(not ShirsInventory_ShouldShowMerchantSellButton(),
+  "Sell Junk should be hidden on the Buyback tab")
+MerchantFrame.selectedTab = 1
+MerchantFrame.IsShown = function() return false end
+assert(not ShirsInventory_ShouldShowMerchantSellButton(),
+  "Sell Junk should be hidden while the merchant is closed")
+MerchantFrame.IsShown = function() return true end
+CanMerchantRepair = function() return false end
+assert(ShirsInventory_ShouldShowMerchantSellButton(),
+  "Sell Junk should remain available on a non-repair vendor's main tab")
 assert(ShirsInventory_GetAutoSellJunk() == false, "auto-sell must default off")
 local count, status = ShirsInventory_StartAutoJunkSale()
 assert(count == 0 and status == "disabled", "vendor open must do nothing while opt-in is off")
@@ -32,10 +45,11 @@ assert(ShirsInventory_GetAutoSellJunk() == true, "auto-sell opt-in was not saved
 count, status = ShirsInventory_StartAutoJunkSale()
 assert(count == 2 and status == "started", "opt-in should queue gray and manually marked junk")
 ShirsInventory_CancelJunkSale()
-ShirsInventory_SetFeatureEnabled("junk", false)
+assert(not ShirsInventory_SetFeatureEnabled("junk", false),
+  "full-suite junk tools were disabled by the obsolete feature API")
 count, status = ShirsInventory_StartAutoJunkSale()
-assert(count == 0 and status == "disabled", "disabled Junk feature must block automatic sale")
-ShirsInventory_SetFeatureEnabled("junk", true)
+assert(count == 2 and status == "started", "full-suite junk tools stopped automatic sale")
+ShirsInventory_CancelJunkSale()
 MerchantFrame.selectedTab = 2
 count, status = ShirsInventory_StartAutoJunkSale()
 assert(count == 0 and status == "merchant", "Buyback must block automatic sale")

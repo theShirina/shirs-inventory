@@ -74,4 +74,20 @@ if not LT(greenBoundKey, whiteBoundKey) then
   error("white soulbound gear still sorts ahead of uncommon gear")
 end
 
+if ShirsInventory_GetOppositeEdgeRank(true, false, true) ~= 1 then
+  error("grouped quest item did not receive the inner opposite-edge rank")
+end
+if ShirsInventory_GetOppositeEdgeRank(false, true, true) ~= 2 then
+  error("conjured item did not receive the outer opposite-edge rank")
+end
+if ShirsInventory_GetOppositeEdgeRank(true, true, true) ~= 1 then
+  error("quest-outlined conjured item lost quest precedence")
+end
+if ShirsInventory_GetOppositeEdgeRank(true, false, false) ~= nil then
+  error("disabled quest grouping still assigned an opposite-edge rank")
+end
+if ShirsInventory_GetOppositeEdgeRank(false, true, false) ~= 2 then
+  error("conjured grouping incorrectly depends on the quest setting")
+end
+
 print("SORT_MODE_TEST=PASS")

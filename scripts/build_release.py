@@ -65,7 +65,7 @@ Made and tested for Microbot's WoW 1.12.1 client. It should also work on other W
 INSTALL
 1. Extract the ShirsInventory folder into Interface/AddOns.
 2. Restart the client.
-3. Choose the features and bag provider on first login.
+3. Open your bags. The combined inventory, sorter, and junk tools load as one suite.
 
 Source and updates:
 https://github.com/theShirina/shirs-inventory

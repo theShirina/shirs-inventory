@@ -16,14 +16,16 @@ assert(detected[1].name == "Bagnon" and detected[2].name == "Bagnon_Core" and
   "providers should be stable and sorted")
 local signature = ShirsInventory_GetBagAddonSignature(detected)
 assert(signature == "bagnon|bagnon_core|bagshui|cleanup|pfui", "conflict signature should be deterministic")
-assert(ShirsInventory_GetBagProviderChoice(signature) == nil, "fresh conflict should require a choice")
+assert(ShirsInventory_GetBagProviderChoice(signature) == "shirs",
+  "full suite did not claim bag ownership automatically")
 assert(not ShirsInventory_SaveBagProviderChoice("invalid", signature), "invalid provider choice was accepted")
-assert(ShirsInventory_SaveBagProviderChoice("other", signature), "other provider choice was rejected")
-assert(ShirsInventory_GetBagProviderChoice(signature) == "other", "other provider choice was not saved")
-assert(ShirsInventory_IsFeatureEnabled("sorter") and ShirsInventory_IsFeatureEnabled("junk"),
-  "keeping Bagnon or Bagshui must not disable the independent sorter or junk tools")
-assert(ShirsInventory_GetBagProviderChoice("bagnon|bagnon_core|bagshui|cleanup|onebag|pfui") == nil,
-  "changed provider set should require a new choice")
-assert(ShirsInventory_SaveBagProviderChoice("shirs", signature), "Shir provider choice was rejected")
-assert(ShirsInventory_GetBagProviderChoice(signature) == "shirs", "Shir provider choice was not saved")
+assert(not ShirsInventory_SaveBagProviderChoice("other", signature),
+  "external bag ownership is still selectable")
+assert(ShirsInventory_GetBagProviderChoice(signature) == "shirs",
+  "rejected external choice changed bag ownership")
+assert(ShirsInventory_IsFeatureEnabled("bagUI") and ShirsInventory_IsFeatureEnabled("sorter") and
+  ShirsInventory_IsFeatureEnabled("junk"), "the full suite is not fully enabled")
+assert(ShirsInventory_GetBagProviderChoice("bagnon|bagnon_core|bagshui|cleanup|onebag|pfui") == "shirs",
+  "changed provider set stopped automatic Shir ownership")
+assert(ShirsInventory_SaveBagProviderChoice("shirs", signature), "Shir ownership compatibility call failed")
 print("BAG_ADDON_CONFLICT_MODEL_TEST=PASS")

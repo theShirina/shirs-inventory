@@ -4,8 +4,8 @@ assert(loadfile(settingsPath))()
 ShirsInventory_IsBagUIActive = function() return false end
 ShirsInventory_IsFeatureEnabled = function() return true end
 assert(type(ShirsInventory_ShouldUseStandaloneControls) == "function" and
-  ShirsInventory_ShouldUseStandaloneControls(),
-  "external-provider mode must not fall back to the enabled Full Bag UI checkbox")
+  not ShirsInventory_ShouldUseStandaloneControls(),
+  "full suite still enables standalone controls on another bag UI")
 local frames = {
   ContainerFrame1 = { visible = true, id = 2 },
   ContainerFrame2 = { visible = true, id = 0 },
