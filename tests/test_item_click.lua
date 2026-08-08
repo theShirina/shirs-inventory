@@ -23,10 +23,17 @@ assert(loadfile(corePath))()
 assert(loadfile(junkPath))()
 assert(loadfile(uiPath))()
 
+local inventoryRefreshes, bankRefreshes = 0, 0
+ShirsInventory_Update = function() inventoryRefreshes = inventoryRefreshes + 1 end
+ShirsInventory_UpdateBank = function() bankRefreshes = bankRefreshes + 1 end
+ShirsInventoryBankFrame = { IsShown = function() return true end }
+
 local button = { bag = 0, slot = 1 }
 local handled = ShirsInventory_HandleItemClick(button, "RightButton")
 assert(handled and ShirsInventoryDB.junkItems[7076], "Alt-right-click should mark the item id")
 assert(used == 0 and picked == 0, "marking junk must not use, move, or sell the item")
+assert(inventoryRefreshes == 1 and bankRefreshes == 1,
+  "junk marking must refresh both visible inventory and bank badges")
 
 altDown = false
 ShirsInventory_HandleItemClick(button, "RightButton")

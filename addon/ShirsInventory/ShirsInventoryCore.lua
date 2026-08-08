@@ -434,8 +434,18 @@ function ShirsInventory_GetInventoryFramePosition()
 end
 
 function ShirsInventory_SaveInventoryFramePosition(frame)
-  if not frame or type(frame.GetPoint) ~= "function" then return false end
-  local point, _, relativePoint, x, y = frame:GetPoint(1)
+  if not frame then return false end
+  local point, relativePoint, x, y
+  if type(frame.GetLeft) == "function" and type(frame.GetTop) == "function" then
+    x, y = frame:GetLeft(), frame:GetTop()
+    if type(x) == "number" and type(y) == "number" then
+      point = "TOPLEFT"
+      relativePoint = "BOTTOMLEFT"
+    end
+  end
+  if not point and type(frame.GetPoint) == "function" then
+    point, _, relativePoint, x, y = frame:GetPoint(1)
+  end
   if type(point) ~= "string" or type(relativePoint) ~= "string" or
     type(x) ~= "number" or type(y) ~= "number" then
     return false
@@ -613,6 +623,102 @@ function ShirsInventory_BuildInventorySlots(slotCounts)
     end
   end
   return result
+end
+
+function ShirsInventory_GetBankBagSlotLimit()
+  return tonumber(NUM_BANKBAGSLOTS) or 6
+end
+
+function ShirsInventory_GetBankContainerIDs()
+  local containers = {BANK_CONTAINER or -1}
+  local bag
+  for bag = 5, 4 + ShirsInventory_GetBankBagSlotLimit() do
+    table.insert(containers, bag)
+  end
+  return containers
+end
+
+function ShirsInventory_BuildBankSlots(slotCounts)
+  local result = {}
+  local containers = ShirsInventory_GetBankContainerIDs()
+  local containerIndex
+  for containerIndex = 1, table.getn(containers) do
+    local bag = containers[containerIndex]
+    local count = slotCounts[bag] or 0
+    local slot
+    for slot = 1, count do
+      table.insert(result, { bag = bag, slot = slot })
+    end
+  end
+  return result
+end
+
+function ShirsInventory_GetBankFrameLayout()
+  return {
+    maximumColumns = 10,
+    itemSize = 36,
+    itemStep = 40,
+    gridTopOffset = -64,
+    footerHeight = 14,
+    bankBagButtonSize = 26,
+    bankBagButtonGap = 0,
+    bankBagIconInset = 0,
+    bankBagLayeredBorder = false,
+    bankBagAnchorPoint = "TOPLEFT",
+    bankBagTopOffset = -32,
+  }
+end
+
+function ShirsInventory_GetBankFrameAnchor()
+  return {
+    point = "BOTTOMLEFT",
+    relativePoint = "BOTTOMLEFT",
+    x = 20,
+    y = 20,
+  }
+end
+
+function ShirsInventory_BuildBankBagBarModel(purchasedSlots, maximumSlots, textures, slotCounts)
+  local entries = {}
+  maximumSlots = tonumber(maximumSlots) or ShirsInventory_GetBankBagSlotLimit()
+  purchasedSlots = math.max(0, math.min(tonumber(purchasedSlots) or 0, maximumSlots))
+  textures = textures or {}
+  slotCounts = slotCounts or {}
+  local nextCombinedIndex = (slotCounts[BANK_CONTAINER or -1] or 0) + 1
+  local index
+  for index = 1, purchasedSlots do
+    local bag = index + 4
+    local slots = slotCounts[bag] or 0
+    table.insert(entries, {
+      inventoryIndex = index,
+      bag = bag,
+      texture = textures[index],
+      purchase = false,
+      slots = slots,
+      firstCombinedIndex = slots > 0 and nextCombinedIndex or nil,
+      lastCombinedIndex = slots > 0 and (nextCombinedIndex + slots - 1) or nil,
+    })
+    nextCombinedIndex = nextCombinedIndex + slots
+  end
+  if purchasedSlots < maximumSlots then
+    table.insert(entries, {
+      inventoryIndex = purchasedSlots + 1,
+      bag = purchasedSlots + 5,
+      purchase = true,
+    })
+  end
+  return entries
+end
+
+function ShirsInventory_GetBankSlotCounts()
+  local counts = {}
+  local containers = ShirsInventory_GetBankContainerIDs()
+  local index
+  for index = 1, table.getn(containers) do
+    local bag = containers[index]
+    counts[bag] = GetContainerNumSlots and (GetContainerNumSlots(bag) or 0) or 0
+  end
+  return counts
 end
 
 function ShirsInventory_GetGridLayout(slotCount, maximumColumns)

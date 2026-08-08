@@ -416,6 +416,11 @@ function ShirsInventory_SortBags()
   return Start({0, 1, 2, 3, 4})
 end
 
+function ShirsInventory_GetBankSortContainers()
+  if ShirsInventory_GetBankContainerIDs then return ShirsInventory_GetBankContainerIDs() end
+  return {BANK_CONTAINER or -1, 5, 6, 7, 8, 9, 10}
+end
+
 function ShirsInventory_SortBank()
   if ShirsInventory_IsFeatureEnabled and not ShirsInventory_IsFeatureEnabled("sorter") then
     Message("Bag Sorter is disabled in settings.")
@@ -425,7 +430,7 @@ function ShirsInventory_SortBank()
     Message("Open the bank before sorting bank slots.")
     return false, "bank"
   end
-  return Start({-1, 5, 6, 7, 8, 9, 10})
+  return Start(ShirsInventory_GetBankSortContainers())
 end
 
 local function StateSignature(slots)
@@ -462,6 +467,11 @@ local function ProcessSortBurst()
   end
   if UnitAffectingCombat and UnitAffectingCombat("player") then
     Stop("combat", "Sorting stopped because combat started.")
+    return
+  end
+  if activeContainers and activeContainers[1] == (BANK_CONTAINER or -1) and
+    (not BankFrame or not BankFrame:IsVisible()) then
+    Stop("bank-closed", "Sorting stopped because the bank was closed.")
     return
   end
 

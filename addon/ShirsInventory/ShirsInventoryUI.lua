@@ -272,6 +272,10 @@ function ShirsInventory_HandleItemClick(button, mouseButton, ignoreModifiers)
       ShirsInventory_Message("Removed this item type from junk.")
     end
     if ShirsInventory_Update then ShirsInventory_Update() end
+    if ShirsInventoryBankFrame and ShirsInventoryBankFrame.IsShown and
+      ShirsInventoryBankFrame:IsShown() and ShirsInventory_UpdateBank then
+      ShirsInventory_UpdateBank()
+    end
     return true
   end
 
@@ -473,6 +477,9 @@ end
 
 local inventoryButtons = {}
 local bagBarButtons = {}
+local bankButtons = {}
+local bankBagButtons = {}
+local bankPurchaseButton
 local saleElapsed = 0
 
 local function ShirsInventory_SetBagChecks(checked)
@@ -494,8 +501,10 @@ local function ShirsInventory_HideNativeNormalBags()
 end
 
 local function ShirsInventory_UpdateControlLabels()
-  if not ShirsInventoryFrame then return end
-  ShirsInventory_RefreshInventoryButtonStyles()
+  if ShirsInventoryFrame then ShirsInventory_RefreshInventoryButtonStyles() end
+  if ShirsInventoryBankFrame and ShirsInventoryBankFrame:IsShown() and ShirsInventory_RefreshBankButtonStyles then
+    ShirsInventory_RefreshBankButtonStyles()
+  end
 end
 
 -- Icon-mode button styling. Text mode keeps the UIPanelButtonTemplate chrome;
@@ -761,19 +770,30 @@ function ShirsInventory_LayoutInventoryControls(frame)
   end
 end
 
-function ShirsInventory_RefreshInventoryButtonStyles()
-  if not ShirsInventoryFrame then return end
-  if type(ShirsInventory_ApplyButtonStyle) ~= "function" then return end
-  ShirsInventory_LayoutInventoryControls(ShirsInventoryFrame)
+function ShirsInventory_RefreshActionButtonStyles(frame, bank)
+  if not frame or type(ShirsInventory_ApplyButtonStyle) ~= "function" then return end
+  ShirsInventory_LayoutInventoryControls(frame)
   local specs = ShirsInventory_GetInventoryButtonSpecs()
+  if bank then
+    specs.sort.tooltipTitle = "Sort bank"
+    specs.sort.tooltipDescription = "Arrange the main bank and all equipped bank bags with Shir's sorting engine."
+  end
   specs.sort.forceIcon = true
   specs.mode.forceIcon = true
   specs.direction.forceIcon = true
   specs.settings.forceIcon = true
-  ShirsInventory_ApplyButtonStyle(ShirsInventoryFrame.sortButton, specs.sort)
-  ShirsInventory_ApplyButtonStyle(ShirsInventoryFrame.modeButton, specs.mode)
-  ShirsInventory_ApplyButtonStyle(ShirsInventoryFrame.directionButton, specs.direction)
-  ShirsInventory_ApplyButtonStyle(ShirsInventoryFrame.settingsButton, specs.settings)
+  ShirsInventory_ApplyButtonStyle(frame.sortButton, specs.sort)
+  ShirsInventory_ApplyButtonStyle(frame.modeButton, specs.mode)
+  ShirsInventory_ApplyButtonStyle(frame.directionButton, specs.direction)
+  ShirsInventory_ApplyButtonStyle(frame.settingsButton, specs.settings)
+end
+
+function ShirsInventory_RefreshInventoryButtonStyles()
+  ShirsInventory_RefreshActionButtonStyles(ShirsInventoryFrame, false)
+end
+
+function ShirsInventory_RefreshBankButtonStyles()
+  ShirsInventory_RefreshActionButtonStyles(ShirsInventoryBankFrame, true)
 end
 
 function ShirsInventory_OnModeButtonClick()
@@ -786,6 +806,11 @@ end
 function ShirsInventory_GetInventoryTitle(playerName)
   if type(playerName) ~= "string" or playerName == "" then return "Player's Inventory" end
   return playerName .. "'s Inventory"
+end
+
+function ShirsInventory_GetBankTitle(playerName)
+  if type(playerName) ~= "string" or playerName == "" then return "Player's Bank" end
+  return playerName .. "'s Bank"
 end
 
 function ShirsInventory_RefreshInventoryTitle(frame, playerName)
@@ -809,9 +834,30 @@ function ShirsInventory_OnInventoryDragStop(frame)
   if not frame then return false end
   if frame.StopMovingOrSizing then frame:StopMovingOrSizing() end
   if ShirsInventory_SaveInventoryFramePosition then
-    return ShirsInventory_SaveInventoryFramePosition(frame)
+    local saved = ShirsInventory_SaveInventoryFramePosition(frame)
+    if not saved then return false end
+    local position = ShirsInventory_GetInventoryFramePosition and
+      ShirsInventory_GetInventoryFramePosition() or nil
+    if position then
+      ShirsInventory_SetInventoryFrameAnchor(
+        frame, position.point, UIParent, position.relativePoint, position.x, position.y, false
+      )
+    end
+    return true
   end
   return false
+end
+
+function ShirsInventory_BindInventoryDragHandle(frame, handle)
+  if not frame or not handle then return false end
+  handle:RegisterForDrag("LeftButton")
+  handle:SetScript("OnDragStart", function()
+    if frame.StartMoving then frame:StartMoving() end
+  end)
+  handle:SetScript("OnDragStop", function()
+    ShirsInventory_OnInventoryDragStop(frame)
+  end)
+  return true
 end
 
 function ShirsInventory_ApplyInventoryFramePosition(frame)
@@ -824,6 +870,13 @@ function ShirsInventory_ApplyInventoryFramePosition(frame)
   else
     ShirsInventory_SetInventoryFrameAnchor(frame, "BOTTOMRIGHT", UIParent, "BOTTOMRIGHT", -16, 84, false)
   end
+end
+
+function ShirsInventory_PrepareInventoryFrameForShow(frame, playerName)
+  if not frame then return false end
+  ShirsInventory_RefreshInventoryTitle(frame, playerName)
+  ShirsInventory_ApplyInventoryFramePosition(frame)
+  return true
 end
 
 function ShirsInventory_FormatCooldownRemaining(remaining)
@@ -917,6 +970,16 @@ function ShirsInventory_UpdateItemCursor(button, locked, readable)
   end
 end
 
+function ShirsInventory_SetItemTooltip(button)
+  if not button then return nil end
+  if button.bag == (BANK_CONTAINER or -1) and GameTooltip.SetInventoryItem and BankButtonIDToInvSlotID then
+    GameTooltip:SetInventoryItem("player", BankButtonIDToInvSlotID(button.slot))
+    return "bank"
+  end
+  GameTooltip:SetBagItem(button.bag, button.slot)
+  return "bag"
+end
+
 local function ShirsInventory_OnItemEnter(button)
   if not button.hasItem then return end
   if button:GetRight() >= GetScreenWidth() / 2 then
@@ -924,7 +987,7 @@ local function ShirsInventory_OnItemEnter(button)
   else
     GameTooltip:SetOwner(button, "ANCHOR_RIGHT")
   end
-  GameTooltip:SetBagItem(button.bag, button.slot)
+  ShirsInventory_SetItemTooltip(button)
   local itemId = ShirsInventory_GetItemId(GetContainerItemLink(button.bag, button.slot))
   local _, _, locked, quality, readable = GetContainerItemInfo(button.bag, button.slot)
   if (not ShirsInventory_IsFeatureEnabled or ShirsInventory_IsFeatureEnabled("junk")) and
@@ -941,9 +1004,11 @@ local function ShirsInventory_OnItemEnter(button)
   ShirsInventory_UpdateItemCursor(button, locked, readable)
 end
 
-local function ShirsInventory_CreateItemButton(index)
-  local frame = ShirsInventoryFrame
-  local button = CreateFrame("Button", "ShirsInventoryItem" .. index, frame, "ItemButtonTemplate")
+local function ShirsInventory_CreateItemButton(index, ownerFrame, namePrefix, collection)
+  local frame = ownerFrame or ShirsInventoryFrame
+  local buttons = collection or inventoryButtons
+  local prefix = namePrefix or "ShirsInventoryItem"
+  local button = CreateFrame("Button", prefix .. index, frame, "ItemButtonTemplate")
   button:SetWidth(36)
   button:SetHeight(36)
   button:RegisterForClicks("LeftButtonUp", "RightButtonUp")
@@ -1016,7 +1081,7 @@ local function ShirsInventory_CreateItemButton(index)
     ShirsInventory_UpdateCooldownDisplay(this, arg1)
     if GameTooltip:IsOwned(this) then ShirsInventory_OnItemEnter(this) end
   end)
-  inventoryButtons[index] = button
+  buttons[index] = button
   return button
 end
 
@@ -1074,6 +1139,9 @@ function ShirsInventory_RefreshRarityBoxes()
   for index = 1, table.getn(inventoryButtons) do
     local button = inventoryButtons[index]
     if button:IsShown() then ShirsInventory_UpdateItemButton(button) end
+  end
+  if ShirsInventoryBankFrame and ShirsInventoryBankFrame:IsShown() and ShirsInventory_UpdateBank then
+    ShirsInventory_UpdateBank(ShirsInventoryBankFrame)
   end
 end
 
@@ -1177,25 +1245,31 @@ local function ShirsInventory_UpdateBagBar()
   end
 end
 
-local function ShirsInventory_ClampMainFrame()
-  if not ShirsInventoryFrame or not UIParent or not ShirsInventoryFrame.GetLeft or
-    not ShirsInventoryFrame.GetTop or not UIParent.GetWidth or not UIParent.GetHeight then
-    return
+function ShirsInventory_ClampInventoryFrame(frame, preserveSavedPosition)
+  frame = frame or ShirsInventoryFrame
+  if not frame then return false end
+  if preserveSavedPosition and ShirsInventory_GetInventoryFramePosition and
+    ShirsInventory_GetInventoryFramePosition() then
+    return true
   end
-  local left = ShirsInventoryFrame:GetLeft()
-  local top = ShirsInventoryFrame:GetTop()
-  if not left or not top then return end
+  if not UIParent or not frame.GetLeft or not frame.GetTop or not frame.GetWidth or
+    not frame.GetHeight or not UIParent.GetWidth or not UIParent.GetHeight then
+    return true
+  end
+  local left = frame:GetLeft()
+  local top = frame:GetTop()
+  if not left or not top then return true end
   local bottomMargin = 8
   if MainMenuBarBackpackButton and MainMenuBarBackpackButton.GetTop then
     bottomMargin = (MainMenuBarBackpackButton:GetTop() or 0) + 8
   end
   local newLeft, newTop = ShirsInventory_GetClampedTopLeft(
-    left, top, ShirsInventoryFrame:GetWidth(), ShirsInventoryFrame:GetHeight(),
+    left, top, frame:GetWidth(), frame:GetHeight(),
     UIParent:GetWidth(), UIParent:GetHeight(), 8, bottomMargin
   )
-  if newLeft == left and newTop == top then return end
-  ShirsInventory_SetInventoryFrameAnchor(
-    ShirsInventoryFrame, "TOPLEFT", UIParent, "BOTTOMLEFT", newLeft, newTop, true
+  if newLeft == left and newTop == top then return true end
+  return ShirsInventory_SetInventoryFrameAnchor(
+    frame, "TOPLEFT", UIParent, "BOTTOMLEFT", newLeft, newTop, true
   )
 end
 
@@ -1208,7 +1282,7 @@ local function ShirsInventory_RebuildGrid()
   local bagBarLayout = ShirsInventory_GetBagBarLayout()
   ShirsInventoryFrame:SetWidth(layout.width)
   ShirsInventoryFrame:SetHeight(layout.height + bagBarLayout.heightExtra)
-  ShirsInventory_ClampMainFrame()
+  ShirsInventory_ClampInventoryFrame(ShirsInventoryFrame, true)
   ShirsInventory_UpdateBagBar()
 
   for index, address in ipairs(slots) do
@@ -1234,6 +1308,442 @@ function ShirsInventory_Update()
   if not ShirsInventoryFrame or not ShirsInventoryFrame:IsShown() then return end
   ShirsInventory_RebuildGrid()
   ShirsInventory_UpdateControlLabels()
+end
+
+function ShirsInventory_RequestBankSlotPurchase()
+  if type(StaticPopup_Show) ~= "function" then return false end
+  StaticPopup_Show("CONFIRM_BUY_BANK_SLOT")
+  return true
+end
+
+function ShirsInventory_SuppressOtherBankFrames(nativeBank, extraFrames)
+  nativeBank = nativeBank or BankFrame
+  if nativeBank then
+    if nativeBank.SetScale then nativeBank:SetScale(0.001) end
+    if nativeBank.SetAlpha then nativeBank:SetAlpha(0) end
+    if nativeBank.EnableMouse then nativeBank:EnableMouse(false) end
+  end
+  local frames = extraFrames or {}
+  if not extraFrames then
+    local names = {"pfBank", "OneBankFrame", "BagnonBankFrame", "BagnonFramebank", "ArkInventory_Bank"}
+    local index
+    for index = 1, table.getn(names) do
+      local other = getglobal and getglobal(names[index]) or nil
+      if other then table.insert(frames, other) end
+    end
+    if pfUI and pfUI.bag and pfUI.bag.left then table.insert(frames, pfUI.bag.left) end
+  end
+  local index
+  for index = 1, table.getn(frames) do
+    local other = frames[index]
+    if other and other ~= ShirsInventoryBankFrame and other.Hide then other:Hide() end
+  end
+  return true
+end
+
+function ShirsInventory_CreateBankActionButtons(frame)
+  if not frame or not CreateFrame then return false end
+  frame.sortButton = CreateFrame("Button", nil, frame)
+  frame.sortButton:SetWidth(64)
+  frame.sortButton:SetHeight(22)
+  frame.sortButton:SetText("Sort")
+  frame.sortButton:SetScript("OnClick", function()
+    if ShirsInventory_SortBank then ShirsInventory_SortBank() end
+  end)
+
+  frame.modeButton = CreateFrame("Button", nil, frame)
+  frame.modeButton:SetWidth(80)
+  frame.modeButton:SetHeight(22)
+  frame.modeButton:SetScript("OnClick", function() ShirsInventory_OnModeButtonClick() end)
+
+  frame.directionButton = CreateFrame("Button", nil, frame)
+  frame.directionButton:SetWidth(64)
+  frame.directionButton:SetHeight(22)
+  frame.directionButton:SetScript("OnClick", function()
+    if ShirsInventory_ToggleDirection then ShirsInventory_ToggleDirection() end
+    ShirsInventory_UpdateControlLabels()
+  end)
+
+  frame.settingsButton = CreateFrame("Button", nil, frame)
+  frame.settingsButton:SetWidth(72)
+  frame.settingsButton:SetHeight(22)
+  frame.settingsButton:SetText("Settings")
+  frame.settingsButton:SetScript("OnClick", function()
+    if ShirsInventory_ShowSettings then ShirsInventory_ShowSettings() end
+  end)
+  return true
+end
+
+function ShirsInventory_HandleBankBagClick(button, mouseButton)
+  if not button or not button.bag then return false end
+  if IsShiftKeyDown and IsShiftKeyDown() and type(BankFrameItemButtonBag_OnShiftClick) == "function" then
+    BankFrameItemButtonBag_OnShiftClick()
+    return true
+  end
+  if type(BankFrameItemButtonBag_OnClick) == "function" then
+    BankFrameItemButtonBag_OnClick(mouseButton)
+    return true
+  end
+  local inventoryID = BankButtonIDToInvSlotID and BankButtonIDToInvSlotID(button.bag, 1) or nil
+  if not inventoryID then return false end
+  if IsShiftKeyDown and IsShiftKeyDown() and PickupBagFromSlot then
+    PickupBagFromSlot(inventoryID)
+    return true
+  end
+  if CursorHasItem and CursorHasItem() then
+    if PutItemInBag then PutItemInBag(inventoryID) end
+  elseif ToggleBag then
+    ToggleBag(button.bag)
+  end
+  return true
+end
+
+function ShirsInventory_HandleBankBagDrop(button, mouseButton)
+  if not button or not button.bag then return false end
+  if type(BankFrameItemButtonBag_OnClick) == "function" then
+    BankFrameItemButtonBag_OnClick(mouseButton or "LeftButton")
+    return true
+  end
+  local inventoryID = BankButtonIDToInvSlotID and BankButtonIDToInvSlotID(button.bag, 1) or nil
+  if not inventoryID then return false end
+  if PutItemInBag then PutItemInBag(inventoryID) end
+  return true
+end
+
+function ShirsInventory_BindBankBagButtonScripts(button)
+  if not button or not button.SetScript then return false end
+  button:SetScript("OnClick", function() ShirsInventory_HandleBankBagClick(this, arg1) end)
+  button:SetScript("OnDragStart", function()
+    if PickupBagFromSlot and this.inventoryID then PickupBagFromSlot(this.inventoryID) end
+  end)
+  button:SetScript("OnReceiveDrag", function() ShirsInventory_HandleBankBagDrop(this, "LeftButton") end)
+  return true
+end
+
+function ShirsInventory_ApplyBankBagButtonVisuals(button, purchase)
+  if not button then return false end
+  local layout = ShirsInventory_GetBankFrameLayout()
+  button:SetWidth(layout.bankBagButtonSize)
+  button:SetHeight(layout.bankBagButtonSize)
+  if button.SetNormalTexture then button:SetNormalTexture(nil) end
+  if not button.icon and button.CreateTexture then
+    button.icon = button:CreateTexture(nil, "ARTWORK")
+  end
+  if button.icon then
+    button.icon:ClearAllPoints()
+    button.icon:SetAllPoints(button)
+    if purchase then
+      button.icon:SetTexture("Interface\\PaperDoll\\UI-PaperDoll-Slot-Bag")
+      button.icon:SetVertexColor(0.45, 0.45, 0.45, 1)
+    end
+  end
+  button:SetHighlightTexture("Interface\\Buttons\\WHITE8X8", "ADD")
+  local highlight = button:GetHighlightTexture()
+  if highlight then
+    if highlight.ClearAllPoints then highlight:ClearAllPoints() end
+    highlight:SetAllPoints(button)
+    highlight:SetVertexColor(0.15, 0.5, 1, 0.28)
+  end
+  return true
+end
+
+function ShirsInventory_SetBankBagRangeHighlight(bag, buttons)
+  buttons = buttons or bankButtons
+  local index
+  for index = 1, table.getn(buttons) do
+    local itemButton = buttons[index]
+    if itemButton.bagRangeHighlight then
+      if bag ~= nil and itemButton:IsShown() and ShirsInventory_ShouldHighlightBagSlot(itemButton, bag) then
+        itemButton.bagRangeHighlight:Show()
+      else
+        itemButton.bagRangeHighlight:Hide()
+      end
+    end
+  end
+  return true
+end
+
+function ShirsInventory_OnBankBagEnter(button, buttons)
+  if not button or not button.bagEntry then return false end
+  local entry = button.bagEntry
+  ShirsInventory_SetBankBagRangeHighlight(entry.bag, buttons)
+  local inventoryID = button.inventoryID or entry.inventoryID
+  GameTooltip:SetOwner(button, "ANCHOR_RIGHT")
+  if button.texture and inventoryID and GameTooltip.SetInventoryItem then
+    GameTooltip:SetInventoryItem("player", inventoryID)
+  else
+    GameTooltip:SetText(BANK_BAG or "Bank Bag", 1, 0.82, 0)
+  end
+  GameTooltip:AddLine((entry.slots or 0) .. " slots", 0.65, 0.8, 1)
+  if entry.firstCombinedIndex then
+    GameTooltip:AddLine(
+      "Combined slots " .. entry.firstCombinedIndex .. "-" .. entry.lastCombinedIndex,
+      0.35, 0.7, 1
+    )
+  end
+  GameTooltip:AddLine("Left-click or drag to remove or swap this bag.", 0.45, 0.8, 1, 1)
+  GameTooltip:Show()
+  return true
+end
+
+function ShirsInventory_OnBankBagLeave(buttons)
+  ShirsInventory_SetBankBagRangeHighlight(nil, buttons)
+  GameTooltip:Hide()
+  return true
+end
+
+function ShirsInventory_ApplyBankFrameAnchor(frame)
+  if not frame then return false end
+  local anchor = ShirsInventory_GetBankFrameAnchor()
+  frame:ClearAllPoints()
+  frame:SetPoint(anchor.point, UIParent, anchor.relativePoint, anchor.x, anchor.y)
+  return true
+end
+
+function ShirsInventory_OnBankDragStop(frame)
+  if not frame then return false end
+  if frame.StopMovingOrSizing then frame:StopMovingOrSizing() end
+  if not frame.GetLeft or not frame.GetBottom then return false end
+  local left, bottom = frame:GetLeft(), frame:GetBottom()
+  if left == nil or bottom == nil then return false end
+  frame:ClearAllPoints()
+  frame:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", left, bottom)
+  return true
+end
+
+local function ShirsInventory_CreateBankBagButton(frame, index)
+  local button = CreateFrame("Button", "ShirsInventoryBankBag" .. index, frame)
+  button:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+  button:RegisterForDrag("LeftButton")
+  button.isBag = 1
+  button.GetInventorySlot = function(self)
+    return BankButtonIDToInvSlotID and BankButtonIDToInvSlotID(self:GetID(), 1) or nil
+  end
+  ShirsInventory_ApplyBankBagButtonVisuals(button, false)
+  ShirsInventory_BindBankBagButtonScripts(button)
+  button:SetScript("OnEnter", function() ShirsInventory_OnBankBagEnter(this) end)
+  button:SetScript("OnLeave", function() ShirsInventory_OnBankBagLeave() end)
+  bankBagButtons[index] = button
+  return button
+end
+
+local function ShirsInventory_CreateBankPurchaseButton(frame)
+  local button = CreateFrame("Button", "ShirsInventoryBankPurchaseButton", frame)
+  ShirsInventory_ApplyBankBagButtonVisuals(button, true)
+  button.text = button:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+  button.text:SetPoint("CENTER", button, "CENTER", 0, 1)
+  button.text:SetText("+")
+  button.text:SetTextColor(0.45, 0.65, 1, 1)
+  button:SetScript("OnClick", function() ShirsInventory_RequestBankSlotPurchase() end)
+  button:SetScript("OnEnter", function()
+    this.text:SetTextColor(1, 1, 1, 1)
+    GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
+    GameTooltip:SetText(BANK_BAG_PURCHASE or "Purchase Bank Bag Slot", 1, 0.82, 0)
+    GameTooltip:AddLine("Click to review the price and buy the next bank bag slot.", 0.9, 0.9, 0.9, 1)
+    GameTooltip:Show()
+  end)
+  button:SetScript("OnLeave", function()
+    this.text:SetTextColor(0.45, 0.65, 1, 1)
+    GameTooltip:Hide()
+  end)
+  bankPurchaseButton = button
+  return button
+end
+
+function ShirsInventory_UpdateBankBagBar(frame, slotCounts)
+  if not frame then return false end
+  local purchased = 0
+  if GetNumBankSlots then purchased = GetNumBankSlots() or 0 end
+  local textures = {}
+  local index
+  for index = 1, purchased do
+    local bag = index + 4
+    local inventoryID = BankButtonIDToInvSlotID and BankButtonIDToInvSlotID(bag, 1) or nil
+    textures[index] = inventoryID and GetInventoryItemTexture and GetInventoryItemTexture("player", inventoryID) or nil
+  end
+  slotCounts = slotCounts or ShirsInventory_GetBankSlotCounts()
+  local entries = ShirsInventory_BuildBankBagBarModel(
+    purchased, ShirsInventory_GetBankBagSlotLimit(), textures, slotCounts
+  )
+  local layout = ShirsInventory_GetBankFrameLayout()
+  for index = 1, table.getn(bankBagButtons) do bankBagButtons[index]:Hide() end
+  if bankPurchaseButton then bankPurchaseButton:Hide() end
+  local buttonIndex = 0
+  local entry
+  for index, entry in ipairs(entries) do
+    local button
+    if entry.purchase then
+      button = bankPurchaseButton or ShirsInventory_CreateBankPurchaseButton(frame)
+    else
+      buttonIndex = buttonIndex + 1
+      button = bankBagButtons[buttonIndex] or ShirsInventory_CreateBankBagButton(frame, buttonIndex)
+      button.bag = entry.bag
+      button.bagEntry = entry
+      button.inventoryID = BankButtonIDToInvSlotID and BankButtonIDToInvSlotID(entry.bag, 1) or nil
+      button.texture = entry.texture
+      button.icon:SetTexture(entry.texture or "Interface\\PaperDoll\\UI-PaperDoll-Slot-Bag")
+      if entry.texture then button.icon:SetVertexColor(1, 1, 1) else button.icon:SetVertexColor(0.45, 0.45, 0.45) end
+      button:SetID(entry.bag)
+    end
+    button:ClearAllPoints()
+    button:SetPoint(
+      layout.bankBagAnchorPoint, frame, layout.bankBagAnchorPoint,
+      14 + (index - 1) * (layout.bankBagButtonSize + layout.bankBagButtonGap), layout.bankBagTopOffset
+    )
+    button:Show()
+  end
+  return true
+end
+
+function ShirsInventory_TryOpenBankFromGossip()
+  if type(GetGossipOptions) ~= "function" or type(SelectGossipOption) ~= "function" then
+    return false
+  end
+  local options = {GetGossipOptions()}
+  local rawIndex
+  for rawIndex = 1, table.getn(options), 2 do
+    local optionType = string.lower(tostring(options[rawIndex + 1] or ""))
+    if optionType == "banker" then
+      SelectGossipOption((rawIndex + 1) / 2)
+      return true
+    end
+  end
+  return false
+end
+
+function ShirsInventory_HandleBankEvent(eventName, frame)
+  if not frame then return false end
+  if eventName == "GOSSIP_SHOW" then
+    return ShirsInventory_TryOpenBankFromGossip()
+  elseif eventName == "BANKFRAME_OPENED" then
+    ShirsInventory_SuppressOtherBankFrames()
+    frame:Show()
+    if ShirsInventory_UpdateBank then ShirsInventory_UpdateBank(frame) end
+    return true
+  elseif eventName == "BANKFRAME_CLOSED" then
+    frame:Hide()
+    return true
+  elseif eventName == "PLAYERBANKSLOTS_CHANGED" or eventName == "PLAYERBANKBAGSLOTS_CHANGED" or
+    eventName == "BAG_UPDATE" or eventName == "BAG_UPDATE_COOLDOWN" or eventName == "ITEM_LOCK_CHANGED" then
+    if frame:IsShown() then
+      if ShirsInventory_UpdateBank then ShirsInventory_UpdateBank(frame) end
+      return true
+    end
+  end
+  return false
+end
+
+function ShirsInventory_UpdateBank(frame)
+  frame = frame or ShirsInventoryBankFrame
+  if not frame or not frame:IsShown() then return false end
+  local bankLayout = ShirsInventory_GetBankFrameLayout()
+  local slotCounts = ShirsInventory_GetBankSlotCounts()
+  local slots = ShirsInventory_BuildBankSlots(slotCounts)
+  local grid = ShirsInventory_GetGridLayout(table.getn(slots), bankLayout.maximumColumns)
+  local free = 0
+  frame:SetWidth(grid.width)
+  frame:SetHeight(grid.rows * bankLayout.itemStep + bankLayout.gridTopOffset * -1 + bankLayout.footerHeight)
+
+  local index, address
+  for index, address in ipairs(slots) do
+    local button = bankButtons[index] or ShirsInventory_CreateItemButton(
+      index, frame, "ShirsInventoryBankItem", bankButtons
+    )
+    button.bag = address.bag
+    button.slot = address.slot
+    button:SetID(address.slot)
+    button:ClearAllPoints()
+    local column = math.mod(index - 1, grid.columns)
+    local row = math.floor((index - 1) / grid.columns)
+    button:SetPoint(
+      "TOPLEFT", frame, "TOPLEFT",
+      14 + column * bankLayout.itemStep,
+      bankLayout.gridTopOffset - row * bankLayout.itemStep
+    )
+    button:Show()
+    ShirsInventory_UpdateItemButton(button)
+    if not button.hasItem then free = free + 1 end
+  end
+  for index = table.getn(slots) + 1, table.getn(bankButtons) do
+    bankButtons[index]:Hide()
+  end
+  frame.freeText:SetText(free .. " free")
+  ShirsInventory_UpdateBankBagBar(frame, slotCounts)
+  ShirsInventory_RefreshBankButtonStyles()
+  return true
+end
+
+function ShirsInventory_CreateBankFrame()
+  if ShirsInventoryBankFrame then return ShirsInventoryBankFrame end
+  local frame = CreateFrame("Frame", "ShirsInventoryBankFrame", UIParent)
+  ShirsInventoryBankFrame = frame
+  frame:SetFrameStrata("HIGH")
+  frame:SetToplevel(true)
+  frame:SetMovable(true)
+  frame:SetClampedToScreen(true)
+  frame:EnableMouse(true)
+  frame:RegisterForDrag("LeftButton")
+  ShirsInventory_ApplyBankFrameAnchor(frame)
+  frame:SetBackdrop({
+    bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+    edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+    tile = true,
+    tileSize = 16,
+    edgeSize = 16,
+    insets = { left = 4, right = 4, top = 4, bottom = 4 },
+  })
+  frame:SetBackdropColor(0.035, 0.045, 0.065, 0.96)
+  frame:SetBackdropBorderColor(0.3, 0.55, 0.8, 1)
+
+  frame.title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+  frame.title:SetPoint("TOPLEFT", frame, "TOPLEFT", 14, -13)
+  frame.title:SetText(ShirsInventory_GetBankTitle(UnitName and UnitName("player")))
+  frame.freeText = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+
+  frame.dragHandle = CreateFrame("Button", nil, frame)
+  frame.dragHandle:SetPoint("TOPLEFT", frame, "TOPLEFT", 7, -5)
+  frame.dragHandle:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -150, -5)
+  frame.dragHandle:SetHeight(25)
+  frame.dragHandle:RegisterForDrag("LeftButton")
+  frame.dragHandle:SetScript("OnDragStart", function() frame:StartMoving() end)
+  frame.dragHandle:SetScript("OnDragStop", function() ShirsInventory_OnBankDragStop(frame) end)
+
+  frame.closeButton = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
+  frame.closeButton:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 2, 2)
+  frame.freeText:SetPoint("RIGHT", frame.closeButton, "LEFT", -2, 0)
+  frame.closeButton:SetScript("OnClick", function()
+    if CloseBankFrame then CloseBankFrame() else ShirsInventoryBankFrame:Hide() end
+  end)
+
+  ShirsInventory_CreateBankActionButtons(frame)
+
+  frame:SetScript("OnShow", function()
+    this.title:SetText(ShirsInventory_GetBankTitle(UnitName and UnitName("player")))
+    ShirsInventory_SuppressOtherBankFrames()
+    ShirsInventory_RefreshBankButtonStyles()
+  end)
+  frame:SetScript("OnDragStart", function() this:StartMoving() end)
+  frame:SetScript("OnDragStop", function() ShirsInventory_OnBankDragStop(this) end)
+  frame:SetScript("OnEvent", function()
+    ShirsInventory_HandleBankEvent(event, this)
+  end)
+  frame:SetScript("OnUpdate", function()
+    this.suppressElapsed = (this.suppressElapsed or 0) + arg1
+    if this.suppressElapsed >= 0.10 then
+      this.suppressElapsed = 0
+      ShirsInventory_SuppressOtherBankFrames()
+    end
+  end)
+  frame:RegisterEvent("BANKFRAME_OPENED")
+  frame:RegisterEvent("GOSSIP_SHOW")
+  frame:RegisterEvent("BANKFRAME_CLOSED")
+  frame:RegisterEvent("PLAYERBANKSLOTS_CHANGED")
+  frame:RegisterEvent("PLAYERBANKBAGSLOTS_CHANGED")
+  frame:RegisterEvent("BAG_UPDATE")
+  frame:RegisterEvent("BAG_UPDATE_COOLDOWN")
+  frame:RegisterEvent("ITEM_LOCK_CHANGED")
+  frame:Hide()
+  return frame
 end
 
 local function ShirsInventory_CreateMainFrame()
@@ -1262,6 +1772,12 @@ local function ShirsInventory_CreateMainFrame()
   ShirsInventory_RefreshInventoryTitle(frame, UnitName and UnitName("player"))
   frame.freeText = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
   frame.freeText:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -35, -16)
+
+  frame.dragHandle = CreateFrame("Button", nil, frame)
+  frame.dragHandle:SetPoint("TOPLEFT", frame, "TOPLEFT", 7, -5)
+  frame.dragHandle:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -150, -5)
+  frame.dragHandle:SetHeight(25)
+  ShirsInventory_BindInventoryDragHandle(frame, frame.dragHandle)
 
   frame.closeButton = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
   frame.closeButton:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 2, 2)
@@ -1300,7 +1816,7 @@ local function ShirsInventory_CreateMainFrame()
   frame.settingsButton:SetScript("OnClick", function() ShirsInventory_ShowSettings() end)
 
   frame:SetScript("OnShow", function()
-    ShirsInventory_RefreshInventoryTitle(this, UnitName and UnitName("player"))
+    ShirsInventory_PrepareInventoryFrameForShow(this, UnitName and UnitName("player"))
     ShirsInventory_HideNativeNormalBags()
     ShirsInventory_SetBagChecks(1)
     ShirsInventory_Update()
@@ -1358,6 +1874,13 @@ function ShirsInventory_HandleSlashCommand(message)
     ShirsInventory_StartJunkSale()
   elseif command == "settings" or command == "options" then
     ShirsInventory_ShowSettings()
+  elseif command == "bank" then
+    if BankFrame and BankFrame.IsVisible and BankFrame:IsVisible() and ShirsInventoryBankFrame then
+      ShirsInventoryBankFrame:Show()
+      ShirsInventory_UpdateBank(ShirsInventoryBankFrame)
+    else
+      ShirsInventory_Message("Open a bank before using the combined bank window.")
+    end
   else
     ToggleBackpack()
   end
@@ -1367,6 +1890,7 @@ end
 function ShirsInventory_InitializeUI()
   if ShirsInventoryFrame then return ShirsInventoryFrame end
   local frame = ShirsInventory_CreateMainFrame()
+  ShirsInventory_CreateBankFrame()
   if ShirsInventory_CreateSettingsUI then ShirsInventory_CreateSettingsUI() end
   ShirsInventory_ApplyFeatureSelection()
 

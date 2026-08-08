@@ -1,12 +1,15 @@
 # Shir's Inventory
 
-A standalone bag addon made and tested for Microbot's WoW 1.12.1 client. It should also work on other WoW 1.12.x clients and private servers, but those have not been tested.
+A standalone bag addon made and tested for Microbot's WoW 1.12.1 client.
 
-Current release: **0.4.1** — a full-suite build with faster confirmed sorting, fixed Top and Bottom groups, visible item cooldowns, and a compact merchant junk-sale control.
+Current release: **0.5.1** — adds the combined bank, direct banker opening, bank-bag slot highlighting, and stable per-character inventory positioning.
 
 ## What it does
 
 - Combines the Backpack and equipped bags into one continuous grid.
+- Replaces the normal or pfUI bank window with one combined view of the main bank and equipped bank bags.
+- Shows the native bank-bag slots and the next bank-slot purchase button.
+- Gives the bank the same Sort, grouping, direction, and Settings controls as the inventory.
 - Sorts bags and the bank by item type or rarity.
 - Sorts from the top or bottom and merges partial stacks.
 - Waits for each exact bag-state update before submitting the next cursor move.
@@ -23,7 +26,7 @@ Current release: **0.4.1** — a full-suite build with faster confirmed sorting,
 
 ## Download and install
 
-1. Download the ZIP from the [v0.4.1 release page](https://github.com/theShirina/shirs-inventory/releases/tag/v0.4.1).
+1. Download the ZIP from the [v0.5.1 release page](https://github.com/theShirina/shirs-inventory/releases/tag/v0.5.1).
 2. Extract the `ShirsInventory` folder into your client's `Interface/AddOns` folder.
 3. Restart the client.
 
@@ -37,6 +40,7 @@ Shir's Inventory takes ownership of the bag bar when it loads.
 - `/si mark <item ID or item link>` — mark an item type as junk.
 - `/si unmark <item ID or item link>` — remove a manual junk mark.
 - `/si settings` — open Shir's Inventory settings.
+- `/si bank` — reopen the combined bank window while the normal bank is open.
 
 ## Source and license
 
