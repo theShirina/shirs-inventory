@@ -56,6 +56,25 @@ local function ShirsInventory_MerchantCanSell()
   return MerchantFrame and MerchantFrame:IsShown() and MerchantFrame.selectedTab ~= 2
 end
 
+local function ShirsInventory_ResolveJunkQuality(itemId, link, containerQuality)
+  if type(containerQuality) == "number" and containerQuality >= 0 then
+    return containerQuality
+  end
+  if type(GetItemInfo) ~= "function" then
+    return containerQuality
+  end
+
+  local query = itemId or link
+  if query == nil then
+    return containerQuality
+  end
+  local _, _, itemQuality = GetItemInfo(query)
+  if type(itemQuality) == "number" and itemQuality >= 0 then
+    return itemQuality
+  end
+  return containerQuality
+end
+
 local function ShirsInventory_CollectBagItems()
   local counts = {}
   for bag = 0, 4 do
@@ -67,11 +86,13 @@ local function ShirsInventory_CollectBagItems()
   for _, address in ipairs(slots) do
     local texture, count, locked, quality = GetContainerItemInfo(address.bag, address.slot)
     if texture then
+      local link = GetContainerItemLink(address.bag, address.slot)
+      local itemId = ShirsInventory_GetItemId(link)
       table.insert(result, {
         bag = address.bag,
         slot = address.slot,
-        itemId = ShirsInventory_GetItemId(GetContainerItemLink(address.bag, address.slot)),
-        quality = quality,
+        itemId = itemId,
+        quality = ShirsInventory_ResolveJunkQuality(itemId, link, quality),
         locked = locked,
         count = count,
       })
@@ -137,18 +158,41 @@ function ShirsInventory_SellNextJunk()
 
   local entry = saleState.queue[saleState.index]
   if not entry then
+    local currentMoney = GetMoney and GetMoney() or saleState.startMoney
+    if saleState.summaryMoney == nil then
+      saleState.summaryMoney = currentMoney
+      saleState.summaryChecks = 1
+      saleState.summaryStableChecks = 1
+      return false, "waiting"
+    end
+
+    saleState.summaryChecks = saleState.summaryChecks + 1
+    if currentMoney == saleState.summaryMoney then
+      saleState.summaryStableChecks = saleState.summaryStableChecks + 1
+    else
+      saleState.summaryMoney = currentMoney
+      saleState.summaryStableChecks = 0
+    end
+
+    local gained = currentMoney - saleState.startMoney
+    if not (gained ~= 0 and saleState.summaryStableChecks >= 2) and saleState.summaryChecks < 12 then
+      return false, "waiting"
+    end
+
     local sold = saleState.sold
-    local gained = (GetMoney and GetMoney() or saleState.startMoney) - saleState.startMoney
+    local gainedText = ShirsInventory_AccountFormatMoney and ShirsInventory_AccountFormatMoney(gained) or tostring(gained) .. "c"
     saleState = nil
     if DEFAULT_CHAT_FRAME then
-      DEFAULT_CHAT_FRAME:AddMessage("|cff68ccefShir's Inventory:|r sold " .. sold .. " junk stack(s) for " .. gained .. " copper.")
+      DEFAULT_CHAT_FRAME:AddMessage("|cff68ccefShir's Inventory:|r sold " .. sold .. " junk stack(s) for " .. gainedText .. ".")
     end
     return false, "complete"
   end
   saleState.index = saleState.index + 1
 
   local texture, _, locked, quality = GetContainerItemInfo(entry.bag, entry.slot)
-  local itemId = ShirsInventory_GetItemId(GetContainerItemLink(entry.bag, entry.slot))
+  local link = GetContainerItemLink(entry.bag, entry.slot)
+  local itemId = ShirsInventory_GetItemId(link)
+  quality = ShirsInventory_ResolveJunkQuality(itemId, link, quality)
   if not texture or locked or itemId ~= entry.itemId or not ShirsInventory_IsJunk(itemId, quality, ShirsInventory_EnsureJunkItems()) then
     return false, "skipped"
   end
