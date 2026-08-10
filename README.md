@@ -2,7 +2,7 @@
 
 A standalone bag addon made and tested for Microbot's WoW 1.12.1 client.
 
-Current release: **0.5.3** — fixes transient gray-item quality reads, waits for the post-sale money total to settle, and formats junk-sale proceeds as gold, silver, and copper.
+Current release: **0.5.4** — restores direct bag dragging onto equipped-bag slots and lets pfUI's money datatext close the combined inventory on its second click.
 
 ## What it does
 
@@ -26,7 +26,7 @@ Current release: **0.5.3** — fixes transient gray-item quality reads, waits fo
 
 ## Download and install
 
-1. Download the ZIP from the [v0.5.3 release page](https://github.com/theShirina/shirs-inventory/releases/tag/v0.5.3).
+1. Download the ZIP from the [v0.5.4 release page](https://github.com/theShirina/shirs-inventory/releases/tag/v0.5.4).
 2. Extract the `ShirsInventory` folder into your client's `Interface/AddOns` folder.
 3. Restart the client.
 

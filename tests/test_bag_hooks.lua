@@ -39,8 +39,23 @@ assert(IsBagOpen(KEYRING_CONTAINER) == 99, "keyring open checks should delegate"
 
 OpenAllBags()
 assert(shown, "open-all should show the combined inventory")
+OpenAllBags()
+assert(shown, "stock open-all semantics must keep an already-open combined inventory shown")
 CloseAllBags()
 assert(not shown, "close-all should hide the combined inventory")
+
+pfUI = { bag = {} }
+ShirsInventory_UninstallBagHooks()
+ShirsInventory_InstallBagHooks()
+OpenAllBags()
+assert(shown, "pfUI's money-datatext OpenAllBags callback should open the combined inventory")
+OpenAllBags()
+assert(not shown, "pressing pfUI's money datatext again should close the combined inventory")
+ToggleBackpack()
+assert(shown, "the stock backpack toggle should still open the combined inventory with pfUI loaded")
+OpenAllBags()
+assert(not shown, "pfUI's money datatext must close inventory opened through another bag control")
+pfUI = nil
 
 shown = true
 delegated = {}

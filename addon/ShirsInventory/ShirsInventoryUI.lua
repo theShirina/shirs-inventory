@@ -231,6 +231,12 @@ function ShirsInventory_HandleBagBarClick(button, mouseButton)
   if mouseButton ~= "LeftButton" or not entry or entry.bag == 0 or not entry.inventoryID then
     return false
   end
+  -- A release after dragging a bag can arrive through the click path on these
+  -- custom buttons. Match the stock BagSlotButton cursor path instead of
+  -- picking up the equipped bag and undoing the drop.
+  if type(CursorHasItem) == "function" and CursorHasItem() then
+    return ShirsInventory_HandleBagBarDrop(button)
+  end
   if type(PickupBagFromSlot) ~= "function" then return false end
   PickupBagFromSlot(entry.inventoryID)
   return true
@@ -344,7 +350,15 @@ function ShirsInventory_InstallBagHooks()
   end
 
   OpenAllBags = function()
-    ShirsInventory_GetFrame():Show()
+    local frame = ShirsInventory_GetFrame()
+    -- pfUI intentionally wires its bag-space and money panels to OpenAllBags
+    -- as a toggle. Preserve that provider contract while keeping stock
+    -- OpenAllBags open-only when pfUI is absent.
+    if pfUI and frame:IsShown() then
+      frame:Hide()
+    else
+      frame:Show()
+    end
   end
 
   CloseAllBags = function()

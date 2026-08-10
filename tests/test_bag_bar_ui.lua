@@ -56,9 +56,17 @@ pickedSlot = nil
 putSlot = nil
 function CursorHasItem() return true end
 assert(ShirsInventory_HandleBagBarClick({bagEntry = entries[2]}, "LeftButton") and
-  pickedSlot == 20 and putSlot == nil,
-  "drag completion must not re-equip the picked-up bag through the click path")
+  pickedSlot == nil and putSlot == 20,
+  "a drag-style click onto an occupied bag slot must use Vanilla PutItemInBag so replacement can prompt")
+putSlot = nil
+assert(ShirsInventory_HandleBagBarClick({bagEntry = entries[4]}, "LeftButton") and
+  pickedSlot == nil and putSlot == 22,
+  "a drag-style click onto an empty bag slot must use Vanilla PutItemInBag so the bag equips")
 function CursorHasItem() return false end
+assert(ShirsInventory_HandleBagBarClick({bagEntry = entries[2]}, "LeftButton") and pickedSlot == 20,
+  "clicking an equipped bag with an empty cursor must use the Vanilla bag-slot pickup API")
+pickedSlot = nil
+putSlot = nil
 assert(ShirsInventory_HandleBagBarDrop({bagEntry = entries[2]}) and putSlot == 20,
   "dropping a cursor bag onto an equipped slot must use Vanilla PutItemInBag")
 putSlot = nil
