@@ -1,36 +1,48 @@
--- Shir's Inventory - account-wide gold tracking.
+-- Shir's Inventory - account-wide gold and item tracking.
 --
 -- Original clean-room implementation for Vanilla WoW 1.12.1 (Lua 5.0.3).
 -- The per-character saved variable ShirsInventoryDB cannot hold account
--- data, so this module persists every character's copper on this
--- account+server in the separate account-wide saved variable
+-- data, so this module persists every character's copper and item totals on
+-- this account+server in the separate account-wide saved variable
 -- ShirsInventoryAccountDB, keyed by realm name and then character name.
 --
 -- Saved variable shape:
 --   ShirsInventoryAccountDB = {
---     version = 1,
+--     version = 2,
 --     realms = {
 --       ["RealmName"] = {
 --         ["CharacterName"] = 1234567, -- copper
 --       },
 --     },
+--     items = {
+--       ["RealmName"] = {
+--         ["CharacterName"] = {
+--           bags = { [14342] = 6 },
+--           bank = { [14342] = 12 },
+--           bagsUpdated = 1234567890,
+--           bankUpdated = 1234567890,
+--         },
+--       },
+--     },
 --   }
 --
--- The current character's entry is refreshed on PLAYER_LOGIN and on every
--- PLAYER_MONEY change. A compact gold readout is attached to the combined
--- inventory frame (ShirsInventoryFrame) and only appears while the full
--- suite bag UI feature (bagUI) is enabled; hovering it opens a tooltip
--- listing every known character on the realm with a running total.
+-- Gold refreshes on PLAYER_LOGIN and PLAYER_MONEY. Carried-item snapshots
+-- refresh at login and on bag changes; bank snapshots refresh only while the
+-- bank is open. Item tooltips show same-account totals by character. The
+-- compact gold readout remains attached to the combined inventory frame.
 
 function ShirsInventory_AccountEnsureDB()
   if type(ShirsInventoryAccountDB) ~= "table" then
     ShirsInventoryAccountDB = {}
   end
-  if ShirsInventoryAccountDB.version == nil then
-    ShirsInventoryAccountDB.version = 1
+  if type(ShirsInventoryAccountDB.version) ~= "number" or ShirsInventoryAccountDB.version < 2 then
+    ShirsInventoryAccountDB.version = 2
   end
   if type(ShirsInventoryAccountDB.realms) ~= "table" then
     ShirsInventoryAccountDB.realms = {}
+  end
+  if type(ShirsInventoryAccountDB.items) ~= "table" then
+    ShirsInventoryAccountDB.items = {}
   end
   return ShirsInventoryAccountDB
 end
@@ -64,6 +76,155 @@ function ShirsInventory_AccountGetCurrentCharacter()
     return nil
   end
   return character
+end
+
+local function ShirsInventory_AccountNow()
+  if type(time) == "function" then return tonumber(time()) or 0 end
+  return 0
+end
+
+local function ShirsInventory_AccountExtractItemID(link)
+  if ShirsInventory_GetItemId then return ShirsInventory_GetItemId(link) end
+  if type(link) ~= "string" then return nil end
+  local _, _, rawItemID = string.find(link, "item:(%d+)")
+  return tonumber(rawItemID)
+end
+
+local function ShirsInventory_AccountCountContainers(containers)
+  local counts = {}
+  if type(GetContainerNumSlots) ~= "function" or type(GetContainerItemLink) ~= "function" then
+    return counts, 0
+  end
+  local _, container
+  for _, container in ipairs(containers) do
+    local slots = tonumber(GetContainerNumSlots(container)) or 0
+    local slot
+    for slot = 1, slots do
+      local itemID = ShirsInventory_AccountExtractItemID(GetContainerItemLink(container, slot))
+      if itemID then
+        local count = 1
+        if type(GetContainerItemInfo) == "function" then
+          local _, stackCount = GetContainerItemInfo(container, slot)
+          count = tonumber(stackCount) or 1
+        end
+        if count > 0 then counts[itemID] = (counts[itemID] or 0) + count end
+      end
+    end
+  end
+  local distinct = 0
+  local _
+  for _ in pairs(counts) do distinct = distinct + 1 end
+  return counts, distinct
+end
+
+function ShirsInventory_AccountGetCharacterItems(realm, character, create)
+  local db = ShirsInventory_AccountEnsureDB()
+  if type(realm) ~= "string" or realm == "" or type(character) ~= "string" or character == "" then
+    return nil
+  end
+  if type(db.items[realm]) ~= "table" then
+    if not create then return nil end
+    db.items[realm] = {}
+  end
+  if type(db.items[realm][character]) ~= "table" then
+    if not create then return nil end
+    db.items[realm][character] = { bags = {}, bank = {} }
+  end
+  local record = db.items[realm][character]
+  if type(record.bags) ~= "table" then record.bags = {} end
+  if type(record.bank) ~= "table" then record.bank = {} end
+  return record
+end
+
+function ShirsInventory_AccountScanBags()
+  if not ShirsInventory_AccountIsEnabled() then return nil end
+  local realm = ShirsInventory_AccountGetCurrentRealm()
+  local character = ShirsInventory_AccountGetCurrentCharacter()
+  if not realm or not character then return nil end
+  local counts, distinct = ShirsInventory_AccountCountContainers({0, 1, 2, 3, 4})
+  local record = ShirsInventory_AccountGetCharacterItems(realm, character, true)
+  record.bags = counts
+  record.bagsUpdated = ShirsInventory_AccountNow()
+  return distinct
+end
+
+function ShirsInventory_AccountScanBank()
+  if not ShirsInventory_AccountIsEnabled() then return nil end
+  local realm = ShirsInventory_AccountGetCurrentRealm()
+  local character = ShirsInventory_AccountGetCurrentCharacter()
+  if not realm or not character then return nil end
+  local containers = {BANK_CONTAINER or -1}
+  local bankBagCount = tonumber(NUM_BANKBAGSLOTS) or 6
+  local index
+  for index = 1, bankBagCount do table.insert(containers, 4 + index) end
+  local counts, distinct = ShirsInventory_AccountCountContainers(containers)
+  local record = ShirsInventory_AccountGetCharacterItems(realm, character, true)
+  record.bank = counts
+  record.bankUpdated = ShirsInventory_AccountNow()
+  return distinct
+end
+
+function ShirsInventory_AccountBuildItemTooltipLines(realm, itemID, currentCharacter)
+  local lines = {}
+  local total = 0
+  itemID = tonumber(itemID)
+  if not itemID then return lines, total end
+  local db = ShirsInventory_AccountEnsureDB()
+  local characters = db.items[realm]
+  if type(characters) ~= "table" then return lines, total end
+  local name, record
+  for name, record in pairs(characters) do
+    if type(name) == "string" and type(record) == "table" then
+      local bags = type(record.bags) == "table" and tonumber(record.bags[itemID]) or 0
+      local bank = type(record.bank) == "table" and tonumber(record.bank[itemID]) or 0
+      bags = bags or 0
+      bank = bank or 0
+      if bags + bank > 0 then
+        table.insert(lines, {
+          name = name,
+          bags = bags,
+          bank = bank,
+          total = bags + bank,
+          current = type(currentCharacter) == "string" and name == currentCharacter,
+          bankKnown = type(record.bankUpdated) == "number",
+          bagsUpdated = record.bagsUpdated,
+          bankUpdated = record.bankUpdated,
+        })
+        total = total + bags + bank
+      end
+    end
+  end
+  table.sort(lines, function(left, right)
+    return string.lower(left.name) < string.lower(right.name)
+  end)
+  return lines, total
+end
+
+local function ShirsInventory_AccountFormatItemLocation(line)
+  local parts = {}
+  if line.bags > 0 then table.insert(parts, "Bags: " .. line.bags) end
+  if line.bank > 0 then table.insert(parts, "Bank: " .. line.bank) end
+  if not line.bankKnown then table.insert(parts, "Bank: not scanned") end
+  return table.concat(parts, " | ")
+end
+
+function ShirsInventory_AccountAddItemTooltip(targetTooltip, itemID)
+  if not targetTooltip or type(targetTooltip.AddLine) ~= "function" or
+    type(targetTooltip.AddDoubleLine) ~= "function" then return false end
+  local realm = ShirsInventory_AccountGetCurrentRealm()
+  local currentCharacter = ShirsInventory_AccountGetCurrentCharacter()
+  if not realm then return false end
+  local lines, total = ShirsInventory_AccountBuildItemTooltipLines(realm, itemID, currentCharacter)
+  if total <= 0 then return false end
+  targetTooltip:AddLine(" ")
+  targetTooltip:AddDoubleLine("Owned on this account", tostring(total), 0.3, 0.8, 1, 1, 0.82, 0)
+  local _, line
+  for _, line in ipairs(lines) do
+    local label = line.name
+    if line.current then label = label .. " (current)" end
+    targetTooltip:AddDoubleLine(label, ShirsInventory_AccountFormatItemLocation(line), 1, 1, 1, 0.8, 0.8, 0.8)
+  end
+  return true
 end
 
 function ShirsInventory_AccountGetRealmGold(realm)
@@ -338,10 +499,15 @@ if CreateFrame then
   end
 
   local accountEvents = CreateFrame("Frame", "ShirsInventoryAccountEvents")
+  local bankOpen = false
   accountEvents:RegisterEvent("ADDON_LOADED")
   accountEvents:RegisterEvent("PLAYER_LOGIN")
   accountEvents:RegisterEvent("PLAYER_MONEY")
   accountEvents:RegisterEvent("BAG_UPDATE")
+  accountEvents:RegisterEvent("BANKFRAME_OPENED")
+  accountEvents:RegisterEvent("BANKFRAME_CLOSED")
+  accountEvents:RegisterEvent("PLAYERBANKSLOTS_CHANGED")
+  accountEvents:RegisterEvent("PLAYERBANKBAGSLOTS_CHANGED")
   accountEvents:SetScript("OnEvent", function()
     if event == "ADDON_LOADED" then
       if arg1 == "ShirsInventory" then
@@ -349,14 +515,29 @@ if CreateFrame then
       end
     elseif event == "PLAYER_LOGIN" then
       ShirsInventory_AccountRecordCurrentGold()
+      ShirsInventory_AccountScanBags()
       ShirsInventory_AccountAttachDisplay(ShirsInventoryFrame)
       ShirsInventory_AccountUpdateDisplay()
     elseif event == "PLAYER_MONEY" then
       ShirsInventory_AccountRecordCurrentGold()
       ShirsInventory_AccountUpdateDisplay()
     elseif event == "BAG_UPDATE" then
+      local changedContainer = tonumber(arg1)
+      if changedContainer == nil or (changedContainer >= 0 and changedContainer <= 4) then
+        ShirsInventory_AccountScanBags()
+      end
+      if bankOpen and (changedContainer == nil or changedContainer == (BANK_CONTAINER or -1) or changedContainer >= 5) then
+        ShirsInventory_AccountScanBank()
+      end
       ShirsInventory_AccountAttachDisplay(ShirsInventoryFrame)
       ShirsInventory_AccountUpdateDisplay()
+    elseif event == "BANKFRAME_OPENED" then
+      bankOpen = true
+      ShirsInventory_AccountScanBank()
+    elseif event == "PLAYERBANKSLOTS_CHANGED" or event == "PLAYERBANKBAGSLOTS_CHANGED" then
+      if bankOpen then ShirsInventory_AccountScanBank() end
+    elseif event == "BANKFRAME_CLOSED" then
+      bankOpen = false
     end
   end)
 end

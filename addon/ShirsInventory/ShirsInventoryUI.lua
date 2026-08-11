@@ -174,11 +174,36 @@ end
 function ShirsInventory_GetClampedTopLeft(left, top, width, height, screenWidth, screenHeight, margin, bottomMargin)
   margin = margin or 8
   bottomMargin = bottomMargin or margin
+  local maximumLeft = screenWidth - margin - width
+  if maximumLeft < margin then maximumLeft = margin end
   if left < margin then left = margin end
-  if left + width > screenWidth - margin then left = screenWidth - margin - width end
-  if top > screenHeight - margin then top = screenHeight - margin end
-  if top - height < bottomMargin then top = height + bottomMargin end
+  if left > maximumLeft then left = maximumLeft end
+  local maximumTop = screenHeight - margin
+  local minimumTop = height + bottomMargin
+  if minimumTop > maximumTop then minimumTop = maximumTop end
+  if top > maximumTop then top = maximumTop end
+  if top < minimumTop then top = minimumTop end
   return left, top
+end
+
+function ShirsInventory_GetFittedWindowScale(width, height, requestedScale, screenWidth, screenHeight, margin, bottomMargin)
+  width = tonumber(width) or 0
+  height = tonumber(height) or 0
+  requestedScale = tonumber(requestedScale) or 1
+  screenWidth = tonumber(screenWidth) or 0
+  screenHeight = tonumber(screenHeight) or 0
+  margin = tonumber(margin) or 8
+  bottomMargin = tonumber(bottomMargin) or margin
+  if width <= 0 or height <= 0 or screenWidth <= 0 or screenHeight <= 0 then
+    return requestedScale
+  end
+  local fitted = requestedScale
+  local widthScale = (screenWidth - margin * 2) / width
+  local heightScale = (screenHeight - margin - bottomMargin) / height
+  if widthScale < fitted then fitted = widthScale end
+  if heightScale < fitted then fitted = heightScale end
+  if fitted < 0.1 then fitted = 0.1 end
+  return fitted
 end
 
 function ShirsInventory_BuildBagBarModel()
@@ -996,6 +1021,18 @@ function ShirsInventory_SetItemTooltip(button)
   return "bag"
 end
 
+function ShirsInventory_AddAccountItemTooltip(targetTooltip, itemId)
+  if ShirsInventory_GetHideItemOwnershipInCombat and
+    ShirsInventory_GetHideItemOwnershipInCombat() and
+    UnitAffectingCombat and UnitAffectingCombat("player") then
+    return false
+  end
+  if ShirsInventory_AccountAddItemTooltip then
+    return ShirsInventory_AccountAddItemTooltip(targetTooltip, itemId)
+  end
+  return false
+end
+
 local function ShirsInventory_OnItemEnter(button)
   if not button.hasItem then return end
   if button:GetRight() >= GetScreenWidth() / 2 then
@@ -1005,6 +1042,7 @@ local function ShirsInventory_OnItemEnter(button)
   end
   ShirsInventory_SetItemTooltip(button)
   local itemId = ShirsInventory_GetItemId(GetContainerItemLink(button.bag, button.slot))
+  ShirsInventory_AddAccountItemTooltip(GameTooltip, itemId)
   local _, _, locked, quality, readable = GetContainerItemInfo(button.bag, button.slot)
   if (not ShirsInventory_IsFeatureEnabled or ShirsInventory_IsFeatureEnabled("junk")) and
     ShirsInventory_IsJunk(itemId, quality, ShirsInventory_GetJunkItems()) then
@@ -1261,6 +1299,41 @@ local function ShirsInventory_UpdateBagBar()
   end
 end
 
+local function ShirsInventory_GetInventoryBottomMargin()
+  local bottomMargin = 8
+  if MainMenuBarBackpackButton and MainMenuBarBackpackButton.GetTop then
+    bottomMargin = (MainMenuBarBackpackButton:GetTop() or 0) + 8
+  end
+  return bottomMargin
+end
+
+function ShirsInventory_ApplyViewportScale(frame, bottomMargin)
+  if not frame or not frame.SetScale then return 1 end
+  local requested = ShirsInventory_GetWindowScale and ShirsInventory_GetWindowScale() or 1
+  local fitted = requested
+  if UIParent and UIParent.GetWidth and UIParent.GetHeight and frame.GetWidth and frame.GetHeight then
+    fitted = ShirsInventory_GetFittedWindowScale(
+      frame:GetWidth(), frame:GetHeight(), requested,
+      UIParent:GetWidth(), UIParent:GetHeight(), 8, bottomMargin or 8
+    )
+  end
+  frame:SetScale(fitted)
+  return fitted
+end
+
+function ShirsInventory_GetFrameToParentScale(frame)
+  if not frame then return 1 end
+  local frameScale
+  local parentScale
+  if frame.GetEffectiveScale then frameScale = frame:GetEffectiveScale() end
+  if UIParent and UIParent.GetEffectiveScale then parentScale = UIParent:GetEffectiveScale() end
+  if not frameScale and frame.GetScale then frameScale = frame:GetScale() end
+  frameScale = tonumber(frameScale) or 1
+  parentScale = tonumber(parentScale) or 1
+  if frameScale <= 0 or parentScale <= 0 then return 1 end
+  return frameScale / parentScale
+end
+
 function ShirsInventory_ClampInventoryFrame(frame, preserveSavedPosition)
   frame = frame or ShirsInventoryFrame
   if not frame then return false end
@@ -1275,18 +1348,104 @@ function ShirsInventory_ClampInventoryFrame(frame, preserveSavedPosition)
   local left = frame:GetLeft()
   local top = frame:GetTop()
   if not left or not top then return true end
-  local bottomMargin = 8
-  if MainMenuBarBackpackButton and MainMenuBarBackpackButton.GetTop then
-    bottomMargin = (MainMenuBarBackpackButton:GetTop() or 0) + 8
-  end
+  local scale = ShirsInventory_GetFrameToParentScale(frame)
+  local screenLeft = left * scale
+  local screenTop = top * scale
   local newLeft, newTop = ShirsInventory_GetClampedTopLeft(
-    left, top, frame:GetWidth(), frame:GetHeight(),
-    UIParent:GetWidth(), UIParent:GetHeight(), 8, bottomMargin
+    screenLeft, screenTop, frame:GetWidth() * scale, frame:GetHeight() * scale,
+    UIParent:GetWidth(), UIParent:GetHeight(), 8, ShirsInventory_GetInventoryBottomMargin()
   )
-  if newLeft == left and newTop == top then return true end
-  return ShirsInventory_SetInventoryFrameAnchor(
-    frame, "TOPLEFT", UIParent, "BOTTOMLEFT", newLeft, newTop, true
-  )
+  if newLeft == screenLeft and newTop == screenTop then return true end
+  local localLeft, localTop = newLeft / scale, newTop / scale
+  if not ShirsInventory_SetInventoryFrameAnchor(
+    frame, "TOPLEFT", UIParent, "BOTTOMLEFT", localLeft, localTop, false
+  ) then
+    return false
+  end
+  if ShirsInventory_SaveInventoryFrameCoordinates then
+    return ShirsInventory_SaveInventoryFrameCoordinates("TOPLEFT", "BOTTOMLEFT", localLeft, localTop)
+  end
+  return true
+end
+
+function ShirsInventory_ClampBankFrame(frame, preserveSavedPosition)
+  frame = frame or ShirsInventoryBankFrame
+  if not frame then return false end
+  if preserveSavedPosition and ShirsInventory_GetBankFramePosition and
+    ShirsInventory_GetBankFramePosition() then
+    return true
+  end
+  if not UIParent or not frame.GetLeft or not frame.GetBottom or not frame.GetWidth or
+    not frame.GetHeight or not UIParent.GetWidth or not UIParent.GetHeight then
+    return true
+  end
+  local left, bottom = frame:GetLeft(), frame:GetBottom()
+  if not left or not bottom then return true end
+  local scale = ShirsInventory_GetFrameToParentScale(frame)
+  local width, height = frame:GetWidth() * scale, frame:GetHeight() * scale
+  local maximumLeft = UIParent:GetWidth() - 8 - width
+  local maximumBottom = UIParent:GetHeight() - 8 - height
+  if maximumLeft < 8 then maximumLeft = 8 end
+  if maximumBottom < 8 then maximumBottom = 8 end
+  local screenLeft, screenBottom = left * scale, bottom * scale
+  local newLeft = math.max(8, math.min(maximumLeft, screenLeft))
+  local newBottom = math.max(8, math.min(maximumBottom, screenBottom))
+  if newLeft == screenLeft and newBottom == screenBottom then return true end
+  frame:ClearAllPoints()
+  local localLeft, localBottom = newLeft / scale, newBottom / scale
+  frame:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", localLeft, localBottom)
+  if ShirsInventory_SaveBankFrameCoordinates then
+    return ShirsInventory_SaveBankFrameCoordinates(localLeft, localBottom)
+  end
+  return true
+end
+
+function ShirsInventory_RecoverInventoryViewport(frame)
+  frame = frame or ShirsInventoryFrame
+  if not frame then return false end
+  ShirsInventory_ApplyViewportScale(frame, ShirsInventory_GetInventoryBottomMargin())
+  return ShirsInventory_ClampInventoryFrame(frame, false)
+end
+
+function ShirsInventory_RecoverBankViewport(frame)
+  frame = frame or ShirsInventoryBankFrame
+  if not frame then return false end
+  ShirsInventory_ApplyViewportScale(frame, 8)
+  return ShirsInventory_ClampBankFrame(frame, false)
+end
+
+function ShirsInventory_ApplyLayoutSettings()
+  local requested = ShirsInventory_GetWindowScale and ShirsInventory_GetWindowScale() or 1
+  if ShirsInventoryFrame and ShirsInventoryFrame.SetScale then ShirsInventoryFrame:SetScale(requested) end
+  if ShirsInventoryBankFrame and ShirsInventoryBankFrame.SetScale then ShirsInventoryBankFrame:SetScale(requested) end
+  if ShirsInventoryFrame and ShirsInventoryFrame.IsShown and ShirsInventoryFrame:IsShown() and
+    ShirsInventory_Update then
+    ShirsInventory_Update()
+    ShirsInventory_RecoverInventoryViewport(ShirsInventoryFrame)
+  end
+  if ShirsInventoryBankFrame and ShirsInventoryBankFrame.IsShown and ShirsInventoryBankFrame:IsShown() and
+    ShirsInventory_UpdateBank then
+    ShirsInventory_UpdateBank(ShirsInventoryBankFrame)
+    ShirsInventory_RecoverBankViewport(ShirsInventoryBankFrame)
+  end
+  return true
+end
+
+function ShirsInventory_ApplyWindowScaleSetting()
+  local scale = ShirsInventory_GetWindowScale and ShirsInventory_GetWindowScale() or 1
+  if ShirsInventoryFrame and ShirsInventoryFrame.SetScale then
+    ShirsInventoryFrame:SetScale(scale)
+    if not ShirsInventoryFrame.IsShown or ShirsInventoryFrame:IsShown() then
+      ShirsInventory_RecoverInventoryViewport(ShirsInventoryFrame)
+    end
+  end
+  if ShirsInventoryBankFrame and ShirsInventoryBankFrame.SetScale then
+    ShirsInventoryBankFrame:SetScale(scale)
+    if not ShirsInventoryBankFrame.IsShown or ShirsInventoryBankFrame:IsShown() then
+      ShirsInventory_RecoverBankViewport(ShirsInventoryBankFrame)
+    end
+  end
+  return true
 end
 
 local function ShirsInventory_RebuildGrid()
@@ -1294,11 +1453,11 @@ local function ShirsInventory_RebuildGrid()
   local free = 0
   for bag = 0, 4 do counts[bag] = GetContainerNumSlots(bag) or 0 end
   local slots = ShirsInventory_BuildInventorySlots(counts)
-  local layout = ShirsInventory_GetGridLayout(table.getn(slots), 10)
+  local layout = ShirsInventory_GetGridLayout(table.getn(slots), ShirsInventory_GetItemsPerRow())
   local bagBarLayout = ShirsInventory_GetBagBarLayout()
   ShirsInventoryFrame:SetWidth(layout.width)
   ShirsInventoryFrame:SetHeight(layout.height + bagBarLayout.heightExtra)
-  ShirsInventory_ClampInventoryFrame(ShirsInventoryFrame, true)
+  ShirsInventory_RecoverInventoryViewport(ShirsInventoryFrame)
   ShirsInventory_UpdateBagBar()
 
   for index, address in ipairs(slots) do
@@ -1663,6 +1822,7 @@ function ShirsInventory_UpdateBank(frame)
   local free = 0
   frame:SetWidth(grid.width)
   frame:SetHeight(grid.rows * bankLayout.itemStep + bankLayout.gridTopOffset * -1 + bankLayout.footerHeight)
+  ShirsInventory_RecoverBankViewport(frame)
 
   local index, address
   for index, address in ipairs(slots) do
@@ -1697,6 +1857,7 @@ function ShirsInventory_CreateBankFrame()
   if ShirsInventoryBankFrame then return ShirsInventoryBankFrame end
   local frame = CreateFrame("Frame", "ShirsInventoryBankFrame", UIParent)
   ShirsInventoryBankFrame = frame
+  frame:SetScale(ShirsInventory_GetWindowScale())
   frame:SetFrameStrata("HIGH")
   frame:SetToplevel(true)
   frame:SetMovable(true)
@@ -1770,6 +1931,7 @@ end
 local function ShirsInventory_CreateMainFrame()
   local frame = CreateFrame("Frame", "ShirsInventoryFrame", UIParent)
   ShirsInventoryFrame = frame
+  frame:SetScale(ShirsInventory_GetWindowScale())
   frame:SetFrameStrata("HIGH")
   frame:SetToplevel(true)
   frame:SetMovable(true)

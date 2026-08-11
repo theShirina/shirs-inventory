@@ -13,4 +13,10 @@ layout = ShirsInventory_GetGridLayout(4, 10)
 assert(layout.columns == 4 and layout.rows == 1, "small inventories should not leave fake columns")
 assert(layout.width == 188 and layout.height == 132, "small frame should shrink to used columns")
 
+layout = ShirsInventory_GetGridLayout(80, 20)
+assert(layout.columns == 20 and layout.rows == 4,
+  "wide layout should support twenty items per row")
+assert(layout.width == 828 and layout.height == 252,
+  "twenty-column layout has the wrong frame dimensions")
+
 print("GRID_LAYOUT_TEST=PASS")

@@ -74,7 +74,8 @@ function ShirsInventory_IsPetOrMountTooltipText(text)
   if not string.find(value, "summon", 1, true) then return false end
   return string.find(value, "pet", 1, true) ~= nil or
     string.find(value, "companion", 1, true) ~= nil or
-    string.find(value, "mount", 1, true) ~= nil
+    string.find(value, "mount", 1, true) ~= nil or
+    string.find(value, "rideable", 1, true) ~= nil
 end
 
 local function TooltipFacts(container, position)

@@ -10,6 +10,19 @@ local sellerElapsed = 0
 local standaloneLayoutElapsed = 0
 local originalContainerItemClick
 local nativeJunkHookInstalled
+local refreshingSettings
+
+function ShirsInventory_ApplyItemsPerRowSliderValue(value)
+  local applied = ShirsInventory_SetItemsPerRow(value)
+  if ShirsInventory_ApplyLayoutSettings then ShirsInventory_ApplyLayoutSettings() end
+  return applied
+end
+
+function ShirsInventory_ApplyWindowScaleSliderValue(value)
+  local applied = ShirsInventory_SetWindowScale(value)
+  if ShirsInventory_ApplyWindowScaleSetting then ShirsInventory_ApplyWindowScaleSetting() end
+  return applied
+end
 
 function ShirsInventory_GetStandaloneControlSpecs()
   return {
@@ -108,6 +121,17 @@ local function ShirsInventory_RefreshSettings()
   settingsFrame.autoSellJunk:SetChecked(ShirsInventory_GetAutoSellJunk() and 1 or nil)
   settingsFrame.showRarityBoxes:SetChecked(ShirsInventory_GetShowRarityBoxes() and 1 or nil)
   settingsFrame.useCoinIcons:SetChecked(ShirsInventory_GetUseCoinIcons() and 1 or nil)
+  settingsFrame.hideItemOwnershipInCombat:SetChecked(
+    ShirsInventory_GetHideItemOwnershipInCombat() and 1 or nil
+  )
+  refreshingSettings = true
+  settingsFrame.itemsPerRowSlider:SetValue(ShirsInventory_GetItemsPerRow())
+  settingsFrame.windowScaleSlider:SetValue(ShirsInventory_GetWindowScale())
+  settingsFrame.itemsPerRowSliderText:SetText("Items per row: " .. ShirsInventory_GetItemsPerRow())
+  settingsFrame.windowScaleSliderText:SetText(
+    "Window scale: " .. math.floor(ShirsInventory_GetWindowScale() * 100 + 0.5) .. "%"
+  )
+  refreshingSettings = false
 end
 
 function ShirsInventory_ShowSettings()
@@ -116,8 +140,46 @@ function ShirsInventory_ShowSettings()
   settingsFrame:Show()
 end
 
+function ShirsInventory_CreateLayoutSliders(frame)
+  if not frame or not CreateFrame then return false end
+  frame.itemsPerRowSlider = CreateFrame(
+    "Slider", "ShirsInventoryItemsPerRowSlider", frame, "OptionsSliderTemplate"
+  )
+  frame.itemsPerRowSlider:SetWidth(300)
+  frame.itemsPerRowSlider:SetPoint("TOPLEFT", frame, "TOPLEFT", 45, -280)
+  frame.itemsPerRowSlider:SetMinMaxValues(10, 20)
+  frame.itemsPerRowSlider:SetValueStep(1)
+  frame.itemsPerRowSliderText = getglobal("ShirsInventoryItemsPerRowSliderText")
+  getglobal("ShirsInventoryItemsPerRowSliderLow"):SetText("10")
+  getglobal("ShirsInventoryItemsPerRowSliderHigh"):SetText("20")
+  frame.itemsPerRowSlider:SetScript("OnValueChanged", function()
+    if refreshingSettings then return end
+    ShirsInventory_ApplyItemsPerRowSliderValue(this:GetValue())
+    ShirsInventory_RefreshSettings()
+  end)
+
+  frame.windowScaleSlider = CreateFrame(
+    "Slider", "ShirsInventoryWindowScaleSlider", frame, "OptionsSliderTemplate"
+  )
+  frame.windowScaleSlider:SetWidth(300)
+  frame.windowScaleSlider:SetPoint("TOPLEFT", frame, "TOPLEFT", 45, -345)
+  frame.windowScaleSlider:SetMinMaxValues(0.65, 1)
+  frame.windowScaleSlider:SetValueStep(0.05)
+  frame.windowScaleSliderText = getglobal("ShirsInventoryWindowScaleSliderText")
+  getglobal("ShirsInventoryWindowScaleSliderLow"):SetText("65%")
+  getglobal("ShirsInventoryWindowScaleSliderHigh"):SetText("100%")
+  frame.windowScaleSlider:SetScript("OnValueChanged", function()
+    if refreshingSettings then return end
+    local applied = ShirsInventory_ApplyWindowScaleSliderValue(this:GetValue())
+    frame.windowScaleSliderText:SetText(
+      "Window scale: " .. math.floor(applied * 100 + 0.5) .. "%"
+    )
+  end)
+  return true
+end
+
 local function ShirsInventory_CreateSettingsFrame()
-  local frame = ShirsInventory_CreatePanel("ShirsInventorySettingsFrame", 390, 330, "DIALOG")
+  local frame = ShirsInventory_CreatePanel("ShirsInventorySettingsFrame", 390, 460, "DIALOG")
   settingsFrame = frame
   frame:SetPoint("CENTER", UIParent, "CENTER", 0, 20)
 
@@ -135,6 +197,9 @@ local function ShirsInventory_CreateSettingsFrame()
   frame.autoSellJunk = ShirsInventory_CreateFeatureCheck(frame, "Auto-sell gray + manually marked items at vendors", "autoSellJunk", -142)
   frame.showRarityBoxes = ShirsInventory_CreateFeatureCheck(frame, "Show quest and rarity borders on items", "showRarityBoxes", -172)
   frame.useCoinIcons = ShirsInventory_CreateFeatureCheck(frame, "Use coin icons for currency (off = g/s/c text)", "useCoinIcons", -202)
+  frame.hideItemOwnershipInCombat = ShirsInventory_CreateFeatureCheck(
+    frame, "Hide item ownership details while in combat", "hideItemOwnershipInCombat", -232
+  )
   frame.ignoreJunkSorting:SetScript("OnClick", function()
     ShirsInventory_SetIgnoreJunkSorting(this:GetChecked() and true or false)
     ShirsInventory_RefreshSettings()
@@ -163,6 +228,12 @@ local function ShirsInventory_CreateSettingsFrame()
     end
     ShirsInventory_RefreshSettings()
   end)
+  frame.hideItemOwnershipInCombat:SetScript("OnClick", function()
+    ShirsInventory_SetHideItemOwnershipInCombat(this:GetChecked() and true or false)
+    ShirsInventory_RefreshSettings()
+  end)
+
+  ShirsInventory_CreateLayoutSliders(frame)
 
   frame.closeButton = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
   frame.closeButton:SetWidth(86)

@@ -199,6 +199,12 @@ assert(ShirsInventory_IsPetOrMountTooltipText("Use: Summons and dismisses your c
   "Microbot custom companion tooltip was not recognized")
 assert(ShirsInventory_IsPetOrMountTooltipText("Use: Teaches you how to summon this mount."),
   "mount tooltip was not recognized")
+assert(ShirsInventory_IsPetOrMountTooltipText("Use: Summons and dismisses a rideable Dire Wolf."),
+  "classic rideable mount tooltip was not recognized")
+assert(ShirsInventory_GetEdgeAnchorRank(
+  5665, "Horn of the Dire Wolf", "Miscellaneous", "Junk", nil,
+  ShirsInventory_IsPetOrMountTooltipText("Use: Summons and dismisses a rideable Dire Wolf.")
+) == 3, "Horn of the Dire Wolf was not grouped near Hearthstone")
 assert(not ShirsInventory_IsPetOrMountTooltipText("Use: Summons a temporary guardian."),
   "unrelated summon tooltip became a pet or mount")
 assert(ShirsInventory_IsPetOrMountItem("Miscellaneous", "Custom", nil, true),

@@ -11,4 +11,17 @@ assert(left == 8 and top == 712, "frame top and left must clamp to screen margin
 left, top = ShirsInventory_GetClampedTopLeft(1100, 500, 414, 457, 1280, 720, 8)
 assert(left == 858 and top == 500, "frame right edge must clamp without changing valid height")
 
+assert(type(ShirsInventory_GetFittedWindowScale) == "function",
+  "scale-aware viewport fitting helper is missing")
+local fitted = ShirsInventory_GetFittedWindowScale(828, 252, 1, 1024, 768, 8, 8)
+assert(fitted == 1,
+  "twenty columns at the maximum supported scale must fit a 1024-pixel viewport")
+fitted = ShirsInventory_GetFittedWindowScale(828, 700, 1, 1024, 768, 8, 70)
+assert(fitted < 1 and fitted > 0.65,
+  "a tall window must reduce its effective scale enough to remain accessible")
+
+left, top = ShirsInventory_GetClampedTopLeft(500, 700, 828, 252, 1024, 768, 8)
+assert(left >= 8 and left + 828 <= 1016 and top <= 760 and top - 252 >= 8,
+  "scale-aware dimensions did not keep the full window inside the viewport")
+
 print("FRAME_CLAMP_TEST=PASS")

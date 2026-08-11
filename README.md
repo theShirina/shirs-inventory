@@ -2,7 +2,7 @@
 
 A standalone bag addon made and tested for Microbot's WoW 1.12.1 client.
 
-Current release: **0.5.6** — adds WIM item linking and tighter Item Type groups for standard enchanting materials and Microbot raid tokens.
+Current release: **0.6.0**.
 
 ## What it does
 
@@ -24,12 +24,16 @@ Current release: **0.5.6** — adds WIM item linking and tighter Item Type group
 - Marks items as junk and sells gray or marked junk through a guarded merchant queue.
 - Adds a bordered Sell Junk icon beside the merchant repair buttons.
 - Tracks gold across characters on the same account.
+- Tracks every carried and banked item across characters on the same account and shows the location totals in item tooltips.
+- Can hide same-account owned-item details while the player is in combat.
+- Refreshes carried items at login and on bag changes; bank snapshots refresh whenever each character opens the bank.
+- Lets each character choose 10–20 items per row and scale the inventory and bank windows from 65% to 100%, with automatic viewport fitting.
 - Ships as one full suite: combined bags, sorting, and junk tools stay enabled together.
 - Reclaims the bag bar from other loaded bag replacements; running two bag UIs together is not supported.
 
 ## Download and install
 
-1. Download the ZIP from the [v0.5.6 release page](https://github.com/theShirina/shirs-inventory/releases/tag/v0.5.6).
+1. Download the ZIP from the [v0.6.0 release page](https://github.com/theShirina/shirs-inventory/releases/tag/v0.6.0).
 2. Extract the `ShirsInventory` folder into your client's `Interface/AddOns` folder.
 3. Restart the client.
 

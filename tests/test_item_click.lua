@@ -27,6 +27,32 @@ assert(loadfile(corePath))()
 assert(loadfile(junkPath))()
 assert(loadfile(uiPath))()
 
+local ownershipTooltip = {}
+local ownershipTarget, ownershipItemID
+local inCombat = false
+function UnitAffectingCombat(unit) return unit == "player" and inCombat end
+ShirsInventory_AccountAddItemTooltip = function(target, itemID)
+  ownershipTarget, ownershipItemID = target, itemID
+  return true
+end
+assert(ShirsInventory_AddAccountItemTooltip(ownershipTooltip, 14342),
+  "inventory item tooltip did not call account ownership tracking")
+assert(ownershipTarget == ownershipTooltip and ownershipItemID == 14342,
+  "inventory item tooltip passed the wrong target or item ID")
+assert(not ShirsInventory_GetHideItemOwnershipInCombat(),
+  "item ownership details must remain visible in combat by default")
+assert(ShirsInventory_SetHideItemOwnershipInCombat(true),
+  "item ownership combat setting did not persist")
+ownershipTarget, ownershipItemID = nil, nil
+inCombat = true
+assert(not ShirsInventory_AddAccountItemTooltip(ownershipTooltip, 14342) and
+  ownershipTarget == nil and ownershipItemID == nil,
+  "item ownership details were not suppressed in combat")
+inCombat = false
+assert(ShirsInventory_AddAccountItemTooltip(ownershipTooltip, 14342) and
+  ownershipTarget == ownershipTooltip and ownershipItemID == 14342,
+  "item ownership details stayed suppressed after combat")
+
 local inventoryRefreshes, bankRefreshes = 0, 0
 ShirsInventory_Update = function() inventoryRefreshes = inventoryRefreshes + 1 end
 ShirsInventory_UpdateBank = function() bankRefreshes = bankRefreshes + 1 end

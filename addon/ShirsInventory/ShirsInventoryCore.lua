@@ -75,9 +75,20 @@ local function ShirsInventory_EnsureDB()
   if ShirsInventoryDB.useCoinIcons == nil then
     ShirsInventoryDB.useCoinIcons = true
   end
+  if ShirsInventoryDB.hideItemOwnershipInCombat == nil then
+    ShirsInventoryDB.hideItemOwnershipInCombat = false
+  end
   if ShirsInventoryDB.questItemsOppositeEdge == nil then
     ShirsInventoryDB.questItemsOppositeEdge = true
   end
+  local itemsPerRow = tonumber(ShirsInventoryDB.itemsPerRow)
+  if not itemsPerRow then itemsPerRow = 10 end
+  itemsPerRow = math.floor(itemsPerRow + 0.5)
+  ShirsInventoryDB.itemsPerRow = math.max(10, math.min(20, itemsPerRow))
+  local windowScale = tonumber(ShirsInventoryDB.windowScale)
+  if not windowScale then windowScale = 1 end
+  windowScale = math.floor(windowScale * 20 + 0.5) / 20
+  ShirsInventoryDB.windowScale = math.max(0.65, math.min(1, windowScale))
   return ShirsInventoryDB
 end
 
@@ -514,19 +525,7 @@ function ShirsInventory_GetInventoryFramePosition()
   return position
 end
 
-function ShirsInventory_SaveInventoryFramePosition(frame)
-  if not frame then return false end
-  local point, relativePoint, x, y
-  if type(frame.GetLeft) == "function" and type(frame.GetTop) == "function" then
-    x, y = frame:GetLeft(), frame:GetTop()
-    if type(x) == "number" and type(y) == "number" then
-      point = "TOPLEFT"
-      relativePoint = "BOTTOMLEFT"
-    end
-  end
-  if not point and type(frame.GetPoint) == "function" then
-    point, _, relativePoint, x, y = frame:GetPoint(1)
-  end
+function ShirsInventory_SaveInventoryFrameCoordinates(point, relativePoint, x, y)
   if type(point) ~= "string" or type(relativePoint) ~= "string" or
     type(x) ~= "number" or type(y) ~= "number" then
     return false
@@ -540,6 +539,22 @@ function ShirsInventory_SaveInventoryFramePosition(frame)
   return true
 end
 
+function ShirsInventory_SaveInventoryFramePosition(frame)
+  if not frame then return false end
+  local point, relativePoint, x, y
+  if type(frame.GetLeft) == "function" and type(frame.GetTop) == "function" then
+    x, y = frame:GetLeft(), frame:GetTop()
+    if type(x) == "number" and type(y) == "number" then
+      point = "TOPLEFT"
+      relativePoint = "BOTTOMLEFT"
+    end
+  end
+  if not point and type(frame.GetPoint) == "function" then
+    point, _, relativePoint, x, y = frame:GetPoint(1)
+  end
+  return ShirsInventory_SaveInventoryFrameCoordinates(point, relativePoint, x, y)
+end
+
 function ShirsInventory_ResetInventoryFramePosition()
   ShirsInventory_EnsureDB().inventoryPosition = nil
   return true
@@ -551,11 +566,7 @@ function ShirsInventory_GetBankFramePosition()
   return position
 end
 
-function ShirsInventory_SaveBankFramePosition(frame)
-  if not frame or type(frame.GetLeft) ~= "function" or type(frame.GetBottom) ~= "function" then
-    return false
-  end
-  local left, bottom = frame:GetLeft(), frame:GetBottom()
+function ShirsInventory_SaveBankFrameCoordinates(left, bottom)
   if type(left) ~= "number" or type(bottom) ~= "number" then return false end
   ShirsInventory_EnsureDB().bankPosition = {
     point = "BOTTOMLEFT",
@@ -564,6 +575,14 @@ function ShirsInventory_SaveBankFramePosition(frame)
     y = bottom,
   }
   return true
+end
+
+function ShirsInventory_SaveBankFramePosition(frame)
+  if not frame or type(frame.GetLeft) ~= "function" or type(frame.GetBottom) ~= "function" then
+    return false
+  end
+  local left, bottom = frame:GetLeft(), frame:GetBottom()
+  return ShirsInventory_SaveBankFrameCoordinates(left, bottom)
 end
 
 function ShirsInventory_ResetBankFramePosition()
@@ -704,6 +723,39 @@ function ShirsInventory_ToggleUseCoinIcons()
   return enabled
 end
 
+function ShirsInventory_GetHideItemOwnershipInCombat()
+  return ShirsInventory_EnsureDB().hideItemOwnershipInCombat and true or false
+end
+
+function ShirsInventory_SetHideItemOwnershipInCombat(enabled)
+  ShirsInventory_EnsureDB().hideItemOwnershipInCombat = enabled and true or false
+  return ShirsInventory_GetHideItemOwnershipInCombat()
+end
+
+function ShirsInventory_GetItemsPerRow()
+  return ShirsInventory_EnsureDB().itemsPerRow
+end
+
+function ShirsInventory_SetItemsPerRow(value)
+  value = tonumber(value) or 10
+  value = math.floor(value + 0.5)
+  value = math.max(10, math.min(20, value))
+  ShirsInventory_EnsureDB().itemsPerRow = value
+  return value
+end
+
+function ShirsInventory_GetWindowScale()
+  return ShirsInventory_EnsureDB().windowScale
+end
+
+function ShirsInventory_SetWindowScale(value)
+  value = tonumber(value) or 1
+  value = math.floor(value * 20 + 0.5) / 20
+  value = math.max(0.65, math.min(1, value))
+  ShirsInventory_EnsureDB().windowScale = value
+  return value
+end
+
 function ShirsInventory_MoveCursorItem(srcContainer, srcSlot, dstContainer, dstSlot)
   if CursorHasItem() then
     return false
@@ -768,7 +820,7 @@ end
 
 function ShirsInventory_GetBankFrameLayout()
   return {
-    maximumColumns = 10,
+    maximumColumns = ShirsInventory_GetItemsPerRow(),
     itemSize = 36,
     itemStep = 40,
     gridTopOffset = -64,
