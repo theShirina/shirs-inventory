@@ -289,7 +289,9 @@ function ShirsInventory_HandleItemClick(button, mouseButton, ignoreModifiers)
     if not ignoreModifiers and IsControlKeyDown and IsControlKeyDown() then
       if DressUpItemLink then DressUpItemLink(GetContainerItemLink(bag, slot)) end
     elseif not ignoreModifiers and IsShiftKeyDown and IsShiftKeyDown() then
-      if ChatFrameEditBox and ChatFrameEditBox:IsShown() then
+      if WIM_EditBoxInFocus and WIM_EditBoxInFocus.Insert then
+        WIM_EditBoxInFocus:Insert(GetContainerItemLink(bag, slot))
+      elseif ChatFrameEditBox and ChatFrameEditBox:IsShown() then
         ChatFrameEditBox:Insert(GetContainerItemLink(bag, slot))
       elseif not locked and count and count > 1 and OpenStackSplitFrame then
         button.SplitStack = function(_, split)

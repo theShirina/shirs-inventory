@@ -3,10 +3,12 @@ ShirsInventoryDB = { junkItems = {} }
 DEFAULT_CHAT_FRAME = { AddMessage = function() end }
 
 local altDown = true
+local shiftDown = false
+local itemCount = 1
 function IsAltKeyDown() return altDown end
 function IsControlKeyDown() return false end
-function IsShiftKeyDown() return false end
-function GetContainerItemInfo() return "texture", 1, nil, 2 end
+function IsShiftKeyDown() return shiftDown end
+function GetContainerItemInfo() return "texture", itemCount, nil, 2 end
 function GetContainerItemLink() return "|Hitem:7076:0:0:0|h[Essence of Earth]|h" end
 local used, picked = 0, 0
 function UseContainerItem() used = used + 1 end
@@ -18,6 +20,8 @@ local sellCursorBag, sellCursorSlot, inspectCursor, resetCursor
 function ShowContainerSellCursor(bag, slot) sellCursorBag, sellCursorSlot = bag, slot end
 function ShowInspectCursor() inspectCursor = true end
 function ResetCursor() resetCursor = true end
+local splitFrames = 0
+function OpenStackSplitFrame() splitFrames = splitFrames + 1 end
 
 assert(loadfile(corePath))()
 assert(loadfile(junkPath))()
@@ -47,6 +51,17 @@ assert(used == 1, "right-click should not sell while buyback is selected")
 MerchantFrame.IsShown = function() return false end
 ShirsInventory_HandleItemClick(button, "LeftButton")
 assert(picked == 1, "plain left-click should preserve native pickup behavior")
+
+local wimLink
+WIM_EditBoxInFocus = { Insert = function(_, link) wimLink = link end }
+shiftDown = true
+itemCount = 4
+ShirsInventory_HandleItemClick(button, "LeftButton")
+assert(wimLink == GetContainerItemLink(0, 1), "shift-click should insert the item link into WIM's focused whisper")
+assert(splitFrames == 0, "shift-clicking into WIM must not open the stack split frame")
+shiftDown = false
+itemCount = 1
+WIM_EditBoxInFocus = nil
 
 MerchantFrame.IsShown = function() return true end
 MerchantFrame.selectedTab = 1

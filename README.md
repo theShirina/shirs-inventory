@@ -2,7 +2,7 @@
 
 A standalone bag addon made and tested for Microbot's WoW 1.12.1 client.
 
-Current release: **0.5.4** — restores direct bag dragging onto equipped-bag slots and lets pfUI's money datatext close the combined inventory on its second click.
+Current release: **0.5.6** — adds WIM item linking and tighter Item Type groups for standard enchanting materials and Microbot raid tokens.
 
 ## What it does
 
@@ -11,6 +11,9 @@ Current release: **0.5.4** — restores direct bag dragging onto equipped-bag sl
 - Shows the native bank-bag slots and the next bank-slot purchase button.
 - Gives the bank the same Sort, grouping, direction, and Settings controls as the inventory.
 - Sorts bags and the bank by item type or rarity.
+- Keeps standard enchanting dust, essences, and shards together when sorting by item type.
+- Keeps Token of Mastery and the four Microbot raid tokens together when sorting by item type.
+- Inserts Shift-clicked item links into the focused WIM whisper.
 - Sorts from the top or bottom and merges partial stacks.
 - Waits for each exact bag-state update before submitting the next cursor move.
 - Keeps quest-bordered items at the opposite end of the occupied sorted block by default, with conjured items directly outside them.
@@ -26,7 +29,7 @@ Current release: **0.5.4** — restores direct bag dragging onto equipped-bag sl
 
 ## Download and install
 
-1. Download the ZIP from the [v0.5.4 release page](https://github.com/theShirina/shirs-inventory/releases/tag/v0.5.4).
+1. Download the ZIP from the [v0.5.6 release page](https://github.com/theShirina/shirs-inventory/releases/tag/v0.5.6).
 2. Extract the `ShirsInventory` folder into your client's `Interface/AddOns` folder.
 3. Restart the client.
 

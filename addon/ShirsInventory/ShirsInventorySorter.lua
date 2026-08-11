@@ -246,9 +246,12 @@ local function ReadItem(container, position, count)
   if quality == nil or itemType == nil or maxStack == nil then return nil, "item-info" end
   local charges, usable, soulbound, quest, conjured, tooltipPetOrMount = TooltipFacts(container, position)
   local questBorderItem = ShirsInventory_IsQuestBorderItem(itemType, quality)
+  local sortMode = ShirsInventory_GetSortMode()
   local material = ShirsInventory_GetMaterialCategory(itemID, itemType, itemSubType)
+  local sortMaterial = ShirsInventory_GetSortMaterialCategory(sortMode, itemID, itemInfo[1], material)
   local specialtyClass = ShirsInventory_GetSpecialtyItemClass(itemInfo[1], itemType, itemSubType, material)
   local isConsumable = (usable and itemType ~= AUCTION_CLASSES[1] and itemType ~= AUCTION_CLASSES[2] and itemType ~= AUCTION_CLASSES[8]) or itemType == AUCTION_CLASSES[4]
+  local sortConsumable = ShirsInventory_GetSortConsumable(sortMode, sortMaterial, isConsumable)
   local itemSpell
   if type(GetItemSpell) == "function" then
     itemSpell = GetItemSpell(itemID)
@@ -262,13 +265,13 @@ local function ReadItem(container, position, count)
   )
   local categoryRank = ShirsInventory_GetPrimaryCategoryRank(
     edgeRank, quality, specialtyClass == "soul", conjured,
-    itemType == AUCTION_CLASSES[9], questBorderItem, material, soulbound, isConsumable
+    itemType == AUCTION_CLASSES[9], questBorderItem, sortMaterial, soulbound, sortConsumable
   )
   local sortKey = ShirsInventory_BuildGeneralSortKey(
-    ShirsInventory_GetSortMode(), quality, categoryRank,
+    sortMode, quality, categoryRank,
     ItemTypeKey(itemType), ItemSubTypeKey(itemType, itemSubType),
     ItemInvTypeKey(itemType, itemSubType, inventoryType), itemID,
-    ShirsInventory_GetDirection()
+    ShirsInventory_GetDirection(), sortMaterial
   )
   sortKey.charges = charges
   sortKey.suffixID = tonumber(suffixID) or 0

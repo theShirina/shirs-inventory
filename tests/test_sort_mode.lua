@@ -57,6 +57,52 @@ if not LT(miningType, herbType) or not LT(miningRarity, herbRarity) then
   error("profession material order is not deterministic")
 end
 
+-- Item-type grouping must treat enchanting dust, essences, and shards as one
+-- material group instead of splitting that group by auction subtype.
+local dustType = ShirsInventory_BuildGeneralSortKey("itemType", 1, 15.25, 7, 1, 1, 10940, "top", "Enchanting Materials")
+local essenceType = ShirsInventory_BuildGeneralSortKey("itemType", 2, 15.25, 9, 2, 2, 10938, "top", "Enchanting Materials")
+local shardType = ShirsInventory_BuildGeneralSortKey("itemType", 3, 15.25, 5, 3, 3, 11139, "top", "Enchanting Materials")
+if dustType.itemType ~= essenceType.itemType or essenceType.itemType ~= shardType.itemType or
+  dustType.itemSubType ~= essenceType.itemSubType or essenceType.itemSubType ~= shardType.itemSubType or
+  dustType.inventoryType ~= essenceType.inventoryType or essenceType.inventoryType ~= shardType.inventoryType then
+  error("item-type mode still separates enchanting materials by runtime type fields")
+end
+
+local righteousOrbType = ShirsInventory_BuildGeneralSortKey("itemType", 2, 15, 7, 6, 4, 12811, "top", "Enchanting")
+if righteousOrbType.itemType ~= 7 or righteousOrbType.itemSubType ~= 6 or righteousOrbType.inventoryType ~= 4 then
+  error("item-type mode changed one-off enchanting runtime fields")
+end
+
+-- Rarity grouping must retain its existing subtype keys; quality remains the
+-- primary field and this item-type-only adjustment must not alter that mode.
+local dustRarity = ShirsInventory_BuildGeneralSortKey("rarity", 1, 15, 7, 1, 1, 10940, "top", "Enchanting")
+local essenceRarity = ShirsInventory_BuildGeneralSortKey("rarity", 2, 15, 9, 2, 2, 10938, "top", "Enchanting")
+local shardRarity = ShirsInventory_BuildGeneralSortKey("rarity", 3, 15, 5, 3, 3, 11139, "top", "Enchanting")
+if dustRarity.itemType ~= 7 or essenceRarity.itemType ~= 9 or shardRarity.itemType ~= 5 or
+  dustRarity.itemSubType ~= 1 or essenceRarity.itemSubType ~= 2 or shardRarity.itemSubType ~= 3 or
+  dustRarity.inventoryType ~= 1 or essenceRarity.inventoryType ~= 2 or shardRarity.inventoryType ~= 3 then
+  error("rarity mode changed enchanting runtime type fields")
+end
+if not LT(shardRarity, essenceRarity) or not LT(essenceRarity, dustRarity) then
+  error("rarity mode no longer prioritizes enchanting-material quality")
+end
+
+local masteryTokenType = ShirsInventory_BuildGeneralSortKey("itemType", 3, 18.25, 7, 4, 2, 26039, "top", "Raid Tokens")
+local naxxTokenType = ShirsInventory_BuildGeneralSortKey("itemType", 3, 18.25, 9, 8, 6, 26043, "top", "Raid Tokens")
+if masteryTokenType.itemType ~= naxxTokenType.itemType or
+  masteryTokenType.itemSubType ~= naxxTokenType.itemSubType or
+  masteryTokenType.inventoryType ~= naxxTokenType.inventoryType then
+  error("item-type mode still separates Mastery and raid tokens by runtime type fields")
+end
+
+local masteryTokenRarity = ShirsInventory_BuildGeneralSortKey("rarity", 3, 19, 7, 4, 2, 26039, "top", "Raid Tokens")
+local naxxTokenRarity = ShirsInventory_BuildGeneralSortKey("rarity", 3, 19, 9, 8, 6, 26043, "top", "Raid Tokens")
+if masteryTokenRarity.itemType ~= 7 or naxxTokenRarity.itemType ~= 9 or
+  masteryTokenRarity.itemSubType ~= 4 or naxxTokenRarity.itemSubType ~= 8 or
+  masteryTokenRarity.inventoryType ~= 2 or naxxTokenRarity.inventoryType ~= 6 then
+  error("rarity mode changed Mastery or raid token runtime fields")
+end
+
 -- Binding status must not act like a quality tier.
 local whiteBoundRank = ShirsInventory_GetPrimaryCategoryRank(nil, 1, false, false, false, false, nil, true)
 local whiteUnboundRank = ShirsInventory_GetPrimaryCategoryRank(nil, 1, false, false, false, false, nil, false)

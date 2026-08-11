@@ -4,9 +4,11 @@ ShirsInventory_MaterialRanks = {
   Cloth = 3,
   Leather = 4,
   Enchanting = 5,
+  ["Enchanting Materials"] = 5.25,
   Elemental = 6,
   Engineering = 7,
   Gems = 8,
+  ["Raid Tokens"] = 8.25,
 }
 
 local materialCategoryAliases = {
@@ -347,6 +349,85 @@ local subTypeCategories = {
   ["Gems"] = "Gems",
 }
 
+local enchantingDustFamilies = {
+  Strange = true,
+  Soul = true,
+  Vision = true,
+  Dream = true,
+  Illusion = true,
+}
+
+local enchantingEssenceFamilies = {
+  Magic = true,
+  Astral = true,
+  Mystic = true,
+  Nether = true,
+  Eternal = true,
+}
+
+local enchantingShardFamilies = {
+  Glimmering = true,
+  Glowing = true,
+  Radiant = true,
+  Brilliant = true,
+}
+
+local generalEnchantingMaterialIDs = {
+  [10940] = true, [11083] = true, [11137] = true, [11176] = true, [16204] = true,
+  [10938] = true, [10939] = true, [10998] = true, [11082] = true,
+  [11134] = true, [11135] = true, [11174] = true, [11175] = true,
+  [16202] = true, [16203] = true,
+  [10978] = true, [11084] = true, [11138] = true, [11139] = true,
+  [11177] = true, [11178] = true, [14343] = true, [14344] = true,
+}
+
+local masteryAndRaidTokenIDs = {
+  [26039] = true,
+  [26040] = true,
+  [26041] = true,
+  [26042] = true,
+  [26043] = true,
+}
+
+function ShirsInventory_IsGeneralEnchantingMaterial(itemName)
+  if type(itemName) ~= "string" then return false end
+
+  local _, _, dustFamily = string.find(itemName, "^(%a+) Dust$")
+  if dustFamily and enchantingDustFamilies[dustFamily] then return true end
+
+  local _, _, essenceSize, essenceFamily = string.find(itemName, "^(%a+) (%a+) Essence$")
+  if (essenceSize == "Lesser" or essenceSize == "Greater") and
+    essenceFamily and enchantingEssenceFamilies[essenceFamily] then
+    return true
+  end
+
+  local _, _, shardSize, shardFamily = string.find(itemName, "^(%a+) (%a+) Shard$")
+  if (shardSize == "Small" or shardSize == "Large") and
+    shardFamily and enchantingShardFamilies[shardFamily] then
+    return true
+  end
+
+  return false
+end
+
+function ShirsInventory_GetSortMaterialCategory(mode, itemID, itemName, materialCategory)
+  if mode == "itemType" and generalEnchantingMaterialIDs[tonumber(itemID)] then
+    return "Enchanting Materials"
+  end
+  if mode == "itemType" and masteryAndRaidTokenIDs[tonumber(itemID)] then
+    return "Raid Tokens"
+  end
+  return materialCategory
+end
+
+function ShirsInventory_GetSortConsumable(mode, materialCategory, isConsumable)
+  if mode == "itemType" and
+    (materialCategory == "Enchanting Materials" or materialCategory == "Raid Tokens") then
+    return false
+  end
+  return isConsumable and true or false
+end
+
 function ShirsInventory_GetMaterialCategory(itemID, itemType, itemSubType)
   local db = ShirsInventory_EnsureDB()
   local override = db.itemOverrides[itemID]
@@ -490,9 +571,15 @@ function ShirsInventory_ResetBankFramePosition()
   return true
 end
 
-function ShirsInventory_BuildGeneralSortKey(mode, quality, categoryRank, typeKey, subTypeKey, invTypeKey, itemID, direction)
+function ShirsInventory_BuildGeneralSortKey(mode, quality, categoryRank, typeKey, subTypeKey, invTypeKey, itemID, direction, materialCategory)
   local rarityOrder = -quality
   if mode == "rarity" and direction == "bottom" then rarityOrder = quality end
+  if mode == "itemType" and
+    (materialCategory == "Enchanting Materials" or materialCategory == "Raid Tokens") then
+    typeKey = 0
+    subTypeKey = 0
+    invTypeKey = 0
+  end
   return {
     mode = mode,
     category = categoryRank,
