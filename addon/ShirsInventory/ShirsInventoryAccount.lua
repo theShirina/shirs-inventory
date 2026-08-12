@@ -97,7 +97,14 @@ local function ShirsInventory_AccountCountContainers(containers)
   end
   local _, container
   for _, container in ipairs(containers) do
-    local slots = tonumber(GetContainerNumSlots(container)) or 0
+    local keyring = ShirsInventory_GetKeyRingContainerID and
+      ShirsInventory_GetKeyRingContainerID() or (KEYRING_CONTAINER or -2)
+    local slots
+    if container == keyring and ShirsInventory_GetKeyRingSize then
+      slots = ShirsInventory_GetKeyRingSize()
+    else
+      slots = tonumber(GetContainerNumSlots(container)) or 0
+    end
     local slot
     for slot = 1, slots do
       local itemID = ShirsInventory_AccountExtractItemID(GetContainerItemLink(container, slot))
@@ -141,7 +148,10 @@ function ShirsInventory_AccountScanBags()
   local realm = ShirsInventory_AccountGetCurrentRealm()
   local character = ShirsInventory_AccountGetCurrentCharacter()
   if not realm or not character then return nil end
-  local counts, distinct = ShirsInventory_AccountCountContainers({0, 1, 2, 3, 4})
+  local bagContainers = {0, 1, 2, 3, 4}
+  local keyring = ShirsInventory_GetKeyRingContainerID and ShirsInventory_GetKeyRingContainerID() or (KEYRING_CONTAINER or -2)
+  table.insert(bagContainers, keyring)
+  local counts, distinct = ShirsInventory_AccountCountContainers(bagContainers)
   local record = ShirsInventory_AccountGetCharacterItems(realm, character, true)
   record.bags = counts
   record.bagsUpdated = ShirsInventory_AccountNow()
@@ -523,7 +533,8 @@ if CreateFrame then
       ShirsInventory_AccountUpdateDisplay()
     elseif event == "BAG_UPDATE" then
       local changedContainer = tonumber(arg1)
-      if changedContainer == nil or (changedContainer >= 0 and changedContainer <= 4) then
+      local keyring = ShirsInventory_GetKeyRingContainerID and ShirsInventory_GetKeyRingContainerID() or (KEYRING_CONTAINER or -2)
+      if changedContainer == nil or (changedContainer >= 0 and changedContainer <= 4) or changedContainer == keyring then
         ShirsInventory_AccountScanBags()
       end
       if bankOpen and (changedContainer == nil or changedContainer == (BANK_CONTAINER or -1) or changedContainer >= 5) then

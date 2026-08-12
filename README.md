@@ -2,11 +2,13 @@
 
 A standalone bag addon made and tested for Microbot's WoW 1.12.1 client.
 
-Current release: **0.6.1**.
+Current release: **0.6.2**.
 
 ## What it does
 
 - Combines the Backpack and equipped bags into one continuous grid.
+- Adds Keyring slots to that grid with a fixed Keyring button in the add-on's bag bar.
+- Lets each character click the Keyring button to hide or show Keyring slots.
 - Replaces the normal or pfUI bank window with one combined view of the main bank and equipped bank bags.
 - Shows the native bank-bag slots and the next bank-slot purchase button.
 - Gives the bank the same Sort, grouping, direction, and Settings controls as the inventory.
@@ -29,12 +31,13 @@ Current release: **0.6.1**.
 - Can hide same-account owned-item details while the player is in combat.
 - Refreshes carried items at login and on bag changes; bank snapshots refresh whenever each character opens the bank.
 - Lets each character choose 10–20 items per row and scale the inventory and bank windows from 65% to 100%, with automatic viewport fitting.
+- Keeps valid inventory positions near the top and right screen edges after closing and reopening the bags.
 - Ships as one full suite: combined bags, sorting, and junk tools stay enabled together.
 - Reclaims the bag bar from other loaded bag replacements; running two bag UIs together is not supported.
 
 ## Download and install
 
-1. Download the ZIP from the [v0.6.1 release page](https://github.com/theShirina/shirs-inventory/releases/tag/v0.6.1).
+1. Download the ZIP from the [v0.6.2 release page](https://github.com/theShirina/shirs-inventory/releases/tag/v0.6.2).
 2. Extract the `ShirsInventory` folder into your client's `Interface/AddOns` folder.
 3. Restart the client.
 

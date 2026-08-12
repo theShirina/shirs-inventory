@@ -779,6 +779,53 @@ function ShirsInventory_MoveCursorItem(srcContainer, srcSlot, dstContainer, dstS
   return true
 end
 
+function ShirsInventory_GetKeyRingContainerID()
+  return KEYRING_CONTAINER or -2
+end
+
+function ShirsInventory_GetKeyRingSize()
+  if type(GetKeyRingSize) == "function" then
+    return tonumber(GetKeyRingSize()) or 0
+  end
+  return 0
+end
+
+function ShirsInventory_GetKeyRingSlotsShown()
+  return ShirsInventory_EnsureDB().keyringSlotsShown ~= false
+end
+
+function ShirsInventory_ToggleKeyRingSlots()
+  local db = ShirsInventory_EnsureDB()
+  db.keyringSlotsShown = not ShirsInventory_GetKeyRingSlotsShown()
+  return db.keyringSlotsShown
+end
+
+function ShirsInventory_ShouldCountFreeInventorySlot(container)
+  return container ~= ShirsInventory_GetKeyRingContainerID()
+end
+
+function ShirsInventory_GetInventorySlotCounts()
+  local counts = {}
+  local bag
+  for bag = 0, 4 do
+    counts[bag] = GetContainerNumSlots and (GetContainerNumSlots(bag) or 0) or 0
+  end
+  counts[ShirsInventory_GetKeyRingContainerID()] = ShirsInventory_GetKeyRingSize()
+  return counts
+end
+
+function ShirsInventory_CountFreeInventorySlots(slotStates)
+  local free = 0
+  local index
+  for index = 1, table.getn(slotStates or {}) do
+    local state = slotStates[index]
+    if state and not state.hasItem and ShirsInventory_ShouldCountFreeInventorySlot(state.bag) then
+      free = free + 1
+    end
+  end
+  return free
+end
+
 function ShirsInventory_BuildInventorySlots(slotCounts)
   local result = {}
   for bag = 0, 4 do
@@ -786,6 +833,11 @@ function ShirsInventory_BuildInventorySlots(slotCounts)
     for slot = 1, count do
       table.insert(result, { bag = bag, slot = slot })
     end
+  end
+  local keyring = ShirsInventory_GetKeyRingContainerID()
+  local keyringCount = ShirsInventory_GetKeyRingSlotsShown() and (slotCounts[keyring] or 0) or 0
+  for slot = 1, keyringCount do
+    table.insert(result, { bag = keyring, slot = slot })
   end
   return result
 end

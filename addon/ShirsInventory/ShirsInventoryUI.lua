@@ -45,7 +45,10 @@ local function ShirsInventory_GetFrame()
 end
 
 local function ShirsInventory_IsNormalBag(id)
-  return id ~= nil and id >= 0 and id <= 4
+  if id == nil then return false end
+  if id >= 0 and id <= 4 then return true end
+  local keyring = ShirsInventory_GetKeyRingContainerID and ShirsInventory_GetKeyRingContainerID() or (KEYRING_CONTAINER or -2)
+  return id == keyring
 end
 
 function ShirsInventory_GetBagBarLayout()
@@ -171,14 +174,17 @@ function ShirsInventory_GetItemBorderModel(texture, quality, itemType, enabled)
   return nil
 end
 
-function ShirsInventory_GetClampedTopLeft(left, top, width, height, screenWidth, screenHeight, margin, bottomMargin)
+function ShirsInventory_GetClampedTopLeft(left, top, width, height, screenWidth, screenHeight,
+  margin, bottomMargin, rightMargin, topMargin)
   margin = margin or 8
   bottomMargin = bottomMargin or margin
-  local maximumLeft = screenWidth - margin - width
+  if rightMargin == nil then rightMargin = margin end
+  if topMargin == nil then topMargin = margin end
+  local maximumLeft = screenWidth - rightMargin - width
   if maximumLeft < margin then maximumLeft = margin end
   if left < margin then left = margin end
   if left > maximumLeft then left = maximumLeft end
-  local maximumTop = screenHeight - margin
+  local maximumTop = screenHeight - topMargin
   local minimumTop = height + bottomMargin
   if minimumTop > maximumTop then minimumTop = maximumTop end
   if top > maximumTop then top = maximumTop end
@@ -186,7 +192,8 @@ function ShirsInventory_GetClampedTopLeft(left, top, width, height, screenWidth,
   return left, top
 end
 
-function ShirsInventory_GetFittedWindowScale(width, height, requestedScale, screenWidth, screenHeight, margin, bottomMargin)
+function ShirsInventory_GetFittedWindowScale(width, height, requestedScale, screenWidth, screenHeight,
+  margin, bottomMargin, rightMargin, topMargin)
   width = tonumber(width) or 0
   height = tonumber(height) or 0
   requestedScale = tonumber(requestedScale) or 1
@@ -194,12 +201,14 @@ function ShirsInventory_GetFittedWindowScale(width, height, requestedScale, scre
   screenHeight = tonumber(screenHeight) or 0
   margin = tonumber(margin) or 8
   bottomMargin = tonumber(bottomMargin) or margin
+  if rightMargin == nil then rightMargin = margin else rightMargin = tonumber(rightMargin) or margin end
+  if topMargin == nil then topMargin = margin else topMargin = tonumber(topMargin) or margin end
   if width <= 0 or height <= 0 or screenWidth <= 0 or screenHeight <= 0 then
     return requestedScale
   end
   local fitted = requestedScale
-  local widthScale = (screenWidth - margin * 2) / width
-  local heightScale = (screenHeight - margin - bottomMargin) / height
+  local widthScale = (screenWidth - margin - rightMargin) / width
+  local heightScale = (screenHeight - topMargin - bottomMargin) / height
   if widthScale < fitted then fitted = widthScale end
   if heightScale < fitted then fitted = heightScale end
   if fitted < 0.1 then fitted = 0.1 end
@@ -235,6 +244,27 @@ function ShirsInventory_BuildBagBarModel()
     })
     nextInventoryIndex = nextInventoryIndex + slots
   end
+  local keyring = ShirsInventory_GetKeyRingContainerID and ShirsInventory_GetKeyRingContainerID() or (KEYRING_CONTAINER or -2)
+  local keyringSlots
+  if ShirsInventory_GetKeyRingSize then
+    keyringSlots = ShirsInventory_GetKeyRingSize()
+  elseif type(GetKeyRingSize) == "function" then
+    keyringSlots = tonumber(GetKeyRingSize()) or 0
+  else
+    keyringSlots = 0
+  end
+  local keyringShown = not ShirsInventory_GetKeyRingSlotsShown or ShirsInventory_GetKeyRingSlotsShown()
+  table.insert(result, {
+    bag = keyring,
+    texture = "Interface\\ContainerFrame\\KeyRing-Bag-Icon",
+    slots = keyringSlots,
+    empty = false,
+    keyring = true,
+    fixed = true,
+    collapsed = not keyringShown,
+    firstInventoryIndex = keyringShown and keyringSlots > 0 and nextInventoryIndex or nil,
+    lastInventoryIndex = keyringShown and keyringSlots > 0 and (nextInventoryIndex + keyringSlots - 1) or nil,
+  })
   return result
 end
 
@@ -251,11 +281,30 @@ function ShirsInventory_HandleBagBarDrop(button)
   return true
 end
 
+function ShirsInventory_HandleBagBarDragStart(button)
+  local entry = button and button.bagEntry or nil
+  if not entry or entry.fixed then return false end
+  return ShirsInventory_HandleBagBarClick(button, "LeftButton")
+end
+
+function ShirsInventory_HandleBagBarReceiveDrag(button)
+  local entry = button and button.bagEntry or nil
+  if not entry or entry.fixed then return false end
+  return ShirsInventory_HandleBagBarDrop(button)
+end
+
 function ShirsInventory_HandleBagBarClick(button, mouseButton)
   local entry = button and button.bagEntry or nil
-  if mouseButton ~= "LeftButton" or not entry or entry.bag == 0 or not entry.inventoryID then
+  if mouseButton ~= "LeftButton" or not entry then
     return false
   end
+  if entry.keyring then
+    if not ShirsInventory_ToggleKeyRingSlots then return false end
+    ShirsInventory_ToggleKeyRingSlots()
+    if ShirsInventory_Update then ShirsInventory_Update() end
+    return true
+  end
+  if entry.bag == 0 or not entry.inventoryID then return false end
   -- A release after dragging a bag can arrive through the click path on these
   -- custom buttons. Match the stock BagSlotButton cursor path instead of
   -- picking up the equipped bag and undoing the drop.
@@ -269,6 +318,10 @@ end
 
 function ShirsInventory_GetBagBarActionHint(entry)
   if not entry or entry.bag == 0 then return "Built-in Backpack; it cannot be removed." end
+  if entry.keyring then
+    if entry.collapsed then return "Left-click to show Keyring slots." end
+    return "Left-click to hide Keyring slots."
+  end
   if entry.empty then return "Drop a bag here." end
   return "Left-click or drag to remove or swap this bag."
 end
@@ -281,6 +334,12 @@ end
 
 function ShirsInventory_HandleItemClick(button, mouseButton, ignoreModifiers)
   local bag, slot = button.bag, button.slot
+  local keyring = ShirsInventory_GetKeyRingContainerID and ShirsInventory_GetKeyRingContainerID() or (KEYRING_CONTAINER or -2)
+  if bag == keyring then
+    if type(KeyRingItemButton_OnClick) ~= "function" then return false end
+    KeyRingItemButton_OnClick(mouseButton)
+    return true
+  end
   local texture, count, locked, quality = GetContainerItemInfo(bag, slot)
   if not texture then
     if mouseButton == "LeftButton" then
@@ -357,14 +416,27 @@ function ShirsInventory_InstallBagHooks()
     OpenBag = OpenBag,
     CloseBag = CloseBag,
     IsBagOpen = IsBagOpen,
+    ToggleKeyRing = ToggleKeyRing,
   }
 
+  local function CanOpenIntegratedBags()
+    if type(CanOpenPanels) == "function" and not CanOpenPanels() then
+      if type(UnitIsDead) == "function" and UnitIsDead("player") and type(NotWhileDeadError) == "function" then
+        NotWhileDeadError()
+      end
+      return false
+    end
+    return true
+  end
+
   ToggleBackpack = function()
+    if type(IsOptionFrameOpen) == "function" and IsOptionFrameOpen() then return end
     local frame = ShirsInventory_GetFrame()
     if frame:IsShown() then frame:Hide() else frame:Show() end
   end
 
   OpenBackpack = function()
+    if not CanOpenIntegratedBags() then return end
     local frame = ShirsInventory_GetFrame()
     frame.shirsWasOpen = frame:IsShown()
     frame:Show()
@@ -395,6 +467,10 @@ function ShirsInventory_InstallBagHooks()
     end
   end
 
+  function ShirsInventory_OnInventoryVisibilityChanged()
+    if type(UpdateMicroButtons) == "function" then UpdateMicroButtons() end
+  end
+
   ToggleBag = function(id)
     if ShirsInventory_IsNormalBag(id) then
       ToggleBackpack()
@@ -405,7 +481,9 @@ function ShirsInventory_InstallBagHooks()
 
   OpenBag = function(id)
     if ShirsInventory_IsNormalBag(id) then
-      ShirsInventory_GetFrame():Show()
+      if not CanOpenIntegratedBags() then return end
+      local frame = ShirsInventory_GetFrame()
+      frame:Show()
     elseif originalBagFunctions.OpenBag then
       originalBagFunctions.OpenBag(id)
     end
@@ -413,7 +491,8 @@ function ShirsInventory_InstallBagHooks()
 
   CloseBag = function(id)
     if ShirsInventory_IsNormalBag(id) then
-      ShirsInventory_GetFrame():Hide()
+      local frame = ShirsInventory_GetFrame()
+      frame:Hide()
     elseif originalBagFunctions.CloseBag then
       originalBagFunctions.CloseBag(id)
     end
@@ -428,6 +507,16 @@ function ShirsInventory_InstallBagHooks()
     return nil
   end
 
+  ToggleKeyRing = function()
+    if type(IsOptionFrameOpen) == "function" and IsOptionFrameOpen() then return end
+    ToggleBackpack()
+    local frame = ShirsInventory_GetFrame()
+    local opened = frame and frame.IsShown and frame:IsShown()
+    if opened and type(SetButtonPulse) == "function" and KeyRingButton then
+      SetButtonPulse(KeyRingButton, 0, 1)
+    end
+  end
+
   installedBagFunctions = {
     ToggleBackpack = ToggleBackpack,
     OpenBackpack = OpenBackpack,
@@ -438,6 +527,7 @@ function ShirsInventory_InstallBagHooks()
     OpenBag = OpenBag,
     CloseBag = CloseBag,
     IsBagOpen = IsBagOpen,
+    ToggleKeyRing = ToggleKeyRing,
   }
 end
 
@@ -452,6 +542,7 @@ function ShirsInventory_UninstallBagHooks()
   if OpenBag == installedBagFunctions.OpenBag then OpenBag = originalBagFunctions.OpenBag end
   if CloseBag == installedBagFunctions.CloseBag then CloseBag = originalBagFunctions.CloseBag end
   if IsBagOpen == installedBagFunctions.IsBagOpen then IsBagOpen = originalBagFunctions.IsBagOpen end
+  if ToggleKeyRing == installedBagFunctions.ToggleKeyRing then ToggleKeyRing = originalBagFunctions.ToggleKeyRing end
   bagHooksInstalled = nil
   originalBagFunctions = nil
   installedBagFunctions = nil
@@ -470,7 +561,8 @@ function ShirsInventory_ActivateBagUI()
     ToggleBag ~= installedBagFunctions.ToggleBag or
     OpenBag ~= installedBagFunctions.OpenBag or
     CloseBag ~= installedBagFunctions.CloseBag or
-    IsBagOpen ~= installedBagFunctions.IsBagOpen
+    IsBagOpen ~= installedBagFunctions.IsBagOpen or
+    ToggleKeyRing ~= installedBagFunctions.ToggleKeyRing
   )
   local genericWasOpen = false
   if not wasOpen and (not bagHooksInstalled or hooksStale) and type(IsBagOpen) == "function" then
@@ -889,6 +981,28 @@ function ShirsInventory_OnInventoryDragStop(frame)
   return false
 end
 
+function ShirsInventory_ConfigureInventoryFrameMovement(frame)
+  if not frame then return false end
+  if frame.SetMovable then frame:SetMovable(true) end
+  if frame.SetClampedToScreen then frame:SetClampedToScreen(true) end
+  return true
+end
+
+function ShirsInventory_GetInventoryViewportSize()
+  local width
+  local height
+  if type(GetScreenWidth) == "function" then width = tonumber(GetScreenWidth()) end
+  if type(GetScreenHeight) == "function" then height = tonumber(GetScreenHeight()) end
+  if (not width or width <= 0) and UIParent and UIParent.GetWidth then
+    width = tonumber(UIParent:GetWidth())
+  end
+  if (not height or height <= 0) and UIParent and UIParent.GetHeight then
+    height = tonumber(UIParent:GetHeight())
+  end
+  if not width or width <= 0 or not height or height <= 0 then return nil, nil end
+  return width, height
+end
+
 function ShirsInventory_BindInventoryDragHandle(frame, handle)
   if not frame or not handle then return false end
   handle:RegisterForDrag("LeftButton")
@@ -1002,6 +1116,11 @@ local function ShirsInventory_UpdateCooldown(button)
 end
 
 function ShirsInventory_UpdateItemCursor(button, locked, readable)
+  local keyring = ShirsInventory_GetKeyRingContainerID and ShirsInventory_GetKeyRingContainerID() or (KEYRING_CONTAINER or -2)
+  if button and button.bag == keyring then
+    if CursorUpdate then CursorUpdate(button) elseif ResetCursor then ResetCursor() end
+    return
+  end
   if MerchantFrame and MerchantFrame:IsShown() and MerchantFrame.selectedTab == 1 and not locked then
     if ShowContainerSellCursor then ShowContainerSellCursor(button.bag, button.slot) end
   elseif readable or (IsControlKeyDown and IsControlKeyDown() and button.hasItem) then
@@ -1011,8 +1130,25 @@ function ShirsInventory_UpdateItemCursor(button, locked, readable)
   end
 end
 
+function ShirsInventory_ShouldShowJunkHint(button)
+  if not button then return false end
+  local keyring = ShirsInventory_GetKeyRingContainerID and ShirsInventory_GetKeyRingContainerID() or (KEYRING_CONTAINER or -2)
+  return button.bag ~= keyring
+end
+
+function ShirsInventory_ShouldShowJunkBadge(button, itemId, quality)
+  if not ShirsInventory_ShouldShowJunkHint(button) then return false end
+  if ShirsInventory_IsFeatureEnabled and not ShirsInventory_IsFeatureEnabled("junk") then return false end
+  return ShirsInventory_IsJunk(itemId, quality, ShirsInventory_GetJunkItems()) and true or false
+end
+
 function ShirsInventory_SetItemTooltip(button)
   if not button then return nil end
+  local keyring = ShirsInventory_GetKeyRingContainerID and ShirsInventory_GetKeyRingContainerID() or (KEYRING_CONTAINER or -2)
+  if button.bag == keyring and GameTooltip.SetInventoryItem and KeyRingButtonIDToInvSlotID then
+    GameTooltip:SetInventoryItem("player", KeyRingButtonIDToInvSlotID(button.slot))
+    return "keyring"
+  end
   if button.bag == (BANK_CONTAINER or -1) and GameTooltip.SetInventoryItem and BankButtonIDToInvSlotID then
     GameTooltip:SetInventoryItem("player", BankButtonIDToInvSlotID(button.slot))
     return "bank"
@@ -1044,15 +1180,17 @@ local function ShirsInventory_OnItemEnter(button)
   local itemId = ShirsInventory_GetItemId(GetContainerItemLink(button.bag, button.slot))
   ShirsInventory_AddAccountItemTooltip(GameTooltip, itemId)
   local _, _, locked, quality, readable = GetContainerItemInfo(button.bag, button.slot)
-  if (not ShirsInventory_IsFeatureEnabled or ShirsInventory_IsFeatureEnabled("junk")) and
-    ShirsInventory_IsJunk(itemId, quality, ShirsInventory_GetJunkItems()) then
-    if quality == 0 then
-      GameTooltip:AddLine("Junk: gray item", 1, 0.35, 0.35)
+  if ShirsInventory_ShouldShowJunkHint(button) then
+    if (not ShirsInventory_IsFeatureEnabled or ShirsInventory_IsFeatureEnabled("junk")) and
+      ShirsInventory_IsJunk(itemId, quality, ShirsInventory_GetJunkItems()) then
+      if quality == 0 then
+        GameTooltip:AddLine("Junk: gray item", 1, 0.35, 0.35)
+      else
+        GameTooltip:AddLine("Junk: manually marked", 1, 0.35, 0.35)
+      end
     else
-      GameTooltip:AddLine("Junk: manually marked", 1, 0.35, 0.35)
+      GameTooltip:AddLine("Alt-right-click to mark as junk", 0.55, 0.8, 1)
     end
-  else
-    GameTooltip:AddLine("Alt-right-click to mark as junk", 0.55, 0.8, 1)
   end
   GameTooltip:Show()
   ShirsInventory_UpdateItemCursor(button, locked, readable)
@@ -1176,8 +1314,7 @@ local function ShirsInventory_UpdateItemButton(button)
   if texture then
     ShirsInventory_UpdateCooldown(button)
     local itemId = ShirsInventory_GetItemId(GetContainerItemLink(button.bag, button.slot))
-    if (not ShirsInventory_IsFeatureEnabled or ShirsInventory_IsFeatureEnabled("junk")) and
-      ShirsInventory_IsJunk(itemId, quality, ShirsInventory_GetJunkItems()) then
+    if ShirsInventory_ShouldShowJunkBadge(button, itemId, quality) then
       button.junkBadge:Show()
     else
       button.junkBadge:Hide()
@@ -1216,6 +1353,8 @@ local function ShirsInventory_OnBagBarEnter(button)
   if button.bagEntry and button.bagEntry.inventoryID and GetInventoryItemLink and
     GetInventoryItemLink("player", button.bagEntry.inventoryID) then
     GameTooltip:SetInventoryItem("player", button.bagEntry.inventoryID)
+  elseif button.bagEntry and button.bagEntry.keyring then
+    GameTooltip:SetText("Keyring", 1, 1, 1)
   elseif button.bagEntry and button.bagEntry.bag == 0 then
     GameTooltip:SetText("Backpack", 1, 1, 1)
   else
@@ -1246,7 +1385,7 @@ end
 local function ShirsInventory_CreateBagBar(frame)
   local layout = ShirsInventory_GetBagBarLayout()
   local index
-  for index = 1, 5 do
+  for index = 1, 6 do
     local button = CreateFrame("Button", "ShirsInventoryBagBar" .. index, frame)
     button:SetWidth(layout.buttonSize)
     button:SetHeight(layout.buttonSize)
@@ -1267,8 +1406,8 @@ local function ShirsInventory_CreateBagBar(frame)
     button:RegisterForClicks("LeftButtonUp")
     button:RegisterForDrag("LeftButton")
     button:SetScript("OnClick", function() ShirsInventory_HandleBagBarClick(this, arg1) end)
-    button:SetScript("OnDragStart", function() ShirsInventory_HandleBagBarClick(this, "LeftButton") end)
-    button:SetScript("OnReceiveDrag", function() ShirsInventory_HandleBagBarDrop(this) end)
+    button:SetScript("OnDragStart", function() ShirsInventory_HandleBagBarDragStart(this) end)
+    button:SetScript("OnReceiveDrag", function() ShirsInventory_HandleBagBarReceiveDrag(this) end)
     bagBarButtons[index] = button
   end
   frame.bagBarButtons = bagBarButtons
@@ -1287,7 +1426,10 @@ local function ShirsInventory_UpdateBagBar()
       local entry = entries[index]
       button.bagEntry = entry
       button.icon:SetTexture(entry.texture)
-      if entry.empty then
+      if entry.collapsed then
+        button.icon:SetVertexColor(0.45, 0.45, 0.45)
+        button.slotText:SetText(entry.slots)
+      elseif entry.empty then
         button.icon:SetVertexColor(0.4, 0.4, 0.4)
         button.slotText:SetText("")
       else
@@ -1314,7 +1456,7 @@ function ShirsInventory_ApplyViewportScale(frame, bottomMargin)
   if UIParent and UIParent.GetWidth and UIParent.GetHeight and frame.GetWidth and frame.GetHeight then
     fitted = ShirsInventory_GetFittedWindowScale(
       frame:GetWidth(), frame:GetHeight(), requested,
-      UIParent:GetWidth(), UIParent:GetHeight(), 8, bottomMargin or 8
+      UIParent:GetWidth(), UIParent:GetHeight(), 8, bottomMargin or 8, 0, 0
     )
   end
   frame:SetScale(fitted)
@@ -1342,9 +1484,11 @@ function ShirsInventory_ClampInventoryFrame(frame, preserveSavedPosition)
     return true
   end
   if not UIParent or not frame.GetLeft or not frame.GetTop or not frame.GetWidth or
-    not frame.GetHeight or not UIParent.GetWidth or not UIParent.GetHeight then
+    not frame.GetHeight then
     return true
   end
+  local viewportWidth, viewportHeight = ShirsInventory_GetInventoryViewportSize()
+  if not viewportWidth or not viewportHeight then return true end
   local left = frame:GetLeft()
   local top = frame:GetTop()
   if not left or not top then return true end
@@ -1353,7 +1497,7 @@ function ShirsInventory_ClampInventoryFrame(frame, preserveSavedPosition)
   local screenTop = top * scale
   local newLeft, newTop = ShirsInventory_GetClampedTopLeft(
     screenLeft, screenTop, frame:GetWidth() * scale, frame:GetHeight() * scale,
-    UIParent:GetWidth(), UIParent:GetHeight(), 8, ShirsInventory_GetInventoryBottomMargin()
+    viewportWidth, viewportHeight, 8, ShirsInventory_GetInventoryBottomMargin(), 0, 0
   )
   if newLeft == screenLeft and newTop == screenTop then return true end
   local localLeft, localTop = newLeft / scale, newTop / scale
@@ -1449,9 +1593,8 @@ function ShirsInventory_ApplyWindowScaleSetting()
 end
 
 local function ShirsInventory_RebuildGrid()
-  local counts = {}
-  local free = 0
-  for bag = 0, 4 do counts[bag] = GetContainerNumSlots(bag) or 0 end
+  local counts = ShirsInventory_GetInventorySlotCounts()
+  local freeStates = {}
   local slots = ShirsInventory_BuildInventorySlots(counts)
   local layout = ShirsInventory_GetGridLayout(table.getn(slots), ShirsInventory_GetItemsPerRow())
   local bagBarLayout = ShirsInventory_GetBagBarLayout()
@@ -1471,12 +1614,12 @@ local function ShirsInventory_RebuildGrid()
     button:SetPoint("TOPLEFT", ShirsInventoryFrame, "TOPLEFT", 14 + column * 40, bagBarLayout.gridTopOffset - row * 40)
     button:Show()
     ShirsInventory_UpdateItemButton(button)
-    if not button.hasItem then free = free + 1 end
+    table.insert(freeStates, { bag = address.bag, hasItem = button.hasItem and true or false })
   end
   for index = table.getn(slots) + 1, table.getn(inventoryButtons) do
     inventoryButtons[index]:Hide()
   end
-  ShirsInventoryFrame.freeText:SetText(free .. " free")
+  ShirsInventoryFrame.freeText:SetText(ShirsInventory_CountFreeInventorySlots(freeStates) .. " free")
 end
 
 function ShirsInventory_Update()
@@ -1934,8 +2077,7 @@ local function ShirsInventory_CreateMainFrame()
   frame:SetScale(ShirsInventory_GetWindowScale())
   frame:SetFrameStrata("HIGH")
   frame:SetToplevel(true)
-  frame:SetMovable(true)
-  frame:SetClampedToScreen(true)
+  ShirsInventory_ConfigureInventoryFrameMovement(frame)
   frame:EnableMouse(true)
   frame:RegisterForDrag("LeftButton")
   ShirsInventory_ApplyInventoryFramePosition(frame)
@@ -1999,6 +2141,7 @@ local function ShirsInventory_CreateMainFrame()
   frame.settingsButton:SetScript("OnClick", function() ShirsInventory_ShowSettings() end)
 
   frame:SetScript("OnShow", function()
+    if ShirsInventory_OnInventoryVisibilityChanged then ShirsInventory_OnInventoryVisibilityChanged() end
     ShirsInventory_PrepareInventoryFrameForShow(this, UnitName and UnitName("player"))
     ShirsInventory_HideNativeNormalBags()
     ShirsInventory_SetBagChecks(1)
@@ -2006,6 +2149,7 @@ local function ShirsInventory_CreateMainFrame()
     PlaySound("igBackPackOpen")
   end)
   frame:SetScript("OnHide", function()
+    if ShirsInventory_OnInventoryVisibilityChanged then ShirsInventory_OnInventoryVisibilityChanged() end
     ShirsInventory_SetBagChecks(0)
     if GameTooltip:IsOwned(frame) then GameTooltip:Hide() end
     PlaySound("igBackPackClose")

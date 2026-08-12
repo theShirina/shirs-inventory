@@ -19,6 +19,7 @@ local accountEvents = {}
 local accountOnEvent
 
 BANK_CONTAINER = -1
+KEYRING_CONTAINER = -2
 NUM_BANKBAGSLOTS = 6
 
 function CreateFrame(_, name)
@@ -53,7 +54,12 @@ function time()
 end
 
 function GetContainerNumSlots(container)
+  if container == KEYRING_CONTAINER then return 0 end
   return table.getn(containers[container] or {})
+end
+
+function GetKeyRingSize()
+  return table.getn(containers[KEYRING_CONTAINER] or {})
 end
 
 function GetContainerItemLink(container, slot)
@@ -126,12 +132,16 @@ containers = {
   [1] = {
     { id = 7076, count = 3 },
   },
+  [KEYRING_CONTAINER] = {
+    { id = 12382, count = 1 },
+  },
 }
-assert(ShirsInventory_AccountScanBags() == 3,
+assert(ShirsInventory_AccountScanBags() == 4,
   "bag scan should cache every distinct carried item")
 local altItems = ShirsInventory_AccountGetCharacterItems("TestRealm", "Altsmith")
 assert(altItems.bags[14342] == 6 and altItems.bags[14048] == 20 and altItems.bags[7076] == 3,
   "bag scan did not aggregate duplicate stacks by item ID")
+assert(altItems.bags[12382] == 1, "bag scan did not include the Keyring")
 assert(altItems.bagsUpdated == 1000 and altItems.bankUpdated == nil,
   "bag scan timestamps or unknown-bank state are wrong")
 
@@ -167,6 +177,24 @@ ShirsInventory_AccountScanBags()
 bankItems = ShirsInventory_AccountGetCharacterItems("TestRealm", "Banktoon")
 assert(bankItems.bags[14342] == nil and bankItems.bank[14342] == 9,
   "a bag rescan erased the last known bank snapshot")
+
+currentCharacter = "Altsmith"
+currentTime = 1250
+containers = {
+  [0] = {
+    { id = 14342, count = 4 },
+    { id = 14048, count = 20 },
+    { id = 14342, count = 2 },
+  },
+  [1] = { { id = 7076, count = 3 } },
+  [KEYRING_CONTAINER] = { { id = 12382, count = 1 } },
+}
+event = "BAG_UPDATE"
+arg1 = KEYRING_CONTAINER
+accountOnEvent()
+altItems = ShirsInventory_AccountGetCharacterItems("TestRealm", "Altsmith")
+assert(altItems.bags[12382] == 1 and altItems.bagsUpdated == 1250,
+  "Keyring BAG_UPDATE did not refresh the carried-item snapshot")
 
 currentCharacter = "Altsmith"
 local itemLines, itemTotal = ShirsInventory_AccountBuildItemTooltipLines("TestRealm", 14342, "Altsmith")

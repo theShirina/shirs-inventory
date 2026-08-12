@@ -7,6 +7,17 @@ assert(loadfile(uiPath))()
 
 assert(type(ShirsInventory_GetInventoryTitle) == "function",
   "player inventory title helper is missing")
+assert(type(ShirsInventory_ConfigureInventoryFrameMovement) == "function",
+  "inventory movement configuration helper is missing")
+local movementFrame = {}
+function movementFrame:SetMovable(value) self.movable = value end
+function movementFrame:SetClampedToScreen(value) self.nativeClamp = value end
+assert(ShirsInventory_ConfigureInventoryFrameMovement(movementFrame),
+  "inventory movement configuration failed")
+assert(movementFrame.movable == true,
+  "inventory movement configuration did not keep the frame movable")
+assert(movementFrame.nativeClamp == true,
+  "inventory movement configuration did not restore stable native clamping")
 assert(ShirsInventory_GetInventoryTitle("Shir") == "Shir's Inventory",
   "inventory title does not use the player name")
 local titleFrame = { title = {} }
@@ -87,24 +98,36 @@ assert(ShirsInventory_OnInventoryDragStop(clampedDrag),
   "drag stop rejected a freely moved inventory position")
 saved = ShirsInventory_GetInventoryFramePosition()
 assert(saved.x == 451 and saved.y == 934,
-  "drag stop changed the user's x-axis or y-axis position")
+  "stable drag-stop did not save the native position unchanged")
 assert(clampedDrag.points[1] == "TOPLEFT" and clampedDrag.points[2] == UIParent and
   clampedDrag.points[3] == "BOTTOMLEFT" and clampedDrag.points[4] == 451 and clampedDrag.points[5] == 934,
-  "drag stop did not immediately apply the user's exact x-axis and y-axis anchor")
-assert(ShirsInventory_ClampInventoryFrame(clampedDrag, true),
-  "saved-position layout refresh failed")
-assert(clampedDrag.points[4] == 451 and clampedDrag.points[5] == 934 and
-  ShirsInventory_GetInventoryFramePosition().y == 934,
-  "layout refresh forced the saved inventory back to a screen edge")
+  "stable drag-stop altered the native position before reopen recovery")
 
-local dragFrame = {}
-function dragFrame:StartMoving() self.started = true end
-function dragFrame:StopMovingOrSizing() self.stopped = true end
-function dragFrame:GetLeft() return 200 end
-function dragFrame:GetTop() return 700 end
+-- Stable native dragging can move beyond UIParent's legacy safe rectangle.
+-- Reopen recovery must preserve that position when the scaled frame still
+-- fits inside the actual GetScreenWidth/GetScreenHeight viewport.
+function UIParent:GetWidth() return 1365 end
+function UIParent:GetHeight() return 768 end
+function UIParent:GetEffectiveScale() return 1 end
+GetScreenWidth = function() return 1680 end
+GetScreenHeight = function() return 945 end
+local dragFrame = {
+  left = 1600, top = 1100, width = 400, height = 500,
+  scripts = {}, effectiveScale = 0.8,
+}
+function dragFrame:StartMoving() self.nativeStarted = true end
+function dragFrame:StopMovingOrSizing() self.nativeStopped = true end
+function dragFrame:GetLeft() return self.left end
+function dragFrame:GetTop() return self.top end
+function dragFrame:GetWidth() return self.width end
+function dragFrame:GetHeight() return self.height end
+function dragFrame:GetEffectiveScale() return self.effectiveScale end
+function dragFrame:GetScript(name) return self.scripts[name] end
+function dragFrame:SetScript(name, callback) self.scripts[name] = callback end
 function dragFrame:ClearAllPoints() self.cleared = true end
 function dragFrame:SetPoint(point, relativeTo, relativePoint, x, y)
   self.points = {point, relativeTo, relativePoint, x, y}
+  self.left, self.top = x, y
 end
 local dragHandle = { scripts = {} }
 function dragHandle:RegisterForDrag(button) self.dragButton = button end
@@ -113,14 +136,18 @@ assert(type(ShirsInventory_BindInventoryDragHandle) == "function", "inventory dr
 assert(ShirsInventory_BindInventoryDragHandle(dragFrame, dragHandle), "inventory drag handle was not bound")
 assert(dragHandle.dragButton == "LeftButton", "inventory drag handle did not register left-button dragging")
 dragHandle.scripts.OnDragStart()
-assert(dragFrame.started, "inventory drag handle did not start frame movement")
+assert(dragFrame.nativeStarted, "inventory drag handle did not restore stable native movement")
 dragHandle.scripts.OnDragStop()
-assert(dragFrame.stopped, "inventory drag handle did not stop frame movement")
+assert(dragFrame.nativeStopped, "inventory drag handle did not stop native movement")
 saved = ShirsInventory_GetInventoryFramePosition()
-assert(saved.x == 200 and saved.y == 700, "inventory drag handle did not save the moved position")
-assert(dragFrame.points[1] == "TOPLEFT" and dragFrame.points[2] == UIParent and
-  dragFrame.points[3] == "BOTTOMLEFT" and dragFrame.points[4] == 200 and dragFrame.points[5] == 700,
-  "inventory drag handle did not normalize the live anchor")
+assert(saved.x == 1600 and saved.y == 1100,
+  "native drag did not save the position beyond UIParent's hidden boundary")
+assert(ShirsInventory_ClampInventoryFrame(dragFrame, false),
+  "reopen recovery rejected a position inside the actual screen")
+saved = ShirsInventory_GetInventoryFramePosition()
+assert(saved.x == 1600 and saved.y == 1100 and
+  dragFrame.left == 1600 and dragFrame.top == 1100,
+  "reopen recovery snapped a valid native position back to UIParent's hidden boundary")
 
 local moved = { points = {} }
 function moved:ClearAllPoints() self.cleared = true end

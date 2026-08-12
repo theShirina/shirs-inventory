@@ -31,6 +31,16 @@ assert(loadfile(sorterPath))()
 
 assert(type(ShirsInventory_SortBags) == "function" and type(ShirsInventory_SortBank) == "function",
   "full-suite sorter entry points are missing")
+assert(type(ShirsInventory_GetBagSortContainers) == "function", "normal bag sorter scope helper is missing")
+local bagContainers = ShirsInventory_GetBagSortContainers()
+local expectedBagContainers = {0, 1, 2, 3, 4}
+assert(table.getn(bagContainers) == table.getn(expectedBagContainers),
+  "normal bag sorting must exclude the Keyring")
+local bagIndex
+for bagIndex = 1, table.getn(expectedBagContainers) do
+  assert(bagContainers[bagIndex] == expectedBagContainers[bagIndex],
+    "normal bag sorting skipped, reordered, or added a container")
+end
 assert(ShirsInventory_IsFeatureEnabled("sorter"), "full-suite sorter is disabled")
 assert(not ShirsInventory_SetFeatureEnabled("sorter", false),
   "obsolete feature API disabled the sorter")

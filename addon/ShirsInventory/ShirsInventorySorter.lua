@@ -410,12 +410,16 @@ function ShirsInventory_IsRunning()
   return running
 end
 
+function ShirsInventory_GetBagSortContainers()
+  return {0, 1, 2, 3, 4}
+end
+
 function ShirsInventory_SortBags()
   if ShirsInventory_IsFeatureEnabled and not ShirsInventory_IsFeatureEnabled("sorter") then
     Message("Bag Sorter is disabled in settings.")
     return false, "disabled"
   end
-  return Start({0, 1, 2, 3, 4})
+  return Start(ShirsInventory_GetBagSortContainers())
 end
 
 function ShirsInventory_GetBankSortContainers()

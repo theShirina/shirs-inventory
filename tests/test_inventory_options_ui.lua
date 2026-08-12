@@ -95,8 +95,8 @@ bankFrame.left, bankFrame.bottom = 700, 50
 assert(ShirsInventory_ApplyLayoutSettings(),
   "extreme layout settings were not applied")
 assert(inventoryFrame.left * inventoryFrame.scale >= 8 and
-  (inventoryFrame.left + inventoryFrame.width) * inventoryFrame.scale <= 1016 and
-  inventoryFrame.top * inventoryFrame.scale <= 760 and
+  (inventoryFrame.left + inventoryFrame.width) * inventoryFrame.scale <= 1024 and
+  inventoryFrame.top * inventoryFrame.scale <= 768 and
   (inventoryFrame.top - inventoryFrame.height) * inventoryFrame.scale >= 8,
   "inventory was not recovered from an inaccessible saved edge position")
 assert(bankFrame.left * bankFrame.scale >= 8 and
@@ -144,7 +144,7 @@ assert(ShirsInventory_RecoverInventoryViewport(inventoryFrame) and
   ShirsInventory_RecoverBankViewport(bankFrame),
   "hidden windows were not recovered when reopened")
 assert(inventoryFrame.left * inventoryFrame.scale >= 8 and
-  (inventoryFrame.left + inventoryFrame.width) * inventoryFrame.scale <= 1016,
+  (inventoryFrame.left + inventoryFrame.width) * inventoryFrame.scale <= 1024,
   "reopened inventory kept an inaccessible saved edge position")
 assert(bankFrame.left * bankFrame.scale >= 8 and
   (bankFrame.left + bankFrame.width) * bankFrame.scale <= 1016,
