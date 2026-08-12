@@ -241,6 +241,13 @@ assert(type(ShirsInventory_GetHideItemOwnershipInCombat) == "function" and
 assert(ShirsInventory_SetHideItemOwnershipInCombat(true) and
   ShirsInventory_GetHideItemOwnershipInCombat(),
   "item ownership combat option did not persist")
+assert(type(ShirsInventory_GetAutoClearSearch) == "function" and
+  type(ShirsInventory_SetAutoClearSearch) == "function" and
+  ShirsInventory_GetAutoClearSearch(),
+  "automatic search clearing option is missing or must default on")
+assert(not ShirsInventory_SetAutoClearSearch(false) and
+  not ShirsInventory_GetAutoClearSearch(),
+  "automatic search clearing option did not persist off")
 assert(not string.find(settings, "Use icons for inventory header + action buttons", 1, true),
   "inventory text-style toggle must be removed now that bag controls are icon-only")
 assert(string.find(settings, "Use coin icons for currency (off = g/s/c text)", 1, true),
@@ -248,6 +255,13 @@ assert(string.find(settings, "Use coin icons for currency (off = g/s/c text)", 1
 assert(string.find(settings, "Hide item ownership details while in combat", 1, true) and
   string.find(settings, "ShirsInventory_SetHideItemOwnershipInCombat", 1, true),
   "settings panel is missing the item ownership combat checkbox")
+assert(string.find(settings, "Clear search when bags close or you click outside", 1, true) and
+  string.find(settings, "ShirsInventory_SetAutoClearSearch", 1, true),
+  "settings panel is missing the automatic search clearing checkbox")
+assert(string.find(settings, 'frame, "Clear search when bags close or you click outside", "autoClearSearch", -262', 1, true) and
+  string.find(settings, 'frame.itemsPerRowSlider:SetPoint("TOPLEFT", frame, "TOPLEFT", 45, -310)', 1, true) and
+  string.find(settings, 'frame.windowScaleSlider:SetPoint("TOPLEFT", frame, "TOPLEFT", 45, -375)', 1, true),
+  "automatic search checkbox and layout sliders need separate vertical rows")
 assert(string.find(settings, '"Items per row: "', 1, true) and
   string.find(settings, 'SetMinMaxValues(10, 20)', 1, true) and
   string.find(settings, 'SetValueStep(1)', 1, true),

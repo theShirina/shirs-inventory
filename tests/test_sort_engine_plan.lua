@@ -117,8 +117,8 @@ assert(target(ignoredBottom, 2) == "empty", "bottom did not leave the leading fr
 assert(target(ignoredBottom, 3) == "marked-junk:1", "bottom moved manually marked junk")
 assert(target(ignoredBottom, 4) == "A:1" and target(ignoredBottom, 5) == "B:1", "bottom free-slot order is wrong")
 
--- Edge ranks keep pets, mounts, and field items between the Hearthstone and
--- profession tools at either selected edge.
+-- Edge ranks keep Onyxia Scale Cloak directly beside Hearthstone, followed by
+-- field items, pets and mounts, and profession tools at either selected edge.
 local edgeAnchors = {
   slot(0, 1, nil, item("ordinary", 1, 1, {1}, nil, nil)),
   slot(0, 2, nil, item("salt-shaker", 1, 1, {4}, nil, 4)),
@@ -127,16 +127,18 @@ local edgeAnchors = {
   slot(0, 5, nil, item("field-item", 1, 1, {2.5}, nil, 2)),
   slot(0, 6, nil, item("custom-pet", 1, 1, {3.5}, nil, 3)),
   slot(0, 7, nil, item("custom-mount", 1, 1, {3}, nil, 3)),
-  slot(0, 8, nil, nil),
+  slot(0, 8, nil, item("onyxia-scale-cloak", 1, 1, {2.8}, nil, 1.5)),
+  slot(0, 9, nil, nil),
 }
 local edgeTop = ShirsInventory_SortEnginePlan(edgeAnchors, "top")
 assert(target(edgeTop, 1) == "hearthstone:1", "Top did not put Hearthstone first")
-assert(target(edgeTop, 2) == "field-item:1", "Top did not place field items after Hearthstone")
-assert(target(edgeTop, 3) == "custom-mount:1" and target(edgeTop, 4) == "custom-pet:1",
+assert(target(edgeTop, 2) == "onyxia-scale-cloak:1", "Top did not put Onyxia Scale Cloak beside Hearthstone")
+assert(target(edgeTop, 3) == "field-item:1", "Top did not place field items after Onyxia Scale Cloak")
+assert(target(edgeTop, 4) == "custom-mount:1" and target(edgeTop, 5) == "custom-pet:1",
   "Top did not keep pets directly beside mounts")
-assert(target(edgeTop, 5) == "runed-rod:1" and target(edgeTop, 6) == "salt-shaker:1",
+assert(target(edgeTop, 6) == "runed-rod:1" and target(edgeTop, 7) == "salt-shaker:1",
   "Top did not place profession tools after pets and mounts")
-assert(target(edgeTop, 7) == "ordinary:1" and target(edgeTop, 8) == "empty",
+assert(target(edgeTop, 8) == "ordinary:1" and target(edgeTop, 9) == "empty",
   "Top edge anchors displaced the normal window incorrectly")
 local edgeBottom = ShirsInventory_SortEnginePlan(edgeAnchors, "bottom")
 assert(target(edgeBottom, 1) == "empty" and target(edgeBottom, 2) == "ordinary:1",
@@ -146,8 +148,10 @@ assert(target(edgeBottom, 3) == "runed-rod:1" and target(edgeBottom, 4) == "salt
 assert(target(edgeBottom, 5) == "custom-mount:1" and target(edgeBottom, 6) == "custom-pet:1",
   "Bottom did not keep pets directly beside mounts")
 assert(target(edgeBottom, 7) == "field-item:1",
-  "Bottom did not keep field items between pets and Hearthstone")
-assert(target(edgeBottom, 8) == "hearthstone:1", "Bottom did not put Hearthstone last")
+  "Bottom did not keep field items between pets and Onyxia Scale Cloak")
+assert(target(edgeBottom, 8) == "onyxia-scale-cloak:1",
+  "Bottom did not put Onyxia Scale Cloak beside Hearthstone")
+assert(target(edgeBottom, 9) == "hearthstone:1", "Bottom did not put Hearthstone last")
 
 -- Quest items occupy the inner opposite-edge group and conjured items the
 -- outer group. Top reads quest then conjured; Bottom reads conjured then quest.

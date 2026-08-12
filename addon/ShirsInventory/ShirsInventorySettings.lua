@@ -124,6 +124,7 @@ local function ShirsInventory_RefreshSettings()
   settingsFrame.hideItemOwnershipInCombat:SetChecked(
     ShirsInventory_GetHideItemOwnershipInCombat() and 1 or nil
   )
+  settingsFrame.autoClearSearch:SetChecked(ShirsInventory_GetAutoClearSearch() and 1 or nil)
   refreshingSettings = true
   settingsFrame.itemsPerRowSlider:SetValue(ShirsInventory_GetItemsPerRow())
   settingsFrame.windowScaleSlider:SetValue(ShirsInventory_GetWindowScale())
@@ -146,7 +147,7 @@ function ShirsInventory_CreateLayoutSliders(frame)
     "Slider", "ShirsInventoryItemsPerRowSlider", frame, "OptionsSliderTemplate"
   )
   frame.itemsPerRowSlider:SetWidth(300)
-  frame.itemsPerRowSlider:SetPoint("TOPLEFT", frame, "TOPLEFT", 45, -280)
+  frame.itemsPerRowSlider:SetPoint("TOPLEFT", frame, "TOPLEFT", 45, -310)
   frame.itemsPerRowSlider:SetMinMaxValues(10, 20)
   frame.itemsPerRowSlider:SetValueStep(1)
   frame.itemsPerRowSliderText = getglobal("ShirsInventoryItemsPerRowSliderText")
@@ -162,7 +163,7 @@ function ShirsInventory_CreateLayoutSliders(frame)
     "Slider", "ShirsInventoryWindowScaleSlider", frame, "OptionsSliderTemplate"
   )
   frame.windowScaleSlider:SetWidth(300)
-  frame.windowScaleSlider:SetPoint("TOPLEFT", frame, "TOPLEFT", 45, -345)
+  frame.windowScaleSlider:SetPoint("TOPLEFT", frame, "TOPLEFT", 45, -375)
   frame.windowScaleSlider:SetMinMaxValues(0.65, 1)
   frame.windowScaleSlider:SetValueStep(0.05)
   frame.windowScaleSliderText = getglobal("ShirsInventoryWindowScaleSliderText")
@@ -200,6 +201,9 @@ local function ShirsInventory_CreateSettingsFrame()
   frame.hideItemOwnershipInCombat = ShirsInventory_CreateFeatureCheck(
     frame, "Hide item ownership details while in combat", "hideItemOwnershipInCombat", -232
   )
+  frame.autoClearSearch = ShirsInventory_CreateFeatureCheck(
+    frame, "Clear search when bags close or you click outside", "autoClearSearch", -262
+  )
   frame.ignoreJunkSorting:SetScript("OnClick", function()
     ShirsInventory_SetIgnoreJunkSorting(this:GetChecked() and true or false)
     ShirsInventory_RefreshSettings()
@@ -230,6 +234,10 @@ local function ShirsInventory_CreateSettingsFrame()
   end)
   frame.hideItemOwnershipInCombat:SetScript("OnClick", function()
     ShirsInventory_SetHideItemOwnershipInCombat(this:GetChecked() and true or false)
+    ShirsInventory_RefreshSettings()
+  end)
+  frame.autoClearSearch:SetScript("OnClick", function()
+    ShirsInventory_SetAutoClearSearch(this:GetChecked() and true or false)
     ShirsInventory_RefreshSettings()
   end)
 

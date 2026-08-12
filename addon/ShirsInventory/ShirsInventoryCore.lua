@@ -78,6 +78,9 @@ local function ShirsInventory_EnsureDB()
   if ShirsInventoryDB.hideItemOwnershipInCombat == nil then
     ShirsInventoryDB.hideItemOwnershipInCombat = false
   end
+  if ShirsInventoryDB.autoClearSearch == nil then
+    ShirsInventoryDB.autoClearSearch = true
+  end
   if ShirsInventoryDB.questItemsOppositeEdge == nil then
     ShirsInventoryDB.questItemsOppositeEdge = true
   end
@@ -730,6 +733,15 @@ end
 function ShirsInventory_SetHideItemOwnershipInCombat(enabled)
   ShirsInventory_EnsureDB().hideItemOwnershipInCombat = enabled and true or false
   return ShirsInventory_GetHideItemOwnershipInCombat()
+end
+
+function ShirsInventory_GetAutoClearSearch()
+  return ShirsInventory_EnsureDB().autoClearSearch and true or false
+end
+
+function ShirsInventory_SetAutoClearSearch(enabled)
+  ShirsInventory_EnsureDB().autoClearSearch = enabled and true or false
+  return ShirsInventory_GetAutoClearSearch()
 end
 
 function ShirsInventory_GetItemsPerRow()

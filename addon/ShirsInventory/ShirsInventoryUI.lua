@@ -67,6 +67,113 @@ function ShirsInventory_GetBagBarLayout()
   }
 end
 
+function ShirsInventory_GetSearchBoxLayout()
+  return {
+    height = 22,
+    leftGap = 10,
+    rightGap = 10,
+    minimumWidth = 80,
+    placeholder = "Search",
+    dimAlpha = 0.2,
+  }
+end
+
+function ShirsInventory_NormalizeSearchQuery(query)
+  local normalized = type(query) == "string" and query or ""
+  normalized = string.gsub(normalized, "^%s+", "")
+  normalized = string.gsub(normalized, "%s+$", "")
+  return string.lower(normalized)
+end
+
+function ShirsInventory_ItemMatchesSearch(query, itemName, itemLink)
+  local normalized = ShirsInventory_NormalizeSearchQuery(query)
+  if normalized == "" then return true end
+  local name = itemName
+  if (not name or name == "") and type(itemLink) == "string" then
+    local _, _, visibleName = string.find(itemLink, "|h%[(.-)%]|h")
+    name = visibleName
+  end
+  if type(name) ~= "string" or name == "" then return false end
+  return string.find(string.lower(name), normalized, 1, true) and true or false
+end
+
+function ShirsInventory_ApplySearchToButton(button, query, itemName, itemLink)
+  local matches = ShirsInventory_ItemMatchesSearch(query, itemName, itemLink)
+  if button and button.SetAlpha then
+    button:SetAlpha(matches and 1 or ShirsInventory_GetSearchBoxLayout().dimAlpha)
+  end
+  return matches
+end
+
+function ShirsInventory_GetSearchQueryForButton(button)
+  if not button or not button.shirsInventorySearchEnabled then return "" end
+  return ShirsInventoryFrame and ShirsInventoryFrame.searchQuery or ""
+end
+
+function ShirsInventory_IsCursorInsideFrame(frame)
+  if not frame or type(GetCursorPosition) ~= "function" or
+    not frame.GetLeft or not frame.GetRight or not frame.GetBottom or not frame.GetTop then
+    return false
+  end
+  local left, right = frame:GetLeft(), frame:GetRight()
+  local bottom, top = frame:GetBottom(), frame:GetTop()
+  if not left or not right or not bottom or not top then return false end
+  local cursorX, cursorY = GetCursorPosition()
+  local scale = frame.GetEffectiveScale and frame:GetEffectiveScale() or 1
+  scale = tonumber(scale) or 1
+  if scale <= 0 then scale = 1 end
+  cursorX = cursorX / scale
+  cursorY = cursorY / scale
+  return cursorX >= left and cursorX <= right and cursorY >= bottom and cursorY <= top
+end
+
+function ShirsInventory_ClearSearch(frame, force)
+  if not frame or not frame.searchBox then return false end
+  if not force and ShirsInventory_GetAutoClearSearch and not ShirsInventory_GetAutoClearSearch() then
+    return false
+  end
+  local text = frame.searchBox.GetText and frame.searchBox:GetText() or ""
+  local active = ShirsInventory_NormalizeSearchQuery(frame.searchQuery) ~= "" or
+    ShirsInventory_NormalizeSearchQuery(text) ~= ""
+  if not active then
+    if frame.searchBox.placeholder then frame.searchBox.placeholder:Show() end
+    return false
+  end
+  frame.searchQuery = ""
+  if frame.searchBox.SetText and text ~= "" then
+    frame.searchBox:SetText("")
+  else
+    ShirsInventory_RefreshSearchFilter()
+  end
+  if frame.searchBox.placeholder then frame.searchBox.placeholder:Show() end
+  return true
+end
+
+function ShirsInventory_ProcessDeferredSearchFocus(frame)
+  if not frame or not frame.searchFocusReleasePending then return false end
+  frame.searchFocusReleasePending = false
+  if frame.searchBox and frame.searchBox.ClearFocus then frame.searchBox:ClearFocus() end
+  return true
+end
+
+function ShirsInventory_InstallWorldFrameSearchHook()
+  if not WorldFrame or not WorldFrame.GetScript or not WorldFrame.SetScript then return false end
+  if WorldFrame.shirsInventorySearchHookInstalled then return true end
+  WorldFrame.shirsInventorySearchHookInstalled = true
+  local previousMouseDown = WorldFrame:GetScript("OnMouseDown")
+  WorldFrame:SetScript("OnMouseDown", function()
+    local button = arg1
+    if previousMouseDown then previousMouseDown() end
+    local frame = ShirsInventoryFrame
+    if (button == "LeftButton" or button == "RightButton") and frame and
+      frame.IsShown and frame:IsShown() then
+      local cleared = ShirsInventory_ClearSearch(frame)
+      if cleared then frame.searchFocusReleasePending = true end
+    end
+  end)
+  return true
+end
+
 function ShirsInventory_GetOneBagLayout()
   return {
     singleInventory = true,
@@ -614,6 +721,19 @@ local bankButtons = {}
 local bankBagButtons = {}
 local bankPurchaseButton
 local saleElapsed = 0
+
+function ShirsInventory_RefreshSearchFilter()
+  local query = ShirsInventoryFrame and ShirsInventoryFrame.searchQuery or ""
+  local index
+  for index = 1, table.getn(inventoryButtons) do
+    local button = inventoryButtons[index]
+    if button and button.IsShown and button:IsShown() then
+      local link = button.hasItem and GetContainerItemLink and GetContainerItemLink(button.bag, button.slot) or nil
+      local itemName = link and ShirsInventory_GetItemInfoFields(link).name or nil
+      ShirsInventory_ApplySearchToButton(button, query, itemName, link)
+    end
+  end
+end
 
 local function ShirsInventory_SetBagChecks(checked)
   if MainMenuBarBackpackButton then MainMenuBarBackpackButton:SetChecked(checked) end
@@ -1279,6 +1399,8 @@ end
 
 local function ShirsInventory_UpdateItemButton(button)
   local texture, count, locked, quality, readable = GetContainerItemInfo(button.bag, button.slot)
+  local link = texture and GetContainerItemLink and GetContainerItemLink(button.bag, button.slot) or nil
+  local itemInfo = ShirsInventory_GetItemInfoFields(link)
   SetItemButtonTexture(button, texture)
   SetItemButtonCount(button, count)
   SetItemButtonDesaturated(button, locked, 0.5, 0.5, 0.5)
@@ -1290,8 +1412,6 @@ local function ShirsInventory_UpdateItemButton(button)
   if normal then normal:SetVertexColor(1, 1, 1) end
 
   if button.rarityEdges then
-    local link = texture and GetContainerItemLink and GetContainerItemLink(button.bag, button.slot) or nil
-    local itemInfo = ShirsInventory_GetItemInfoFields(link)
     local border = ShirsInventory_GetItemBorderModel(
       texture,
       ShirsInventory_ResolveItemQuality(quality, itemInfo.quality),
@@ -1323,6 +1443,46 @@ local function ShirsInventory_UpdateItemButton(button)
     button.cooldown:Hide()
     button.junkBadge:Hide()
   end
+  local query = ShirsInventory_GetSearchQueryForButton(button)
+  ShirsInventory_ApplySearchToButton(button, query, itemInfo.name, link)
+end
+
+function ShirsInventory_CreateSearchBox(frame)
+  local layout = ShirsInventory_GetSearchBoxLayout()
+  frame.searchQuery = ""
+  frame.searchFocused = false
+  frame.searchBox = CreateFrame("EditBox", "ShirsInventorySearchBox", frame, "InputBoxTemplate")
+  frame.searchBox:SetHeight(layout.height)
+  frame.searchBox:SetAutoFocus(false)
+  frame.searchBox:SetMaxLetters(64)
+  frame.searchBox:SetPoint("LEFT", frame.bagBarButtons[6], "RIGHT", layout.leftGap, 0)
+  frame.searchBox:SetPoint("RIGHT", frame.sortButton, "LEFT", -layout.rightGap, 0)
+  if frame.searchBox.SetTextInsets then frame.searchBox:SetTextInsets(6, 6, 0, 0) end
+  frame.searchBox.placeholder = frame.searchBox:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+  frame.searchBox.placeholder:SetPoint("LEFT", frame.searchBox, "LEFT", 7, 0)
+  frame.searchBox.placeholder:SetText(layout.placeholder)
+  frame.searchBox:SetScript("OnTextChanged", function()
+    frame.searchQuery = ShirsInventory_NormalizeSearchQuery(this:GetText())
+    if this.placeholder then
+      if frame.searchQuery == "" and not frame.searchFocused then this.placeholder:Show() else this.placeholder:Hide() end
+    end
+    ShirsInventory_RefreshSearchFilter()
+  end)
+  frame.searchBox:SetScript("OnEditFocusGained", function()
+    frame.searchFocused = true
+    if this.placeholder then this.placeholder:Hide() end
+  end)
+  frame.searchBox:SetScript("OnEditFocusLost", function()
+    frame.searchFocused = false
+    if not ShirsInventory_IsCursorInsideFrame(frame) then ShirsInventory_ClearSearch(frame) end
+  end)
+  frame.searchBox:SetScript("OnEnterPressed", function() this:ClearFocus() end)
+  frame.searchBox:SetScript("OnEscapePressed", function()
+    ShirsInventory_ClearSearch(frame, true)
+    this:ClearFocus()
+    if this.placeholder then this.placeholder:Show() end
+  end)
+  return frame.searchBox
 end
 
 function ShirsInventory_RefreshRarityBoxes()
@@ -1605,6 +1765,7 @@ local function ShirsInventory_RebuildGrid()
 
   for index, address in ipairs(slots) do
     local button = inventoryButtons[index] or ShirsInventory_CreateItemButton(index)
+    button.shirsInventorySearchEnabled = true
     button.bag = address.bag
     button.slot = address.slot
     button:SetID(address.slot)
@@ -1972,6 +2133,7 @@ function ShirsInventory_UpdateBank(frame)
     local button = bankButtons[index] or ShirsInventory_CreateItemButton(
       index, frame, "ShirsInventoryBankItem", bankButtons
     )
+    button.shirsInventorySearchEnabled = false
     button.bag = address.bag
     button.slot = address.slot
     button:SetID(address.slot)
@@ -2140,6 +2302,8 @@ local function ShirsInventory_CreateMainFrame()
   frame.settingsButton:SetText("Settings")
   frame.settingsButton:SetScript("OnClick", function() ShirsInventory_ShowSettings() end)
 
+  ShirsInventory_CreateSearchBox(frame)
+
   frame:SetScript("OnShow", function()
     if ShirsInventory_OnInventoryVisibilityChanged then ShirsInventory_OnInventoryVisibilityChanged() end
     ShirsInventory_PrepareInventoryFrameForShow(this, UnitName and UnitName("player"))
@@ -2150,9 +2314,14 @@ local function ShirsInventory_CreateMainFrame()
   end)
   frame:SetScript("OnHide", function()
     if ShirsInventory_OnInventoryVisibilityChanged then ShirsInventory_OnInventoryVisibilityChanged() end
+    ShirsInventory_ClearSearch(frame)
+    if frame.searchBox and frame.searchBox.ClearFocus then frame.searchBox:ClearFocus() end
     ShirsInventory_SetBagChecks(0)
     if GameTooltip:IsOwned(frame) then GameTooltip:Hide() end
     PlaySound("igBackPackClose")
+  end)
+  frame:SetScript("OnUpdate", function()
+    ShirsInventory_ProcessDeferredSearchFocus(this)
   end)
   frame:SetScript("OnDragStart", function() this:StartMoving() end)
   frame:SetScript("OnDragStop", function()
@@ -2217,6 +2386,7 @@ end
 function ShirsInventory_InitializeUI()
   if ShirsInventoryFrame then return ShirsInventoryFrame end
   local frame = ShirsInventory_CreateMainFrame()
+  ShirsInventory_InstallWorldFrameSearchHook()
   ShirsInventory_CreateBankFrame()
   if ShirsInventory_CreateSettingsUI then ShirsInventory_CreateSettingsUI() end
   ShirsInventory_ApplyFeatureSelection()

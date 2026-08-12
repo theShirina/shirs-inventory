@@ -194,6 +194,7 @@ end
 
 function ShirsInventory_GetEdgeAnchorRank(itemID, itemName, itemType, itemSubType, spellName, tooltipPetOrMount)
   if itemID == 6948 then return 1 end
+  if itemID == 15138 then return 1.5 end -- Onyxia Scale Cloak
   if middleEdgeItemIDs[itemID] then return 2 end
   if ShirsInventory_IsPetOrMountItem(itemType, itemSubType, spellName, tooltipPetOrMount) then return 3 end
   if professionToolIDs[itemID] or itemID == 19727 then return 4 end

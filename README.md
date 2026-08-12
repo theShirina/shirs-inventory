@@ -2,12 +2,14 @@
 
 A standalone bag addon made and tested for Microbot's WoW 1.12.1 client.
 
-Current release: **0.6.2**.
+Current release: **0.6.3**.
 
 ## What it does
 
 - Combines the Backpack and equipped bags into one continuous grid.
 - Adds Keyring slots to that grid with a fixed Keyring button in the add-on's bag bar.
+- Filters the visible inventory by item name without moving slots; nonmatching items dim until the search is cleared.
+- Can clear the search when the bags close or the player clicks outside; Escape always clears it.
 - Lets each character click the Keyring button to hide or show Keyring slots.
 - Replaces the normal or pfUI bank window with one combined view of the main bank and equipped bank bags.
 - Shows the native bank-bag slots and the next bank-slot purchase button.
@@ -19,7 +21,7 @@ Current release: **0.6.2**.
 - Sorts from the top or bottom and merges partial stacks.
 - Waits for each exact bag-state update before submitting the next cursor move.
 - Keeps quest-bordered items at the opposite end of the occupied sorted block by default, with conjured items directly outside them.
-- Keeps Hearthstone, field services, adjacent pets and mounts, and profession tools together at the selected edge.
+- Keeps Hearthstone, Onyxia Scale Cloak, field services, adjacent pets and mounts, and profession tools together at the selected edge.
 - Keeps the four Microbot world-buff scrolls next to each other in either sort mode and direction.
 - Sorts herbs and enchanting materials into their matching specialty bags while keeping incompatible profession reagents in normal bags.
 - Keeps quiver, ammo-pouch, and soul-bag items in compatible bags.
@@ -37,7 +39,7 @@ Current release: **0.6.2**.
 
 ## Download and install
 
-1. Download the ZIP from the [v0.6.2 release page](https://github.com/theShirina/shirs-inventory/releases/tag/v0.6.2).
+1. Download the ZIP from the [v0.6.3 release page](https://github.com/theShirina/shirs-inventory/releases/tag/v0.6.3).
 2. Extract the `ShirsInventory` folder into your client's `Interface/AddOns` folder.
 3. Restart the client.
 

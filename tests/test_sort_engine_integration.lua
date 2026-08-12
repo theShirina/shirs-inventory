@@ -117,6 +117,12 @@ function GetItemInfo(itemID)
     -- name, link, rarity, level, type, subtype, maxStack, equipLoc, texture.
     return "Elixir of Lion's Strength", "link", 1, 1, "Consumable", "Consumable", 5, "", "texture"
   end
+  if itemID == 6948 then
+    return "Hearthstone", "link", 1, 1, "Miscellaneous", "Junk", 1, "", "texture"
+  end
+  if itemID == 15138 then
+    return "Onyxia Scale Cloak", "link", 4, 60, "Armor", "Cloth", 1, "INVTYPE_CLOAK", "texture"
+  end
   if itemID >= 100 and itemID <= 300 then
     return "Item " .. itemID, "link", 1, 1, 1, "Weapon", "One-Handed Swords", 20, "One-Hand"
   end
@@ -205,11 +211,13 @@ assert(ShirsInventory_GetSpecialtyBagClass("Felcloth Bag", "Soul Bag") == "soul"
 assert(ShirsInventory_GetSpecialtyBagClass("Enchanted Mageweave Pouch", "Bag") == nil,
   "normal bag display name caused false specialty classification")
 assert(ShirsInventory_GetEdgeAnchorRank(6948) == 1, "Hearthstone edge rank is wrong")
+assert(ShirsInventory_GetEdgeAnchorRank(15138) == 1.5,
+  "Onyxia Scale Cloak was not placed directly beside Hearthstone")
 local fieldItemIDs = {26061, 26063, 26064, 26065}
 local fieldIndex
 for fieldIndex = 1, table.getn(fieldItemIDs) do
   assert(ShirsInventory_GetEdgeAnchorRank(fieldItemIDs[fieldIndex]) == 2,
-    "requested field item was not placed between Hearthstone and profession tools")
+    "requested field item was not placed between Onyxia Scale Cloak and profession tools")
 end
 assert(ShirsInventory_IsPetOrMountItem("Miscellaneous", "Pet", nil),
   "standard pet subtype was not recognized")
@@ -348,6 +356,39 @@ assert(ok and status == "started", "tooltip-only pet sort did not start")
 tickUntilDone()
 assert(bags[0][1] and bags[0][1].id == 600 and bags[0][2] and bags[0][2].id == 100,
   "tooltip-only custom pet did not propagate into selected-edge placement")
+
+-- Onyxia Scale Cloak must pass through the real item reader and movement
+-- planner as the slot directly beside Hearthstone for either edge direction.
+slotCount = 4
+bags[0] = {
+  { id = 100, count = 1 },
+  { id = 15138, count = 1 },
+  { id = 6948, count = 1 },
+  nil,
+}
+ShirsInventory_SetDirection("top")
+ok, status = ShirsInventory_SortBags()
+assert(ok and status == "started", "Onyxia Scale Cloak Top sort did not start")
+tickUntilDone()
+assert(bags[0][1] and bags[0][1].id == 6948 and
+  bags[0][2] and bags[0][2].id == 15138 and
+  bags[0][3] and bags[0][3].id == 100 and not bags[0][4],
+  "Top did not keep Onyxia Scale Cloak directly beside Hearthstone")
+
+bags[0] = {
+  { id = 100, count = 1 },
+  { id = 15138, count = 1 },
+  { id = 6948, count = 1 },
+  nil,
+}
+ShirsInventory_SetDirection("bottom")
+ok, status = ShirsInventory_SortBags()
+assert(ok and status == "started", "Onyxia Scale Cloak Bottom sort did not start")
+tickUntilDone()
+assert(not bags[0][1] and bags[0][2] and bags[0][2].id == 100 and
+  bags[0][3] and bags[0][3].id == 15138 and
+  bags[0][4] and bags[0][4].id == 6948,
+  "Bottom did not keep Onyxia Scale Cloak directly beside Hearthstone")
 
 -- Confirmed-move sorting must submit only one cursor transaction, then wait
 -- until the exact result is visible in a fresh bag scan.
