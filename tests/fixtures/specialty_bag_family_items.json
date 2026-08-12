@@ -1,0 +1,317 @@
+{
+  "classic_db": {
+    "repository": "https://github.com/cmangos/classic-db",
+    "commit": "250a705a462c1acb457d3002359c7e0052c4dafe",
+    "asset_sha256": "4f92db520868ab4e566726f68b5b2e380ae781209beaf22237b4f7f04600d0c0"
+  },
+  "caches": [
+    {
+      "sha256": "835bd082142548180d9bbf777a338b0d26a827b17e4b961b8e90f5b312974e0f",
+      "family_records": 64,
+      "source": "isolated Microbot itemcache.wdb"
+    },
+    {
+      "sha256": "07d3232979b2b47462f2526e8be5731756688b9595956204487089f8cb2dac1e",
+      "family_records": 78,
+      "source": "main Microbot itemcache.wdb"
+    }
+  ],
+  "counts": {
+    "herb": 33,
+    "enchanting": 24
+  },
+  "items": [
+    {
+      "id": 765,
+      "name": "Silverleaf",
+      "family": 6
+    },
+    {
+      "id": 785,
+      "name": "Mageroyal",
+      "family": 6
+    },
+    {
+      "id": 2447,
+      "name": "Peacebloom",
+      "family": 6
+    },
+    {
+      "id": 2449,
+      "name": "Earthroot",
+      "family": 6
+    },
+    {
+      "id": 2450,
+      "name": "Briarthorn",
+      "family": 6
+    },
+    {
+      "id": 2452,
+      "name": "Swiftthistle",
+      "family": 6
+    },
+    {
+      "id": 2453,
+      "name": "Bruiseweed",
+      "family": 6
+    },
+    {
+      "id": 3355,
+      "name": "Wild Steelbloom",
+      "family": 6
+    },
+    {
+      "id": 3356,
+      "name": "Kingsblood",
+      "family": 6
+    },
+    {
+      "id": 3357,
+      "name": "Liferoot",
+      "family": 6
+    },
+    {
+      "id": 3358,
+      "name": "Khadgar's Whisker",
+      "family": 6
+    },
+    {
+      "id": 3369,
+      "name": "Grave Moss",
+      "family": 6
+    },
+    {
+      "id": 3818,
+      "name": "Fadeleaf",
+      "family": 6
+    },
+    {
+      "id": 3819,
+      "name": "Wintersbite",
+      "family": 6
+    },
+    {
+      "id": 3820,
+      "name": "Stranglekelp",
+      "family": 6
+    },
+    {
+      "id": 3821,
+      "name": "Goldthorn",
+      "family": 6
+    },
+    {
+      "id": 4625,
+      "name": "Firebloom",
+      "family": 6
+    },
+    {
+      "id": 5173,
+      "name": "Deathweed",
+      "family": 6
+    },
+    {
+      "id": 8153,
+      "name": "Wildvine",
+      "family": 6
+    },
+    {
+      "id": 8831,
+      "name": "Purple Lotus",
+      "family": 6
+    },
+    {
+      "id": 8836,
+      "name": "Arthas' Tears",
+      "family": 6
+    },
+    {
+      "id": 8838,
+      "name": "Sungrass",
+      "family": 6
+    },
+    {
+      "id": 8839,
+      "name": "Blindweed",
+      "family": 6
+    },
+    {
+      "id": 8845,
+      "name": "Ghost Mushroom",
+      "family": 6
+    },
+    {
+      "id": 8846,
+      "name": "Gromsblood",
+      "family": 6
+    },
+    {
+      "id": 10938,
+      "name": "Lesser Magic Essence",
+      "family": 7
+    },
+    {
+      "id": 10939,
+      "name": "Greater Magic Essence",
+      "family": 7
+    },
+    {
+      "id": 10940,
+      "name": "Strange Dust",
+      "family": 7
+    },
+    {
+      "id": 10978,
+      "name": "Small Glimmering Shard",
+      "family": 7
+    },
+    {
+      "id": 10998,
+      "name": "Lesser Astral Essence",
+      "family": 7
+    },
+    {
+      "id": 11040,
+      "name": "Morrowgrain",
+      "family": 6
+    },
+    {
+      "id": 11082,
+      "name": "Greater Astral Essence",
+      "family": 7
+    },
+    {
+      "id": 11083,
+      "name": "Soul Dust",
+      "family": 7
+    },
+    {
+      "id": 11084,
+      "name": "Large Glimmering Shard",
+      "family": 7
+    },
+    {
+      "id": 11134,
+      "name": "Lesser Mystic Essence",
+      "family": 7
+    },
+    {
+      "id": 11135,
+      "name": "Greater Mystic Essence",
+      "family": 7
+    },
+    {
+      "id": 11137,
+      "name": "Vision Dust",
+      "family": 7
+    },
+    {
+      "id": 11138,
+      "name": "Small Glowing Shard",
+      "family": 7
+    },
+    {
+      "id": 11139,
+      "name": "Large Glowing Shard",
+      "family": 7
+    },
+    {
+      "id": 11174,
+      "name": "Lesser Nether Essence",
+      "family": 7
+    },
+    {
+      "id": 11175,
+      "name": "Greater Nether Essence",
+      "family": 7
+    },
+    {
+      "id": 11176,
+      "name": "Dream Dust",
+      "family": 7
+    },
+    {
+      "id": 11177,
+      "name": "Small Radiant Shard",
+      "family": 7
+    },
+    {
+      "id": 11178,
+      "name": "Large Radiant Shard",
+      "family": 7
+    },
+    {
+      "id": 13463,
+      "name": "Dreamfoil",
+      "family": 6
+    },
+    {
+      "id": 13464,
+      "name": "Golden Sansam",
+      "family": 6
+    },
+    {
+      "id": 13465,
+      "name": "Mountain Silversage",
+      "family": 6
+    },
+    {
+      "id": 13466,
+      "name": "Plaguebloom",
+      "family": 6
+    },
+    {
+      "id": 13467,
+      "name": "Icecap",
+      "family": 6
+    },
+    {
+      "id": 13468,
+      "name": "Black Lotus",
+      "family": 6
+    },
+    {
+      "id": 14343,
+      "name": "Small Brilliant Shard",
+      "family": 7
+    },
+    {
+      "id": 14344,
+      "name": "Large Brilliant Shard",
+      "family": 7
+    },
+    {
+      "id": 16202,
+      "name": "Lesser Eternal Essence",
+      "family": 7
+    },
+    {
+      "id": 16203,
+      "name": "Greater Eternal Essence",
+      "family": 7
+    },
+    {
+      "id": 16204,
+      "name": "Illusion Dust",
+      "family": 7
+    },
+    {
+      "id": 19726,
+      "name": "Bloodvine",
+      "family": 6
+    },
+    {
+      "id": 20725,
+      "name": "Nexus Crystal",
+      "family": 7
+    }
+  ],
+  "scope": "Herbs plus enchanting materials only; excludes other bag-compatible tools, formulas, seeds, quest consumables, and test items.",
+  "licensed_corroboration": {
+    "repository": "https://github.com/nexus-devs/wow-classic-items",
+    "commit": "8339771805564c6de7850ff9428be8e841f69622",
+    "license": "MIT",
+    "note": "Standard gathered herbs and enchanting materials corroborated; exact Vanilla/Microbot bag-family compatibility comes from pinned WDB/CMaNGOS evidence."
+  }
+}

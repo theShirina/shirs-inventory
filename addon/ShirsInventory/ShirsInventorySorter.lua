@@ -107,7 +107,7 @@ local function TooltipFacts(container, position)
   return facts.charges, facts.usable, facts.soulbound, facts.quest, facts.conjured, facts.petOrMount
 end
 
-function ShirsInventory_GetSpecialtyItemClass(itemName, itemType, itemSubType, material)
+function ShirsInventory_GetSpecialtyItemClass(itemID, itemName, itemType, itemSubType)
   local name = string.lower(itemName or "")
   local subType = string.lower(itemSubType or "")
   if itemType == AUCTION_CLASSES[6] then
@@ -115,9 +115,7 @@ function ShirsInventory_GetSpecialtyItemClass(itemName, itemType, itemSubType, m
     if string.find(subType, "bullet", 1, true) then return "bullet" end
   end
   if string.find(name, "soul shard", 1, true) then return "soul" end
-  if material == "Enchanting" then return "enchanting" end
-  if material == "Herbs" then return "herb" end
-  return nil
+  return ShirsInventory_GetStaticSpecialtyItemClass(itemID)
 end
 
 function ShirsInventory_GetSpecialtyBagClass(bagName, itemSubType)
@@ -250,7 +248,7 @@ local function ReadItem(container, position, count)
   local sortMode = ShirsInventory_GetSortMode()
   local material = ShirsInventory_GetMaterialCategory(itemID, itemType, itemSubType)
   local sortMaterial = ShirsInventory_GetSortMaterialCategory(sortMode, itemID, itemInfo[1], material)
-  local specialtyClass = ShirsInventory_GetSpecialtyItemClass(itemInfo[1], itemType, itemSubType, material)
+  local specialtyClass = ShirsInventory_GetSpecialtyItemClass(itemID, itemInfo[1], itemType, itemSubType)
   local isConsumable = (usable and itemType ~= AUCTION_CLASSES[1] and itemType ~= AUCTION_CLASSES[2] and itemType ~= AUCTION_CLASSES[8]) or itemType == AUCTION_CLASSES[4]
   local sortConsumable = ShirsInventory_GetSortConsumable(sortMode, sortMaterial, isConsumable)
   local itemSpell

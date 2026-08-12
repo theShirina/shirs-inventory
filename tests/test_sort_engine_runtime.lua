@@ -1,4 +1,4 @@
-local corePath, enginePath, sorterPath = arg[1], arg[2], arg[3]
+local corePath, enginePath, specialtyPath, sorterPath = arg[1], arg[2], arg[3], arg[4]
 
 ShirsInventoryDB = { setupComplete = true, features = { bagUI = false, sorter = true, junk = false } }
 local cursor = false
@@ -42,6 +42,7 @@ BankFrame = NewFrame()
 
 assert(loadfile(corePath))()
 assert(loadfile(enginePath))()
+assert(loadfile(specialtyPath))()
 assert(loadfile(sorterPath))()
 
 assert(ShirsInventory_GetSortEngineVersion() == 1, "new sorter engine marker is missing")

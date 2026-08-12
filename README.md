@@ -2,7 +2,7 @@
 
 A standalone bag addon made and tested for Microbot's WoW 1.12.1 client.
 
-Current release: **0.6.0**.
+Current release: **0.6.1**.
 
 ## What it does
 
@@ -19,7 +19,8 @@ Current release: **0.6.0**.
 - Keeps quest-bordered items at the opposite end of the occupied sorted block by default, with conjured items directly outside them.
 - Keeps Hearthstone, field services, adjacent pets and mounts, and profession tools together at the selected edge.
 - Keeps the four Microbot world-buff scrolls next to each other in either sort mode and direction.
-- Keeps specialty-bag items in compatible bags using the client's item and bag metadata.
+- Sorts herbs and enchanting materials into their matching specialty bags while keeping incompatible profession reagents in normal bags.
+- Keeps quiver, ammo-pouch, and soul-bag items in compatible bags.
 - Shows quest and rarity borders, native cooldown sweeps with compact remaining-time labels, stack counts, money, and normal item tooltips.
 - Marks items as junk and sells gray or marked junk through a guarded merchant queue.
 - Adds a bordered Sell Junk icon beside the merchant repair buttons.
@@ -33,7 +34,7 @@ Current release: **0.6.0**.
 
 ## Download and install
 
-1. Download the ZIP from the [v0.6.0 release page](https://github.com/theShirina/shirs-inventory/releases/tag/v0.6.0).
+1. Download the ZIP from the [v0.6.1 release page](https://github.com/theShirina/shirs-inventory/releases/tag/v0.6.1).
 2. Extract the `ShirsInventory` folder into your client's `Interface/AddOns` folder.
 3. Restart the client.
 

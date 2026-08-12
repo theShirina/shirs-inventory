@@ -20,6 +20,7 @@ ADDON_FILES = (
     "ShirsInventoryJunk.lua",
     "ShirsInventorySettings.lua",
     "ShirsInventorySortEngine.lua",
+    "ShirsInventorySpecialtyItems.lua",
     "ShirsInventorySorter.lua",
     "ShirsInventoryUI.lua",
     "THIRD_PARTY_NOTICES.md",

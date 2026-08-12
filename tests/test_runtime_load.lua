@@ -33,6 +33,7 @@ SlashCmdList = {}
 
 assert(loadfile(addonPath .. "/ShirsInventoryCore.lua"))()
 assert(loadfile(addonPath .. "/ShirsInventorySortEngine.lua"))()
+assert(loadfile(addonPath .. "/ShirsInventorySpecialtyItems.lua"))()
 assert(loadfile(addonPath .. "/ShirsInventorySorter.lua"))()
 assert(loadfile(addonPath .. "/ShirsInventoryJunk.lua"))()
 CreateFrame = nil

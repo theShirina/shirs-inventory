@@ -2,11 +2,12 @@
 ## Title: Shir's Inventory
 ## Notes: Combined inventory and bank with safe sorting and junk tools
 ## Author: Stefán
-## Version: 0.6.0
+## Version: 0.6.1
 ## SavedVariablesPerCharacter: ShirsInventoryDB
 ## SavedVariables: ShirsInventoryAccountDB
 ShirsInventoryCore.lua
 ShirsInventorySortEngine.lua
+ShirsInventorySpecialtyItems.lua
 ShirsInventorySorter.lua
 ShirsInventoryJunk.lua
 ShirsInventoryUI.lua

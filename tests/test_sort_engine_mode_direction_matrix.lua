@@ -1,4 +1,4 @@
-local corePath, enginePath, sorterPath = arg[1], arg[2], arg[3]
+local corePath, enginePath, specialtyPath, sorterPath = arg[1], arg[2], arg[3], arg[4]
 
 -- Mode x direction matrix: each cell must produce a DIFFERENT, mode-sensitive
 -- layout. The fixture uses a quality-1 consumable (Elixir, id 2454) and a
@@ -117,6 +117,7 @@ BankFrame = NewFrame("BankFrame")
 
 assert(loadfile(corePath))()
 assert(loadfile(enginePath))()
+assert(loadfile(specialtyPath))()
 assert(loadfile(sorterPath))()
 assert(type(runnerUpdate) == "function", "runtime update handler was not captured")
 

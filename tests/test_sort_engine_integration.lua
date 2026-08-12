@@ -1,4 +1,4 @@
-local corePath, enginePath, sorterPath = arg[1], arg[2], arg[3]
+local corePath, enginePath, specialtyPath, sorterPath = arg[1], arg[2], arg[3], arg[4]
 
 BANK_CONTAINER = -1
 UIParent = {}
@@ -13,6 +13,7 @@ local now = 10
 local cursorItem = nil
 local runnerUpdate
 local slotCount = 5
+local slotCounts = {}
 local flipMetadata = false
 local tooltipLines = {}
 local bags = {
@@ -68,6 +69,7 @@ end
 function GetAuctionItemSubClasses() return "One-Handed Swords" end
 function GetAuctionInvTypes() return "One-Hand" end
 function GetContainerNumSlots(container)
+  if slotCounts[container] then return slotCounts[container] end
   if container == 0 then return slotCount end
   return 0
 end
@@ -83,6 +85,15 @@ function GetContainerItemLink(container, position)
 end
 function GetItemInfo(itemID)
   if type(itemID) ~= "number" then return nil end
+  if itemID == 2447 then
+    return "Peacebloom", "link", 1, 5, "Trade Goods", "Trade Goods", 20, "", "texture"
+  end
+  if itemID == 10940 then
+    return "Strange Dust", "link", 1, 10, "Trade Goods", "Trade Goods", 20, "", "texture"
+  end
+  if itemID == 3371 then
+    return "Empty Vial", "link", 1, 1, "Trade Goods", "Trade Goods", 20, "", "texture"
+  end
   if itemID == 400 then
     return "Gray Junk", "link", 0, 1, "Miscellaneous", "Junk", 1, "", "texture"
   end
@@ -113,7 +124,11 @@ function GetItemInfo(itemID)
 end
 local equippedBagLink
 function GetBagName(container)
-  if container == 1 and equippedBagLink then return "Ribbly's Quiver" end
+  if container == 1 and equippedBagLink then
+    if string.find(equippedBagLink, "22252", 1, true) then return "Satchel of Cenarius" end
+    if string.find(equippedBagLink, "22249", 1, true) then return "Big Bag of Enchantment" end
+    return "Ribbly's Quiver"
+  end
   return nil
 end
 function ContainerIDToInventoryID(container) return 19 + container end
@@ -154,6 +169,7 @@ BankFrame = NewFrame("BankFrame")
 
 assert(loadfile(corePath))()
 assert(loadfile(enginePath))()
+assert(loadfile(specialtyPath))()
 assert(loadfile(sorterPath))()
 assert(type(runnerUpdate) == "function", "runtime update handler was not captured")
 assert(ShirsInventory_ExtractLocalizedCount("12 Charges", "%d Charges") == 12,
@@ -162,16 +178,24 @@ assert(ShirsInventory_ExtractLocalizedCount("12 Charges", "%1$d Charges") == 12,
   "positional localized charge count was not parsed")
 assert(ShirsInventory_ExtractLocalizedCount("12 Charge(s)", "%d Charge(s)") == 12,
   "literal punctuation in localized charge text was not parsed")
-assert(ShirsInventory_GetSpecialtyItemClass("Sharp Arrow", "Projectile", "Arrow", nil) == "arrow",
+assert(ShirsInventory_GetSpecialtyItemClass(2512, "Sharp Arrow", "Projectile", "Arrow") == "arrow",
   "arrow subtype was not recognized")
-assert(ShirsInventory_GetSpecialtyItemClass("Heavy Shot", "Projectile", "Bullet", nil) == "bullet",
+assert(ShirsInventory_GetSpecialtyItemClass(2519, "Heavy Shot", "Projectile", "Bullet") == "bullet",
   "bullet subtype was not recognized")
-assert(ShirsInventory_GetSpecialtyItemClass("Soul Shard", "Reagent", "Reagent", nil) == "soul",
+assert(ShirsInventory_GetSpecialtyItemClass(6265, "Soul Shard", "Reagent", "Reagent") == "soul",
   "soul shard name was not recognized")
-assert(ShirsInventory_GetSpecialtyItemClass("Dust", "Trade Goods", "Enchanting", "Enchanting") == "enchanting",
-  "enchanting material was not recognized")
-assert(ShirsInventory_GetSpecialtyItemClass("Peacebloom", "Trade Goods", "Herb", "Herbs") == "herb",
-  "herb material was not recognized")
+assert(ShirsInventory_GetSpecialtyItemClass(10940, "Strange Dust", "Trade Goods", "Trade Goods") == "enchanting",
+  "BagFamily 7 enchanting material was not recognized from its item ID")
+assert(ShirsInventory_GetSpecialtyItemClass(2447, "Peacebloom", "Trade Goods", "Trade Goods") == "herb",
+  "BagFamily 6 herb was not recognized from its item ID")
+assert(ShirsInventory_GetSpecialtyItemClass(5173, "Deathweed", "Trade Goods", "Trade Goods") == "herb",
+  "Microbot cache-only herb was not recognized")
+assert(ShirsInventory_GetSpecialtyItemClass(20725, "Nexus Crystal", "Trade Goods", "Trade Goods") == "enchanting",
+  "Nexus Crystal was not recognized as an enchanting material")
+assert(ShirsInventory_GetSpecialtyItemClass(3371, "Empty Vial", "Trade Goods", "Trade Goods") == nil,
+  "an Alchemy reagent with BagFamily 0 was allowed into herb bags")
+assert(ShirsInventory_GetSpecialtyItemClass(2840, "Copper Bar", "Trade Goods", "Trade Goods") == nil,
+  "an Enchanting reagent with BagFamily 0 was allowed into enchanting bags")
 assert(ShirsInventory_GetSpecialtyBagClass("Ribbly's Quiver", "Quiver") == "arrow",
   "quiver metadata was not recognized")
 assert(ShirsInventory_GetSpecialtyBagClass("Small Shot Pouch", "Ammo Pouch") == "bullet",
@@ -275,6 +299,40 @@ local function tickOnce()
   arg1 = 0.35
   runnerUpdate()
 end
+
+-- Full movement regression with the exact generic item metadata exposed by
+-- Microbot. Item IDs must carry specialty compatibility, just as Projectile
+-- subtype carries arrow/quiver compatibility. A normal reagent must stay out.
+slotCount = 3
+slotCounts[1] = 2
+bags[0] = {
+  { id = 2447, count = 1 },
+  { id = 3371, count = 1 },
+  nil,
+}
+bags[1] = { nil, nil }
+equippedBagLink = "|cffffffff|Hitem:22252:0:0:0|h[Satchel of Cenarius]|h|r"
+GetItemInfo = function(query)
+  if query == 22252 then
+    return "Satchel of Cenarius", equippedBagLink, 2, 70, "Container", "Herb Bag", 1, "INVTYPE_BAG", "texture"
+  end
+  return originalGetItemInfo(query)
+end
+ShirsInventory_SetSortMode("itemType")
+ShirsInventory_SetDirection("top")
+local specialtyOk, specialtyStatus = ShirsInventory_SortBags()
+assert(specialtyOk and specialtyStatus == "started", "herb-bag movement sort did not start")
+tickUntilDone()
+assert(bags[1][1] and bags[1][1].id == 2447,
+  "Peacebloom with generic Trade Goods metadata did not move into the Herb Bag")
+assert(not bags[1][2], "an incompatible item entered the second Herb Bag slot")
+assert(bags[0][1] and bags[0][1].id == 3371,
+  "Empty Vial did not remain in a normal bag")
+assert(not cursorItem, "herb-bag movement left an item on the cursor")
+GetItemInfo = originalGetItemInfo
+equippedBagLink = nil
+slotCounts[1] = nil
+bags[1] = nil
 
 -- Exercise the complete tooltip path: named tooltip text region -> TooltipFacts
 -- -> ReadItem -> edge rank. Metadata alone is deliberately too weak here.
