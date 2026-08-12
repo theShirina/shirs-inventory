@@ -255,10 +255,10 @@ assert(string.find(settings, "Use coin icons for currency (off = g/s/c text)", 1
 assert(string.find(settings, "Hide item ownership details while in combat", 1, true) and
   string.find(settings, "ShirsInventory_SetHideItemOwnershipInCombat", 1, true),
   "settings panel is missing the item ownership combat checkbox")
-assert(string.find(settings, "Clear search when bags close or you click outside", 1, true) and
+assert(string.find(settings, "Clear search when inventory or bank closes, or you click outside", 1, true) and
   string.find(settings, "ShirsInventory_SetAutoClearSearch", 1, true),
-  "settings panel is missing the automatic search clearing checkbox")
-assert(string.find(settings, 'frame, "Clear search when bags close or you click outside", "autoClearSearch", -262', 1, true) and
+  "settings must expose one per-character automatic-clear option for both search fields")
+assert(string.find(settings, 'frame, "Clear search when inventory or bank closes, or you click outside", "autoClearSearch", -262', 1, true) and
   string.find(settings, 'frame.itemsPerRowSlider:SetPoint("TOPLEFT", frame, "TOPLEFT", 45, -310)', 1, true) and
   string.find(settings, 'frame.windowScaleSlider:SetPoint("TOPLEFT", frame, "TOPLEFT", 45, -375)', 1, true),
   "automatic search checkbox and layout sliders need separate vertical rows")

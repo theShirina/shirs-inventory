@@ -43,19 +43,80 @@ local inventoryButton = {
   shirsInventorySearchEnabled = true,
   SetAlpha = function(self, value) self.alpha = value end,
 }
+ShirsInventoryBankFrame = { searchQuery = "rune" }
 local bankButton = {
   shirsInventorySearchEnabled = false,
+  shirsInventorySearchFrame = ShirsInventoryBankFrame,
+  SetAlpha = function(self, value) self.alpha = value end,
+}
+local unmarkedButton = {
   SetAlpha = function(self, value) self.alpha = value end,
 }
 local inventoryQuery = ShirsInventory_GetSearchQueryForButton(inventoryButton)
 local bankQuery = ShirsInventory_GetSearchQueryForButton(bankButton)
-assert(inventoryQuery == "moon" and bankQuery == "",
-  "inventory search query must never leak into bank item rendering")
+local unmarkedQuery = ShirsInventory_GetSearchQueryForButton(unmarkedButton)
+assert(inventoryQuery == "moon" and bankQuery == "rune" and unmarkedQuery == "",
+  "shared item rendering must select the owning window's query and fail closed for unmarked buttons")
+bankButton.shirsInventorySearchEnabled = true
+assert(ShirsInventory_GetSearchQueryForButton(bankButton) == "moon",
+  "a button reused for carried inventory must prefer its carried-item marker over stale bank ownership")
+bankButton.shirsInventorySearchEnabled = false
 ShirsInventory_ApplySearchToButton(inventoryButton, inventoryQuery, "Rune Thread", nil)
 ShirsInventory_ApplySearchToButton(bankButton, bankQuery, "Rune Thread", nil)
-assert(inventoryButton.alpha == 0.2 and bankButton.alpha == 1,
-  "active inventory search must dim only carried items and keep bank items fully visible")
+ShirsInventory_ApplySearchToButton(unmarkedButton, unmarkedQuery, "Rune Thread", nil)
+assert(inventoryButton.alpha == 0.2 and bankButton.alpha == 1 and unmarkedButton.alpha == 1,
+  "inventory and bank searches must remain independent while unmarked buttons stay fully visible")
+
+local sharedRenderer
+local upvalueIndex
+for upvalueIndex = 1, 20 do
+  local name, value = debug.getupvalue(ShirsInventory_UpdateBank, upvalueIndex)
+  if name == "ShirsInventory_UpdateItemButton" then sharedRenderer = value end
+end
+assert(type(sharedRenderer) == "function",
+  "bank-search regression must exercise the private shared production renderer")
+local currentTexture = "texture"
+local currentLink = "|Hitem:1:0:0:0|h[Rune Thread]|h"
+GetContainerItemInfo = function() return currentTexture, 1, nil, nil, nil end
+GetContainerItemLink = function() return currentLink end
+GetContainerItemCooldown = function() return 0, 0, 0 end
+SetItemButtonTexture = function() end
+SetItemButtonCount = function() end
+SetItemButtonDesaturated = function() end
+ShirsInventory_IsJunk = function() return false end
+ShirsInventory_GetJunkItems = function() return {} end
+ShirsInventory_GetShowRarityBoxes = function() return false end
+ShirsInventory_GetItemId = function() return 1 end
+local visibility = { Hide = function() end, Show = function() end }
+local normalTexture = { SetVertexColor = function() end }
+local reusedButton = {
+  bag = 0,
+  slot = 1,
+  shirsInventorySearchEnabled = true,
+  SetAlpha = function(self, value) self.alpha = value end,
+  GetNormalTexture = function() return normalTexture end,
+  cooldown = visibility,
+  junkBadge = visibility,
+}
+sharedRenderer(reusedButton)
+assert(reusedButton.alpha == 0.2,
+  "shared renderer must dim a nonmatching carried item")
+reusedButton.shirsInventorySearchEnabled = false
+reusedButton.shirsInventorySearchFrame = ShirsInventoryBankFrame
+sharedRenderer(reusedButton)
+assert(reusedButton.alpha == 1,
+  "reusing a dimmed carried button for a matching bank item must restore full opacity")
+currentTexture = nil
+currentLink = nil
+sharedRenderer(reusedButton)
+assert(reusedButton.alpha == 0.2,
+  "an empty bank slot must dim safely while a bank query is active")
+ShirsInventoryBankFrame.searchQuery = ""
+sharedRenderer(reusedButton)
+assert(reusedButton.alpha == 1,
+  "clearing bank search must restore reused and empty bank buttons immediately")
 ShirsInventoryFrame = nil
+ShirsInventoryBankFrame = nil
 
 local layout = ShirsInventory_GetSearchBoxLayout()
 assert(layout.height == 22 and layout.leftGap == 10 and layout.rightGap == 10,
@@ -68,9 +129,11 @@ assert(type(ShirsInventory_CreateSearchBox) == "function",
 
 local created
 function CreateFrame(frameType, name, parent, template)
-  assert(frameType == "EditBox" and name == "ShirsInventorySearchBox" and template == "InputBoxTemplate",
-    "inventory search must use the named Vanilla input-box template")
-  local box = { scripts = {}, points = {}, text = "", focused = false, parent = parent }
+  assert(frameType == "EditBox" and
+    (name == "ShirsInventorySearchBox" or name == "ShirsInventoryBankSearchBox") and
+    template == "InputBoxTemplate",
+    "inventory and bank searches must use distinct named Vanilla input-box templates")
+  local box = { scripts = {}, points = {}, text = "", focused = false, parent = parent, name = name }
   function box:SetHeight(value) self.height = value end
   function box:SetAutoFocus(value) self.autoFocus = value end
   function box:SetMaxLetters(value) self.maxLetters = value end
@@ -118,6 +181,7 @@ local autoClear = true
 ShirsInventory_GetAutoClearSearch = function() return autoClear end
 local refreshCalls = 0
 ShirsInventory_RefreshSearchFilter = function() refreshCalls = refreshCalls + 1 end
+ShirsInventoryFrame = frame
 assert(ShirsInventory_CreateSearchBox(frame) == created and frame.searchBox == created,
   "search-box constructor must attach and return the EditBox")
 assert(created.height == 22 and created.autoFocus == false and created.maxLetters == 64,
@@ -186,6 +250,100 @@ assert(ShirsInventory_ClearSearch(frame) and frame.searchQuery == "" and refresh
 assert(not ShirsInventory_ClearSearch(frame) and refreshCalls == 8,
   "clearing an already empty search must be a no-op")
 
+assert(type(ShirsInventory_CreateBankSearchBox) == "function",
+  "bank needs its own item-name search field")
+assert(type(ShirsInventory_RefreshBankSearchFilter) == "function",
+  "bank search changes need an immediate visible-slot refresh")
+assert(type(ShirsInventory_IsCursorInsideSearchWindows) == "function",
+  "search focus loss must recognize both Shir's Inventory windows")
+local inventoryBox = created
+local bankFrame = {
+  sortButton = {},
+  left = 350,
+  right = 550,
+  bottom = 100,
+  top = 300,
+  shown = true,
+}
+function bankFrame:GetLeft() return self.left end
+function bankFrame:GetRight() return self.right end
+function bankFrame:GetBottom() return self.bottom end
+function bankFrame:GetTop() return self.top end
+function bankFrame:GetEffectiveScale() return 2 end
+function bankFrame:IsShown() return self.shown end
+ShirsInventoryFrame = frame
+ShirsInventoryBankFrame = bankFrame
+local bankRefreshCalls = 0
+ShirsInventory_RefreshBankSearchFilter = function() bankRefreshCalls = bankRefreshCalls + 1 end
+assert(ShirsInventory_CreateBankSearchBox(bankFrame) == created and bankFrame.searchBox == created,
+  "bank search constructor must attach and return its EditBox")
+local bankBox = created
+assert(bankBox.name == "ShirsInventoryBankSearchBox" and bankBox.height == 22 and
+  bankBox.autoFocus == false and bankBox.maxLetters == 64,
+  "bank search must use a separate bounded Vanilla EditBox")
+assert(bankBox.points[1][1] == "LEFT" and bankBox.points[1][2] == bankFrame and
+  bankBox.points[1][3] == "TOPLEFT" and bankBox.points[1][4] == 206 and
+  bankBox.points[1][5] == -45,
+  "bank search must share the visible header row after the full bank-bag control area")
+assert(bankBox.points[2][1] == "RIGHT" and bankBox.points[2][2] == bankFrame.sortButton and
+  bankBox.points[2][3] == "LEFT" and bankBox.points[2][4] == -10,
+  "bank search must end before the bank action icons")
+bankBox:SetText("Rune")
+assert(bankFrame.searchQuery == "rune" and bankRefreshCalls == 1,
+  "typing in bank search must normalize its own query and refresh bank slots")
+
+cursorX, cursorY = 400, 400
+assert(ShirsInventory_IsCursorInsideSearchWindows() and ShirsInventory_IsCursorInsideFrame(frame),
+  "inventory-window clicks must count as inside for bank-search focus loss")
+oldThis = this
+this = bankBox
+bankBox.scripts.OnEditFocusLost()
+this = oldThis
+assert(bankFrame.searchQuery == "rune" and bankBox.text == "Rune" and bankRefreshCalls == 1,
+  "clicking inside the inventory must preserve the bank search")
+cursorX, cursorY = 800, 400
+assert(ShirsInventory_IsCursorInsideSearchWindows() and ShirsInventory_IsCursorInsideFrame(bankFrame),
+  "bank-window clicks must count as inside for bank-search focus loss")
+this = bankBox
+bankBox.scripts.OnEditFocusLost()
+this = oldThis
+assert(bankFrame.searchQuery == "rune" and bankBox.text == "Rune" and bankRefreshCalls == 1,
+  "clicking inside the bank must preserve the bank search")
+cursorX, cursorY = 1400, 400
+assert(not ShirsInventory_IsCursorInsideSearchWindows(),
+  "cursor outside both windows must be eligible for automatic clear")
+this = bankBox
+bankBox.scripts.OnEditFocusLost()
+this = oldThis
+assert(bankFrame.searchQuery == "" and bankBox.text == "" and bankRefreshCalls == 2,
+  "clicking outside both windows must clear bank search when automatic clear is enabled")
+bankBox:SetText("Cloth")
+autoClear = false
+this = bankBox
+bankBox.scripts.OnEditFocusLost()
+this = oldThis
+assert(bankFrame.searchQuery == "cloth" and bankRefreshCalls == 3,
+  "disabled automatic clear must preserve bank search outside both windows")
+assert(type(ShirsInventory_InstallSpecialFrameEscapeHook) == "function",
+  "unfocused searches need a special-window Escape hook")
+local previousEscapeCalls = 0
+CloseSpecialWindows = function()
+  previousEscapeCalls = previousEscapeCalls + 1
+  return "closed", 17
+end
+assert(ShirsInventory_InstallSpecialFrameEscapeHook(),
+  "special-window Escape hook did not install")
+local installedEscapeHandler = CloseSpecialWindows
+assert(ShirsInventory_InstallSpecialFrameEscapeHook() and CloseSpecialWindows == installedEscapeHandler,
+  "special-window Escape hook must be idempotent")
+local escapeResult, escapeCount = CloseSpecialWindows()
+assert(escapeResult == "closed" and escapeCount == 17 and previousEscapeCalls == 1,
+  "Escape hook must preserve the prior special-window handler and its returns exactly once")
+assert(bankFrame.searchQuery == "" and bankBox.text == "" and bankRefreshCalls == 4,
+  "Escape must clear an unfocused bank query even when automatic close clearing is disabled")
+autoClear = true
+created = inventoryBox
+
 assert(type(ShirsInventory_InstallWorldFrameSearchHook) == "function",
   "world clicks need a chained WorldFrame OnMouseDown hook")
 local priorCalls = 0
@@ -247,6 +405,24 @@ installedHandler()
 arg1 = oldArg1
 assert(priorCalls == 5 and frame.searchQuery == "rune" and refreshCalls == 13,
   "non-left/right WorldFrame buttons must preserve search")
+
+frame.searchQuery = ""
+created.text = ""
+created.focused = true
+frame.searchFocused = true
+bankFrame.searchQuery = ""
+bankBox.text = ""
+bankBox.focused = true
+bankFrame.searchFocused = true
+bankFrame.shown = true
+arg1 = "LeftButton"
+installedHandler()
+arg1 = oldArg1
+assert(priorCalls == 6 and frame.searchFocusReleasePending and bankFrame.searchFocusReleasePending,
+  "world clicks must defer focus release for selected empty inventory and bank search fields")
+assert(ShirsInventory_ProcessDeferredSearchFocus(frame) and not created.focused and
+  ShirsInventory_ProcessDeferredSearchFocus(bankFrame) and not bankBox.focused,
+  "selected empty inventory and bank fields must release keyboard capture after a world click")
 
 local uiFile = assert(io.open(uiPath, "rb"))
 local uiSource = uiFile:read("*a")

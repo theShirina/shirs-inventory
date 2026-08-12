@@ -202,7 +202,7 @@ local function ShirsInventory_CreateSettingsFrame()
     frame, "Hide item ownership details while in combat", "hideItemOwnershipInCombat", -232
   )
   frame.autoClearSearch = ShirsInventory_CreateFeatureCheck(
-    frame, "Clear search when bags close or you click outside", "autoClearSearch", -262
+    frame, "Clear search when inventory or bank closes, or you click outside", "autoClearSearch", -262
   )
   frame.ignoreJunkSorting:SetScript("OnClick", function()
     ShirsInventory_SetIgnoreJunkSorting(this:GetChecked() and true or false)

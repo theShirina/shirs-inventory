@@ -106,8 +106,14 @@ function ShirsInventory_ApplySearchToButton(button, query, itemName, itemLink)
 end
 
 function ShirsInventory_GetSearchQueryForButton(button)
-  if not button or not button.shirsInventorySearchEnabled then return "" end
-  return ShirsInventoryFrame and ShirsInventoryFrame.searchQuery or ""
+  if not button then return "" end
+  if button.shirsInventorySearchEnabled then
+    return ShirsInventoryFrame and ShirsInventoryFrame.searchQuery or ""
+  end
+  if button.shirsInventorySearchFrame then
+    return button.shirsInventorySearchFrame.searchQuery or ""
+  end
+  return ""
 end
 
 function ShirsInventory_IsCursorInsideFrame(frame)
@@ -127,6 +133,24 @@ function ShirsInventory_IsCursorInsideFrame(frame)
   return cursorX >= left and cursorX <= right and cursorY >= bottom and cursorY <= top
 end
 
+function ShirsInventory_IsCursorInsideSearchWindows()
+  local inventoryVisible = ShirsInventoryFrame and
+    (not ShirsInventoryFrame.IsShown or ShirsInventoryFrame:IsShown())
+  if inventoryVisible and ShirsInventory_IsCursorInsideFrame(ShirsInventoryFrame) then return true end
+  local bankVisible = ShirsInventoryBankFrame and
+    (not ShirsInventoryBankFrame.IsShown or ShirsInventoryBankFrame:IsShown())
+  if bankVisible and ShirsInventory_IsCursorInsideFrame(ShirsInventoryBankFrame) then return true end
+  return false
+end
+
+local function ShirsInventory_RefreshSearchFrame(frame)
+  if frame and frame == ShirsInventoryBankFrame and ShirsInventory_RefreshBankSearchFilter then
+    ShirsInventory_RefreshBankSearchFilter()
+  elseif ShirsInventory_RefreshSearchFilter then
+    ShirsInventory_RefreshSearchFilter()
+  end
+end
+
 function ShirsInventory_ClearSearch(frame, force)
   if not frame or not frame.searchBox then return false end
   if not force and ShirsInventory_GetAutoClearSearch and not ShirsInventory_GetAutoClearSearch() then
@@ -143,7 +167,7 @@ function ShirsInventory_ClearSearch(frame, force)
   if frame.searchBox.SetText and text ~= "" then
     frame.searchBox:SetText("")
   else
-    ShirsInventory_RefreshSearchFilter()
+    ShirsInventory_RefreshSearchFrame(frame)
   end
   if frame.searchBox.placeholder then frame.searchBox.placeholder:Show() end
   return true
@@ -164,13 +188,42 @@ function ShirsInventory_InstallWorldFrameSearchHook()
   WorldFrame:SetScript("OnMouseDown", function()
     local button = arg1
     if previousMouseDown then previousMouseDown() end
-    local frame = ShirsInventoryFrame
-    if (button == "LeftButton" or button == "RightButton") and frame and
-      frame.IsShown and frame:IsShown() then
-      local cleared = ShirsInventory_ClearSearch(frame)
-      if cleared then frame.searchFocusReleasePending = true end
+    if button == "LeftButton" or button == "RightButton" then
+      local frame = ShirsInventoryFrame
+      if frame and frame.IsShown and frame:IsShown() then
+        local cleared = ShirsInventory_ClearSearch(frame)
+        if cleared or frame.searchFocused then frame.searchFocusReleasePending = true end
+      end
+      local bankFrame = ShirsInventoryBankFrame
+      if bankFrame and bankFrame.IsShown and bankFrame:IsShown() then
+        local cleared = ShirsInventory_ClearSearch(bankFrame)
+        if cleared or bankFrame.searchFocused then bankFrame.searchFocusReleasePending = true end
+      end
     end
   end)
+  return true
+end
+
+local function ShirsInventory_PackReturns(...)
+  local values = arg
+  if values.n == nil then values.n = table.getn(values) end
+  return values
+end
+
+function ShirsInventory_InstallSpecialFrameEscapeHook()
+  if type(CloseSpecialWindows) ~= "function" then return false end
+  if ShirsInventorySpecialFrameEscapeHook and CloseSpecialWindows == ShirsInventorySpecialFrameEscapeHook then
+    return true
+  end
+  local previousCloseSpecialWindows = CloseSpecialWindows
+  local wrapper = function()
+    ShirsInventory_ClearSearch(ShirsInventoryFrame, true)
+    ShirsInventory_ClearSearch(ShirsInventoryBankFrame, true)
+    local results = ShirsInventory_PackReturns(previousCloseSpecialWindows())
+    return unpack(results, 1, results.n)
+  end
+  ShirsInventorySpecialFrameEscapeHook = wrapper
+  CloseSpecialWindows = wrapper
   return true
 end
 
@@ -727,6 +780,19 @@ function ShirsInventory_RefreshSearchFilter()
   local index
   for index = 1, table.getn(inventoryButtons) do
     local button = inventoryButtons[index]
+    if button and button.IsShown and button:IsShown() then
+      local link = button.hasItem and GetContainerItemLink and GetContainerItemLink(button.bag, button.slot) or nil
+      local itemName = link and ShirsInventory_GetItemInfoFields(link).name or nil
+      ShirsInventory_ApplySearchToButton(button, query, itemName, link)
+    end
+  end
+end
+
+function ShirsInventory_RefreshBankSearchFilter()
+  local query = ShirsInventoryBankFrame and ShirsInventoryBankFrame.searchQuery or ""
+  local index
+  for index = 1, table.getn(bankButtons) do
+    local button = bankButtons[index]
     if button and button.IsShown and button:IsShown() then
       local link = button.hasItem and GetContainerItemLink and GetContainerItemLink(button.bag, button.slot) or nil
       local itemName = link and ShirsInventory_GetItemInfoFields(link).name or nil
@@ -1474,7 +1540,45 @@ function ShirsInventory_CreateSearchBox(frame)
   end)
   frame.searchBox:SetScript("OnEditFocusLost", function()
     frame.searchFocused = false
-    if not ShirsInventory_IsCursorInsideFrame(frame) then ShirsInventory_ClearSearch(frame) end
+    if not ShirsInventory_IsCursorInsideSearchWindows() then ShirsInventory_ClearSearch(frame) end
+  end)
+  frame.searchBox:SetScript("OnEnterPressed", function() this:ClearFocus() end)
+  frame.searchBox:SetScript("OnEscapePressed", function()
+    ShirsInventory_ClearSearch(frame, true)
+    this:ClearFocus()
+    if this.placeholder then this.placeholder:Show() end
+  end)
+  return frame.searchBox
+end
+
+function ShirsInventory_CreateBankSearchBox(frame)
+  local layout = ShirsInventory_GetSearchBoxLayout()
+  frame.searchQuery = ""
+  frame.searchFocused = false
+  frame.searchBox = CreateFrame("EditBox", "ShirsInventoryBankSearchBox", frame, "InputBoxTemplate")
+  frame.searchBox:SetHeight(layout.height)
+  frame.searchBox:SetAutoFocus(false)
+  frame.searchBox:SetMaxLetters(64)
+  frame.searchBox:SetPoint("LEFT", frame, "TOPLEFT", 206, -45)
+  frame.searchBox:SetPoint("RIGHT", frame.sortButton, "LEFT", -layout.rightGap, 0)
+  if frame.searchBox.SetTextInsets then frame.searchBox:SetTextInsets(6, 6, 0, 0) end
+  frame.searchBox.placeholder = frame.searchBox:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+  frame.searchBox.placeholder:SetPoint("LEFT", frame.searchBox, "LEFT", 7, 0)
+  frame.searchBox.placeholder:SetText(layout.placeholder)
+  frame.searchBox:SetScript("OnTextChanged", function()
+    frame.searchQuery = ShirsInventory_NormalizeSearchQuery(this:GetText())
+    if this.placeholder then
+      if frame.searchQuery == "" and not frame.searchFocused then this.placeholder:Show() else this.placeholder:Hide() end
+    end
+    ShirsInventory_RefreshBankSearchFilter()
+  end)
+  frame.searchBox:SetScript("OnEditFocusGained", function()
+    frame.searchFocused = true
+    if this.placeholder then this.placeholder:Hide() end
+  end)
+  frame.searchBox:SetScript("OnEditFocusLost", function()
+    frame.searchFocused = false
+    if not ShirsInventory_IsCursorInsideSearchWindows() then ShirsInventory_ClearSearch(frame) end
   end)
   frame.searchBox:SetScript("OnEnterPressed", function() this:ClearFocus() end)
   frame.searchBox:SetScript("OnEscapePressed", function()
@@ -1766,6 +1870,7 @@ local function ShirsInventory_RebuildGrid()
   for index, address in ipairs(slots) do
     local button = inventoryButtons[index] or ShirsInventory_CreateItemButton(index)
     button.shirsInventorySearchEnabled = true
+    button.shirsInventorySearchFrame = nil
     button.bag = address.bag
     button.slot = address.slot
     button:SetID(address.slot)
@@ -2134,6 +2239,7 @@ function ShirsInventory_UpdateBank(frame)
       index, frame, "ShirsInventoryBankItem", bankButtons
     )
     button.shirsInventorySearchEnabled = false
+    button.shirsInventorySearchFrame = frame
     button.bag = address.bag
     button.slot = address.slot
     button:SetID(address.slot)
@@ -2202,6 +2308,7 @@ function ShirsInventory_CreateBankFrame()
   end)
 
   ShirsInventory_CreateBankActionButtons(frame)
+  ShirsInventory_CreateBankSearchBox(frame)
 
   frame:SetScript("OnShow", function()
     ShirsInventory_ApplyBankFrameAnchor(this)
@@ -2209,12 +2316,17 @@ function ShirsInventory_CreateBankFrame()
     ShirsInventory_SuppressOtherBankFrames()
     ShirsInventory_RefreshBankButtonStyles()
   end)
+  frame:SetScript("OnHide", function()
+    ShirsInventory_ClearSearch(frame)
+    if frame.searchBox and frame.searchBox.ClearFocus then frame.searchBox:ClearFocus() end
+  end)
   frame:SetScript("OnDragStart", function() this:StartMoving() end)
   frame:SetScript("OnDragStop", function() ShirsInventory_OnBankDragStop(this) end)
   frame:SetScript("OnEvent", function()
     ShirsInventory_HandleBankEvent(event, this)
   end)
   frame:SetScript("OnUpdate", function()
+    ShirsInventory_ProcessDeferredSearchFocus(this)
     this.suppressElapsed = (this.suppressElapsed or 0) + arg1
     if this.suppressElapsed >= 0.10 then
       this.suppressElapsed = 0
@@ -2387,6 +2499,7 @@ function ShirsInventory_InitializeUI()
   if ShirsInventoryFrame then return ShirsInventoryFrame end
   local frame = ShirsInventory_CreateMainFrame()
   ShirsInventory_InstallWorldFrameSearchHook()
+  ShirsInventory_InstallSpecialFrameEscapeHook()
   ShirsInventory_CreateBankFrame()
   if ShirsInventory_CreateSettingsUI then ShirsInventory_CreateSettingsUI() end
   ShirsInventory_ApplyFeatureSelection()
