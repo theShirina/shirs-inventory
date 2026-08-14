@@ -3,10 +3,11 @@ ShirsInventoryDB = { junkItems = {} }
 DEFAULT_CHAT_FRAME = { AddMessage = function() end }
 
 local altDown = true
+local controlDown = false
 local shiftDown = false
 local itemCount = 1
 function IsAltKeyDown() return altDown end
-function IsControlKeyDown() return false end
+function IsControlKeyDown() return controlDown end
 function IsShiftKeyDown() return shiftDown end
 function GetContainerItemInfo() return "texture", itemCount, nil, 2 end
 function GetContainerItemLink() return "|Hitem:7076:0:0:0|h[Essence of Earth]|h" end
@@ -15,6 +16,7 @@ function UseContainerItem() used = used + 1 end
 function PickupContainerItem() picked = picked + 1 end
 function CursorHasItem() return false end
 function ClearCursor() end
+function ToggleBackpack() end
 MerchantFrame = { selectedTab = 1, IsShown = function() return false end }
 local sellCursorBag, sellCursorSlot, inspectCursor, resetCursor
 function ShowContainerSellCursor(bag, slot) sellCursorBag, sellCursorSlot = bag, slot end
@@ -65,7 +67,42 @@ assert(used == 0 and picked == 0, "marking junk must not use, move, or sell the 
 assert(inventoryRefreshes == 1 and bankRefreshes == 1,
   "junk marking must refresh both visible inventory and bank badges")
 
+controlDown = true
+handled = ShirsInventory_HandleItemClick(button, "RightButton")
+assert(handled and not ShirsInventoryDB.junkItems[7076] and
+  not ShirsInventory_GetHearthstoneItemIndex(7076),
+  "Ctrl+Alt-right-click must preserve Alt-right-click junk precedence")
+controlDown = false
+
 altDown = false
+controlDown = true
+local refreshesBeforeSelection = inventoryRefreshes
+local bankRefreshesBeforeSelection = bankRefreshes
+handled = ShirsInventory_HandleItemClick(button, "RightButton")
+assert(handled and ShirsInventory_GetHearthstoneItemIndex(7076) == 1,
+  "Ctrl-right-click should select the item beside Hearthstone")
+assert(used == 0 and picked == 0,
+  "selecting a Hearthstone item must not use or move it")
+assert(inventoryRefreshes == refreshesBeforeSelection + 1 and
+  bankRefreshes == bankRefreshesBeforeSelection + 1,
+  "selecting a Hearthstone item must refresh visible selection state")
+ShirsInventory_HandleItemClick(button, "RightButton")
+assert(not ShirsInventory_GetHearthstoneItemIndex(7076),
+  "second Ctrl-right-click should remove the Hearthstone selection")
+button.bag = -1
+handled = ShirsInventory_HandleItemClick(button, "RightButton")
+assert(handled and not ShirsInventory_GetHearthstoneItemIndex(7076),
+  "Ctrl-right-click on a bank item changed the carried-item selection")
+button.bag = 0
+controlDown = false
+
+assert(ShirsInventory_HandleSlashCommand("pin 7076") and
+  ShirsInventory_GetHearthstoneItemIndex(7076) == 1,
+  "pin slash fallback did not add the selected item")
+assert(ShirsInventory_HandleSlashCommand("unpin 7076") and
+  not ShirsInventory_GetHearthstoneItemIndex(7076),
+  "unpin slash fallback did not remove the selected item")
+
 ShirsInventory_HandleItemClick(button, "RightButton")
 assert(used == 1, "plain right-click should preserve native use behavior")
 
@@ -102,5 +139,10 @@ assert(not sellCursorBag and inspectCursor, "buyback hover should not show a sel
 inspectCursor, resetCursor = nil, nil
 ShirsInventory_UpdateItemCursor(button, false, false)
 assert(resetCursor, "ordinary item hover should reset the cursor when no special cursor applies")
+
+local uiSource = assert(io.open(uiPath, "rb")):read("*a")
+assert(string.find(uiSource, "Ctrl%-right%-click to keep beside Hearthstone") and
+  string.find(uiSource, "Ctrl%-right%-click to remove from beside Hearthstone"),
+  "item tooltip does not explain the Hearthstone selection control and current state")
 
 print("ITEM_CLICK_TEST=PASS")

@@ -1,6 +1,9 @@
 -- Full-suite settings and junk-sale controls.
 
 local settingsFrame
+local hearthstoneItemsFrame
+local hearthstoneItemsPage = 1
+local SHIRS_INVENTORY_HEARTHSTONE_ROWS_PER_PAGE = 8
 local standaloneSortButton
 local standaloneModeButton
 local standaloneDirectionButton
@@ -22,6 +25,30 @@ function ShirsInventory_ApplyWindowScaleSliderValue(value)
   local applied = ShirsInventory_SetWindowScale(value)
   if ShirsInventory_ApplyWindowScaleSetting then ShirsInventory_ApplyWindowScaleSetting() end
   return applied
+end
+
+function ShirsInventory_GetHearthstoneItemDisplayRows(page, pageSize)
+  local items = ShirsInventory_GetHearthstoneItems()
+  local total = table.getn(items)
+  pageSize = math.max(1, math.floor(tonumber(pageSize) or SHIRS_INVENTORY_HEARTHSTONE_ROWS_PER_PAGE))
+  local pageCount = math.max(1, math.ceil(total / pageSize))
+  page = math.max(1, math.min(pageCount, math.floor(tonumber(page) or 1)))
+  local rows = {}
+  local firstIndex = (page - 1) * pageSize + 1
+  local listIndex
+  for listIndex = firstIndex, math.min(total, firstIndex + pageSize - 1) do
+    local itemID = items[listIndex]
+    local name, _, _, _, _, _, _, _, ninth, tenth = GetItemInfo(itemID)
+    table.insert(rows, {
+      itemID = itemID,
+      name = name or ("Item " .. itemID),
+      texture = tenth or ninth or "Interface\\Icons\\INV_Misc_QuestionMark",
+      index = listIndex,
+      canMoveUp = listIndex > 1,
+      canMoveDown = listIndex < total,
+    })
+  end
+  return rows, page, pageCount, total
 end
 
 function ShirsInventory_GetStandaloneControlSpecs()
@@ -80,6 +107,166 @@ local function ShirsInventory_CreatePanel(name, width, height, strata)
   return frame
 end
 
+local function ShirsInventory_RefreshHearthstoneManagerButton()
+  if settingsFrame and settingsFrame.hearthstoneItemsButton then
+    settingsFrame.hearthstoneItemsButton:SetText(
+      "Manage selected Hearthstone items (" .. ShirsInventory_GetHearthstoneItemCount() .. ")"
+    )
+  end
+end
+
+function ShirsInventory_RefreshHearthstoneItemsFrame()
+  if not hearthstoneItemsFrame then return end
+  local rows, page, pageCount, total = ShirsInventory_GetHearthstoneItemDisplayRows(
+    hearthstoneItemsPage, SHIRS_INVENTORY_HEARTHSTONE_ROWS_PER_PAGE
+  )
+  hearthstoneItemsPage = page
+  hearthstoneItemsFrame.pageText:SetText("Page " .. page .. " / " .. pageCount)
+  if total == 0 then
+    hearthstoneItemsFrame.emptyText:Show()
+  else
+    hearthstoneItemsFrame.emptyText:Hide()
+  end
+  local rowIndex
+  for rowIndex = 1, SHIRS_INVENTORY_HEARTHSTONE_ROWS_PER_PAGE do
+    local row = hearthstoneItemsFrame.rows[rowIndex]
+    local data = rows[rowIndex]
+    if data then
+      row.itemID = data.itemID
+      row.icon:SetTexture(data.texture)
+      row.name:SetText(data.name .. "  |cff777777#" .. data.itemID .. "|r")
+      if data.canMoveUp then row.up:Enable() else row.up:Disable() end
+      if data.canMoveDown then row.down:Enable() else row.down:Disable() end
+      row:Show()
+    else
+      row.itemID = nil
+      row:Hide()
+    end
+  end
+  if page > 1 then hearthstoneItemsFrame.previous:Enable() else hearthstoneItemsFrame.previous:Disable() end
+  if page < pageCount then hearthstoneItemsFrame.next:Enable() else hearthstoneItemsFrame.next:Disable() end
+  ShirsInventory_RefreshHearthstoneManagerButton()
+end
+
+local function ShirsInventory_CreateHearthstoneItemsFrame()
+  local frame = ShirsInventory_CreatePanel("ShirsInventoryHearthstoneItemsFrame", 430, 430, "DIALOG")
+  hearthstoneItemsFrame = frame
+  frame:SetPoint("CENTER", UIParent, "CENTER", 0, 10)
+
+  frame.title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+  frame.title:SetPoint("TOP", frame, "TOP", 0, -18)
+  frame.title:SetText("Items beside Hearthstone")
+  frame.help = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  frame.help:SetPoint("TOPLEFT", frame, "TOPLEFT", 24, -48)
+  frame.help:SetWidth(382)
+  frame.help:SetJustifyH("LEFT")
+  frame.help:SetText("Ctrl-right-click a carried item to add or remove it. The list order runs outward from Hearthstone.")
+
+  frame.rows = {}
+  local rowIndex
+  for rowIndex = 1, SHIRS_INVENTORY_HEARTHSTONE_ROWS_PER_PAGE do
+    local row = CreateFrame("Frame", nil, frame)
+    row:SetWidth(382)
+    row:SetHeight(28)
+    row:SetPoint("TOPLEFT", frame, "TOPLEFT", 24, -88 - ((rowIndex - 1) * 32))
+    row.icon = row:CreateTexture(nil, "ARTWORK")
+    row.icon:SetWidth(24)
+    row.icon:SetHeight(24)
+    row.icon:SetPoint("LEFT", row, "LEFT", 0, 0)
+    row.name = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    row.name:SetPoint("LEFT", row.icon, "RIGHT", 6, 0)
+    row.name:SetWidth(172)
+    row.name:SetJustifyH("LEFT")
+
+    row.up = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
+    row.up:SetWidth(34)
+    row.up:SetHeight(22)
+    row.up:SetPoint("LEFT", row, "LEFT", 204, 0)
+    row.up:SetText("Up")
+    row.up.row = row
+    row.up:SetScript("OnClick", function()
+      if this.row.itemID then ShirsInventory_MoveHearthstoneItem(this.row.itemID, -1) end
+      ShirsInventory_RefreshHearthstoneItemsFrame()
+    end)
+
+    row.down = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
+    row.down:SetWidth(44)
+    row.down:SetHeight(22)
+    row.down:SetPoint("LEFT", row.up, "RIGHT", 4, 0)
+    row.down:SetText("Down")
+    row.down.row = row
+    row.down:SetScript("OnClick", function()
+      if this.row.itemID then ShirsInventory_MoveHearthstoneItem(this.row.itemID, 1) end
+      ShirsInventory_RefreshHearthstoneItemsFrame()
+    end)
+
+    row.remove = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
+    row.remove:SetWidth(64)
+    row.remove:SetHeight(22)
+    row.remove:SetPoint("LEFT", row.down, "RIGHT", 4, 0)
+    row.remove:SetText("Remove")
+    row.remove.row = row
+    row.remove:SetScript("OnClick", function()
+      if this.row.itemID then ShirsInventory_SetHearthstoneItem(this.row.itemID, false) end
+      ShirsInventory_RefreshHearthstoneItemsFrame()
+    end)
+    table.insert(frame.rows, row)
+  end
+
+  frame.emptyText = frame:CreateFontString(nil, "OVERLAY", "GameFontDisable")
+  frame.emptyText:SetPoint("CENTER", frame, "CENTER", 0, 10)
+  frame.emptyText:SetText("No items selected yet.")
+
+  frame.pageText = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  frame.pageText:SetPoint("BOTTOM", frame, "BOTTOM", 0, 60)
+  frame.previous = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+  frame.previous:SetWidth(42)
+  frame.previous:SetHeight(22)
+  frame.previous:SetPoint("RIGHT", frame.pageText, "LEFT", -12, 0)
+  frame.previous:SetText("<")
+  frame.previous:SetScript("OnClick", function()
+    hearthstoneItemsPage = hearthstoneItemsPage - 1
+    ShirsInventory_RefreshHearthstoneItemsFrame()
+  end)
+  frame.next = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+  frame.next:SetWidth(42)
+  frame.next:SetHeight(22)
+  frame.next:SetPoint("LEFT", frame.pageText, "RIGHT", 12, 0)
+  frame.next:SetText(">")
+  frame.next:SetScript("OnClick", function()
+    hearthstoneItemsPage = hearthstoneItemsPage + 1
+    ShirsInventory_RefreshHearthstoneItemsFrame()
+  end)
+
+  frame.clear = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+  frame.clear:SetWidth(84)
+  frame.clear:SetHeight(24)
+  frame.clear:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 20, 18)
+  frame.clear:SetText("Clear All")
+  frame.clear:SetScript("OnClick", function()
+    ShirsInventory_ClearHearthstoneItems()
+    hearthstoneItemsPage = 1
+    ShirsInventory_RefreshHearthstoneItemsFrame()
+  end)
+  frame.close = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+  frame.close:SetWidth(84)
+  frame.close:SetHeight(24)
+  frame.close:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -20, 18)
+  frame.close:SetText("Close")
+  frame.close:SetScript("OnClick", function() frame:Hide() end)
+  frame:Hide()
+  table.insert(UISpecialFrames, "ShirsInventoryHearthstoneItemsFrame")
+  return frame
+end
+
+function ShirsInventory_ShowHearthstoneItems()
+  if not hearthstoneItemsFrame then ShirsInventory_CreateHearthstoneItemsFrame() end
+  hearthstoneItemsPage = 1
+  ShirsInventory_RefreshHearthstoneItemsFrame()
+  hearthstoneItemsFrame:Show()
+  return hearthstoneItemsFrame
+end
+
 local function ShirsInventory_CreateFeatureCheck(parent, label, feature, y)
   local check = CreateFrame("CheckButton", nil, parent, "UICheckButtonTemplate")
   check:SetWidth(24)
@@ -125,6 +312,10 @@ local function ShirsInventory_RefreshSettings()
     ShirsInventory_GetHideItemOwnershipInCombat() and 1 or nil
   )
   settingsFrame.autoClearSearch:SetChecked(ShirsInventory_GetAutoClearSearch() and 1 or nil)
+  settingsFrame.automaticHearthstoneItems:SetChecked(
+    ShirsInventory_GetAutomaticHearthstoneItems() and 1 or nil
+  )
+  ShirsInventory_RefreshHearthstoneManagerButton()
   refreshingSettings = true
   settingsFrame.itemsPerRowSlider:SetValue(ShirsInventory_GetItemsPerRow())
   settingsFrame.windowScaleSlider:SetValue(ShirsInventory_GetWindowScale())
@@ -147,7 +338,7 @@ function ShirsInventory_CreateLayoutSliders(frame)
     "Slider", "ShirsInventoryItemsPerRowSlider", frame, "OptionsSliderTemplate"
   )
   frame.itemsPerRowSlider:SetWidth(300)
-  frame.itemsPerRowSlider:SetPoint("TOPLEFT", frame, "TOPLEFT", 45, -310)
+  frame.itemsPerRowSlider:SetPoint("TOPLEFT", frame, "TOPLEFT", 45, -385)
   frame.itemsPerRowSlider:SetMinMaxValues(10, 20)
   frame.itemsPerRowSlider:SetValueStep(1)
   frame.itemsPerRowSliderText = getglobal("ShirsInventoryItemsPerRowSliderText")
@@ -163,7 +354,7 @@ function ShirsInventory_CreateLayoutSliders(frame)
     "Slider", "ShirsInventoryWindowScaleSlider", frame, "OptionsSliderTemplate"
   )
   frame.windowScaleSlider:SetWidth(300)
-  frame.windowScaleSlider:SetPoint("TOPLEFT", frame, "TOPLEFT", 45, -375)
+  frame.windowScaleSlider:SetPoint("TOPLEFT", frame, "TOPLEFT", 45, -455)
   frame.windowScaleSlider:SetMinMaxValues(0.65, 1)
   frame.windowScaleSlider:SetValueStep(0.05)
   frame.windowScaleSliderText = getglobal("ShirsInventoryWindowScaleSliderText")
@@ -180,7 +371,7 @@ function ShirsInventory_CreateLayoutSliders(frame)
 end
 
 local function ShirsInventory_CreateSettingsFrame()
-  local frame = ShirsInventory_CreatePanel("ShirsInventorySettingsFrame", 390, 460, "DIALOG")
+  local frame = ShirsInventory_CreatePanel("ShirsInventorySettingsFrame", 390, 550, "DIALOG")
   settingsFrame = frame
   frame:SetPoint("CENTER", UIParent, "CENTER", 0, 20)
 
@@ -204,6 +395,14 @@ local function ShirsInventory_CreateSettingsFrame()
   frame.autoClearSearch = ShirsInventory_CreateFeatureCheck(
     frame, "Clear search when inventory or bank closes, or you click outside", "autoClearSearch", -262
   )
+  frame.automaticHearthstoneItems = ShirsInventory_CreateFeatureCheck(
+    frame, "Use automatic items beside Hearthstone", "automaticHearthstoneItems", -292
+  )
+  frame.hearthstoneItemsButton = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+  frame.hearthstoneItemsButton:SetWidth(260)
+  frame.hearthstoneItemsButton:SetHeight(24)
+  frame.hearthstoneItemsButton:SetPoint("TOPLEFT", frame, "TOPLEFT", 45, -325)
+  frame.hearthstoneItemsButton:SetText("Manage selected Hearthstone items (0)")
   frame.ignoreJunkSorting:SetScript("OnClick", function()
     ShirsInventory_SetIgnoreJunkSorting(this:GetChecked() and true or false)
     ShirsInventory_RefreshSettings()
@@ -239,6 +438,13 @@ local function ShirsInventory_CreateSettingsFrame()
   frame.autoClearSearch:SetScript("OnClick", function()
     ShirsInventory_SetAutoClearSearch(this:GetChecked() and true or false)
     ShirsInventory_RefreshSettings()
+  end)
+  frame.automaticHearthstoneItems:SetScript("OnClick", function()
+    ShirsInventory_SetAutomaticHearthstoneItems(this:GetChecked() and true or false)
+    ShirsInventory_RefreshSettings()
+  end)
+  frame.hearthstoneItemsButton:SetScript("OnClick", function()
+    ShirsInventory_ShowHearthstoneItems()
   end)
 
   ShirsInventory_CreateLayoutSliders(frame)

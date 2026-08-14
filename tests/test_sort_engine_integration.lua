@@ -138,6 +138,7 @@ function GetBagName(container)
   return nil
 end
 function ContainerIDToInventoryID(container) return 19 + container end
+function BankButtonIDToInvSlotID(position) return position end
 function GetInventoryItemLink(_, inventoryID)
   if inventoryID == 20 then return equippedBagLink end
   return nil
@@ -269,6 +270,43 @@ assert(ShirsInventory_GetAdjacencyGroup(26084) == nil,
   "unrelated item entered the world-buff scroll adjacency group")
 assert(ShirsInventory_GetEdgeAnchorRank(2454, "Elixir of Lion's Strength", "Consumable", "Consumable") == nil,
   "ordinary item became an edge anchor")
+
+-- Per-character selections must sit immediately outside Hearthstone in their
+-- saved order. They apply only to carried bags; automatic groups can be turned
+-- off without disabling Hearthstone or user selections.
+ShirsInventory_ClearHearthstoneItems()
+ShirsInventory_SetAutomaticHearthstoneItems(true)
+assert(ShirsInventory_SetHearthstoneItem(2454, true))
+assert(ShirsInventory_SetHearthstoneItem(100, true))
+local selectedRankOne = ShirsInventory_GetEdgeAnchorRank(
+  2454, "Elixir of Lion's Strength", "Consumable", "Consumable", nil, false, 0
+)
+local selectedRankTwo = ShirsInventory_GetEdgeAnchorRank(
+  100, "Item 100", "Weapon", "One-Handed Swords", nil, false, 0
+)
+assert(selectedRankOne and selectedRankTwo and selectedRankOne > 1 and
+  selectedRankTwo > selectedRankOne and selectedRankTwo < 1.5,
+  "selected items did not occupy their saved order directly outside Hearthstone")
+assert(ShirsInventory_GetEdgeAnchorRank(
+  2454, "Elixir of Lion's Strength", "Consumable", "Consumable", nil, false, BANK_CONTAINER
+) == nil, "carried-bag Hearthstone selection leaked into bank sorting")
+ShirsInventory_SetAutomaticHearthstoneItems(false)
+assert(ShirsInventory_GetEdgeAnchorRank(15138, "Onyxia Scale Cloak", "Armor", "Cloth", nil, false, 0) == nil,
+  "disabled automatic Hearthstone group still ranked Onyxia Scale Cloak in carried bags")
+assert(ShirsInventory_GetEdgeAnchorRank(
+  15138, "Onyxia Scale Cloak", "Armor", "Cloth", nil, false, BANK_CONTAINER
+) == 1.5, "automatic Hearthstone toggle changed main-bank sorting")
+assert(ShirsInventory_GetEdgeAnchorRank(
+  15138, "Onyxia Scale Cloak", "Armor", "Cloth", nil, false, 5
+) == 1.5, "automatic Hearthstone toggle changed bank-bag sorting")
+assert(ShirsInventory_GetEdgeAnchorRank(
+  2454, "Elixir of Lion's Strength", "Consumable", "Consumable", nil, false, 0
+) == selectedRankOne, "disabling automatic Hearthstone items also disabled a user selection")
+assert(ShirsInventory_GetEdgeAnchorRank(6948, "Hearthstone", "Miscellaneous", "Junk", nil, false, 0) == 1,
+  "disabling automatic Hearthstone items disabled the fixed Hearthstone anchor")
+ShirsInventory_SetAutomaticHearthstoneItems(true)
+ShirsInventory_ClearHearthstoneItems()
+
 assert(ShirsInventory_IsQuestBorderItem("Quest", 1),
   "common native Quest item was not matched to the visible quest border")
 assert(not ShirsInventory_IsQuestBorderItem("Quest", 2),
@@ -308,6 +346,52 @@ local function tickOnce()
   runnerUpdate()
 end
 
+-- The real item reader must pass container ownership into edge selection. A
+-- selected carried item sorts beside Hearthstone in bags, but remains in normal
+-- category order in the bank.
+slotCount = 2
+bags[0] = {
+  { id = 2454, count = 1 },
+  { id = 100, count = 1 },
+}
+ShirsInventory_ClearHearthstoneItems()
+assert(ShirsInventory_SetHearthstoneItem(100, true))
+ShirsInventory_SetDirection("top")
+ShirsInventory_SetSortMode("itemType")
+local selectedOk, selectedStatus = ShirsInventory_SortBags()
+assert(selectedOk and selectedStatus == "started", "selected carried-item sort did not start")
+tickUntilDone()
+assert(bags[0][1] and bags[0][1].id == 100 and bags[0][2] and bags[0][2].id == 2454,
+  "selected carried item did not reach the chosen edge")
+ShirsInventory_SetDirection("bottom")
+selectedOk, selectedStatus = ShirsInventory_SortBags()
+assert(selectedOk and selectedStatus == "started", "Bottom selected-item sort did not start")
+tickUntilDone()
+assert(bags[0][1] and bags[0][1].id == 2454 and bags[0][2] and bags[0][2].id == 100,
+  "selected carried item did not retain edge placement for Bottom sorting")
+selectedOk, selectedStatus = ShirsInventory_SortBags()
+assert(selectedOk and selectedStatus == "started", "idempotent selected-item sort did not start")
+tickUntilDone()
+assert(ShirsInventory_GetSortDiagnostics().moves == 0,
+  "repeating an already-correct selected-item sort moved an item")
+
+slotCounts[BANK_CONTAINER] = 2
+bags[BANK_CONTAINER] = {
+  { id = 100, count = 1 },
+  { id = 2454, count = 1 },
+}
+BankFrame:Show()
+selectedOk, selectedStatus = ShirsInventory_SortBank()
+assert(selectedOk and selectedStatus == "started", "bank scope regression sort did not start")
+tickUntilDone()
+assert(bags[BANK_CONTAINER][1] and bags[BANK_CONTAINER][1].id == 2454 and
+  bags[BANK_CONTAINER][2] and bags[BANK_CONTAINER][2].id == 100,
+  "selected carried item incorrectly became a bank edge anchor")
+BankFrame:Hide()
+slotCounts[BANK_CONTAINER] = nil
+bags[BANK_CONTAINER] = nil
+ShirsInventory_ClearHearthstoneItems()
+
 -- Full movement regression with the exact generic item metadata exposed by
 -- Microbot. Item IDs must carry specialty compatibility, just as Projectile
 -- subtype carries arrow/quiver compatibility. A normal reagent must stay out.
@@ -328,6 +412,7 @@ GetItemInfo = function(query)
 end
 ShirsInventory_SetSortMode("itemType")
 ShirsInventory_SetDirection("top")
+assert(ShirsInventory_SetHearthstoneItem(2447, true))
 local specialtyOk, specialtyStatus = ShirsInventory_SortBags()
 assert(specialtyOk and specialtyStatus == "started", "herb-bag movement sort did not start")
 tickUntilDone()
@@ -337,6 +422,7 @@ assert(not bags[1][2], "an incompatible item entered the second Herb Bag slot")
 assert(bags[0][1] and bags[0][1].id == 3371,
   "Empty Vial did not remain in a normal bag")
 assert(not cursorItem, "herb-bag movement left an item on the cursor")
+ShirsInventory_ClearHearthstoneItems()
 GetItemInfo = originalGetItemInfo
 equippedBagLink = nil
 slotCounts[1] = nil

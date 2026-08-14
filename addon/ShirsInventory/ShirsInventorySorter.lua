@@ -192,8 +192,18 @@ function ShirsInventory_IsPetOrMountItem(itemType, itemSubType, spellName, toolt
     (tooltipPetOrMount or string.find(spell, "summon", 1, true) ~= nil)
 end
 
-function ShirsInventory_GetEdgeAnchorRank(itemID, itemName, itemType, itemSubType, spellName, tooltipPetOrMount)
+function ShirsInventory_GetEdgeAnchorRank(itemID, itemName, itemType, itemSubType, spellName, tooltipPetOrMount, container)
   if itemID == 6948 then return 1 end
+  local carriedItem = container == nil or
+    (type(container) == "number" and container >= 0 and container <= 4)
+  if carriedItem and type(ShirsInventory_GetHearthstoneItemIndex) == "function" then
+    local selectedIndex = ShirsInventory_GetHearthstoneItemIndex(itemID)
+    if selectedIndex then return 1 + (selectedIndex / 1000) end
+  end
+  if carriedItem and type(ShirsInventory_GetAutomaticHearthstoneItems) == "function" and
+    not ShirsInventory_GetAutomaticHearthstoneItems() then
+    return nil
+  end
   if itemID == 15138 then return 1.5 end -- Onyxia Scale Cloak
   if middleEdgeItemIDs[itemID] then return 2 end
   if ShirsInventory_IsPetOrMountItem(itemType, itemSubType, spellName, tooltipPetOrMount) then return 3 end
@@ -258,7 +268,7 @@ local function ReadItem(container, position, count)
     if not itemSpell then itemSpell = GetItemSpell(link) end
   end
   local edgeRank = ShirsInventory_GetEdgeAnchorRank(
-    itemID, itemInfo[1], itemType, itemSubType, itemSpell, tooltipPetOrMount
+    itemID, itemInfo[1], itemType, itemSubType, itemSpell, tooltipPetOrMount, container
   )
   local oppositeEdgeRank = ShirsInventory_GetOppositeEdgeRank(
     questBorderItem, conjured, ShirsInventory_GetQuestItemsOppositeEdge()

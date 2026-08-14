@@ -38,6 +38,25 @@ local professionCategories = {
   engineering = "Engineering",
 }
 
+local SHIRS_INVENTORY_MAX_HEARTHSTONE_ITEMS = 20
+
+local function ShirsInventory_NormalizeHearthstoneItems(values)
+  local normalized = {}
+  local seen = {}
+  if type(values) ~= "table" then return normalized end
+  local index
+  for index = 1, table.getn(values) do
+    local itemID = tonumber(values[index])
+    if itemID then itemID = math.floor(itemID) end
+    if itemID and itemID > 0 and itemID ~= 6948 and not seen[itemID] and
+      table.getn(normalized) < SHIRS_INVENTORY_MAX_HEARTHSTONE_ITEMS then
+      seen[itemID] = true
+      table.insert(normalized, itemID)
+    end
+  end
+  return normalized
+end
+
 local function ShirsInventory_EnsureDB()
   if type(ShirsInventoryDB) ~= "table" then
     ShirsInventoryDB = {}
@@ -53,6 +72,12 @@ local function ShirsInventory_EnsureDB()
   end
   if type(ShirsInventoryDB.itemOverrides) ~= "table" then
     ShirsInventoryDB.itemOverrides = {}
+  end
+  ShirsInventoryDB.hearthstoneItems = ShirsInventory_NormalizeHearthstoneItems(
+    ShirsInventoryDB.hearthstoneItems
+  )
+  if type(ShirsInventoryDB.automaticHearthstoneItems) ~= "boolean" then
+    ShirsInventoryDB.automaticHearthstoneItems = true
   end
   if type(ShirsInventoryDB.junkItems) ~= "table" then
     ShirsInventoryDB.junkItems = {}
@@ -210,6 +235,91 @@ function ShirsInventory_ParseItemID(value)
   local itemID = tonumber(linkedID or string.gsub(value, "%s", ""))
   if itemID and itemID > 0 then return math.floor(itemID) end
   return nil
+end
+
+function ShirsInventory_GetAutomaticHearthstoneItems()
+  return ShirsInventory_EnsureDB().automaticHearthstoneItems and true or false
+end
+
+function ShirsInventory_SetAutomaticHearthstoneItems(enabled)
+  ShirsInventory_EnsureDB().automaticHearthstoneItems = enabled and true or false
+  return ShirsInventory_GetAutomaticHearthstoneItems()
+end
+
+function ShirsInventory_GetHearthstoneItems()
+  local source = ShirsInventory_EnsureDB().hearthstoneItems
+  local copy = {}
+  local index
+  for index = 1, table.getn(source) do copy[index] = source[index] end
+  return copy
+end
+
+function ShirsInventory_GetHearthstoneItemIndex(value)
+  local itemID = ShirsInventory_ParseItemID(value)
+  if not itemID then return nil end
+  local values = ShirsInventory_EnsureDB().hearthstoneItems
+  local index
+  for index = 1, table.getn(values) do
+    if values[index] == itemID then return index end
+  end
+  return nil
+end
+
+function ShirsInventory_GetHearthstoneItemCount()
+  return table.getn(ShirsInventory_EnsureDB().hearthstoneItems)
+end
+
+function ShirsInventory_SetHearthstoneItem(value, selected)
+  local itemID = ShirsInventory_ParseItemID(value)
+  if not itemID then return false, "invalid", nil end
+  if itemID == 6948 then return false, "fixed", itemID end
+  local values = ShirsInventory_EnsureDB().hearthstoneItems
+  local index
+  local candidateIndex
+  for candidateIndex = 1, table.getn(values) do
+    if values[candidateIndex] == itemID then
+      index = candidateIndex
+      break
+    end
+  end
+  if selected then
+    if index then return true, "present", itemID end
+    if table.getn(values) >= SHIRS_INVENTORY_MAX_HEARTHSTONE_ITEMS then
+      return false, "full", itemID
+    end
+    table.insert(values, itemID)
+    return true, "added", itemID
+  end
+  if not index then return true, "absent", itemID end
+  table.remove(values, index)
+  return true, "removed", itemID
+end
+
+function ShirsInventory_ToggleHearthstoneItem(value)
+  return ShirsInventory_SetHearthstoneItem(
+    value, ShirsInventory_GetHearthstoneItemIndex(value) == nil
+  )
+end
+
+function ShirsInventory_MoveHearthstoneItem(value, offset)
+  local itemID = ShirsInventory_ParseItemID(value)
+  local index = ShirsInventory_GetHearthstoneItemIndex(itemID)
+  offset = tonumber(offset)
+  if not itemID or not index or not offset then return false, index end
+  if offset < 0 then offset = -1 elseif offset > 0 then offset = 1 else return true, index end
+  local values = ShirsInventory_EnsureDB().hearthstoneItems
+  local destination = math.max(1, math.min(table.getn(values), index + offset))
+  if destination == index then return true, index end
+  table.remove(values, index)
+  table.insert(values, destination, itemID)
+  return true, destination
+end
+
+function ShirsInventory_ClearHearthstoneItems()
+  local db = ShirsInventory_EnsureDB()
+  local removed = table.getn(db.hearthstoneItems)
+  db.hearthstoneItems = {}
+  return removed
 end
 
 local function ShirsInventory_GetProfessionCategory(professionName)

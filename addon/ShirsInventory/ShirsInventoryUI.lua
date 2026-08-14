@@ -509,6 +509,29 @@ function ShirsInventory_HandleItemClick(button, mouseButton, ignoreModifiers)
     return true
   end
 
+  if mouseButton == "RightButton" and not ignoreModifiers and bag >= 0 and bag <= 4 and
+    IsControlKeyDown and IsControlKeyDown() and not (IsAltKeyDown and IsAltKeyDown()) then
+    local itemId = ShirsInventory_GetItemId(GetContainerItemLink(bag, slot))
+    local ok, status = ShirsInventory_ToggleHearthstoneItem(itemId)
+    if status == "added" then
+      ShirsInventory_Message("Added this item type beside Hearthstone.")
+    elseif status == "removed" then
+      ShirsInventory_Message("Removed this item type from beside Hearthstone.")
+    elseif status == "fixed" then
+      ShirsInventory_Message("Hearthstone is always fixed at the selected edge.")
+    elseif status == "full" then
+      ShirsInventory_Message("The Hearthstone item list is full.")
+    elseif not ok then
+      ShirsInventory_Message("This item could not be selected beside Hearthstone.")
+    end
+    if ShirsInventory_Update then ShirsInventory_Update() end
+    if ShirsInventoryBankFrame and ShirsInventoryBankFrame.IsShown and
+      ShirsInventoryBankFrame:IsShown() and ShirsInventory_UpdateBank then
+      ShirsInventory_UpdateBank()
+    end
+    return true
+  end
+
   if mouseButton == "RightButton" and not ignoreModifiers and
     (not ShirsInventory_IsFeatureEnabled or ShirsInventory_IsFeatureEnabled("junk")) and
     IsAltKeyDown and IsAltKeyDown() then
@@ -1376,6 +1399,13 @@ local function ShirsInventory_OnItemEnter(button)
       end
     else
       GameTooltip:AddLine("Alt-right-click to mark as junk", 0.55, 0.8, 1)
+    end
+  end
+  if button.bag >= 0 and button.bag <= 4 then
+    if ShirsInventory_GetHearthstoneItemIndex(itemId) then
+      GameTooltip:AddLine("Ctrl-right-click to remove from beside Hearthstone", 0.55, 0.8, 1)
+    elseif itemId ~= 6948 then
+      GameTooltip:AddLine("Ctrl-right-click to keep beside Hearthstone", 0.55, 0.8, 1)
     end
   end
   GameTooltip:Show()
@@ -2466,7 +2496,27 @@ end
 function ShirsInventory_HandleSlashCommand(message)
   local _, _, command, value = string.find(message or "", "^%s*(%S*)%s*(.-)%s*$")
   command = string.lower(command or "")
-  if command == "mark" or command == "unmark" then
+  if command == "pin" or command == "unpin" then
+    local ok, status, itemId = ShirsInventory_SetHearthstoneItem(value, command == "pin")
+    if ok then
+      if status == "added" then
+        ShirsInventory_Message("Added item " .. itemId .. " beside Hearthstone.")
+      elseif status == "removed" then
+        ShirsInventory_Message("Removed item " .. itemId .. " from beside Hearthstone.")
+      elseif status == "present" then
+        ShirsInventory_Message("Item " .. itemId .. " is already beside Hearthstone.")
+      elseif status == "absent" then
+        ShirsInventory_Message("Item " .. itemId .. " is not in the Hearthstone list.")
+      end
+    elseif status == "fixed" then
+      ShirsInventory_Message("Hearthstone is always fixed at the selected edge.")
+    elseif status == "full" then
+      ShirsInventory_Message("The Hearthstone item list is full.")
+    else
+      ShirsInventory_Message("Use /si " .. command .. " <item ID or item link>.")
+    end
+    return ok
+  elseif command == "mark" or command == "unmark" then
     local ok, status, itemId = ShirsInventory_SetJunkMark(value, command == "mark")
     if ok then
       ShirsInventory_Message((status == "marked" and "Marked item " or "Removed junk mark from item ") .. itemId .. ".")

@@ -248,6 +248,34 @@ assert(type(ShirsInventory_GetAutoClearSearch) == "function" and
 assert(not ShirsInventory_SetAutoClearSearch(false) and
   not ShirsInventory_GetAutoClearSearch(),
   "automatic search clearing option did not persist off")
+
+function GetItemInfo(itemID)
+  if itemID == 15138 then
+    return "Onyxia Scale Cloak", "link", 4, 60, "Armor", "Cloth", 1, "INVTYPE_CLOAK", "cloak-texture"
+  end
+  if itemID == 12361 then
+    return "Blue Sapphire", "link", 2, 50, "Trade Goods", "Gem", 20, "", "gem-texture"
+  end
+  return nil
+end
+ShirsInventory_ClearHearthstoneItems()
+assert(ShirsInventory_SetHearthstoneItem(15138, true))
+assert(ShirsInventory_SetHearthstoneItem(12361, true))
+local selectedRows, selectedPage, selectedPages, selectedTotal =
+  ShirsInventory_GetHearthstoneItemDisplayRows(1, 8)
+assert(selectedPage == 1 and selectedPages == 1 and selectedTotal == 2 and
+  table.getn(selectedRows) == 2,
+  "Hearthstone item manager returned the wrong page model")
+assert(selectedRows[1].itemID == 15138 and selectedRows[1].name == "Onyxia Scale Cloak" and
+  selectedRows[1].texture == "cloak-texture" and not selectedRows[1].canMoveUp and
+  selectedRows[1].canMoveDown,
+  "first Hearthstone manager row has the wrong item data or movement state")
+assert(selectedRows[2].itemID == 12361 and selectedRows[2].name == "Blue Sapphire" and
+  selectedRows[2].texture == "gem-texture" and selectedRows[2].canMoveUp and
+  not selectedRows[2].canMoveDown,
+  "second Hearthstone manager row has the wrong item data or movement state")
+ShirsInventory_ClearHearthstoneItems()
+
 assert(not string.find(settings, "Use icons for inventory header + action buttons", 1, true),
   "inventory text-style toggle must be removed now that bag controls are icon-only")
 assert(string.find(settings, "Use coin icons for currency (off = g/s/c text)", 1, true),
@@ -258,10 +286,22 @@ assert(string.find(settings, "Hide item ownership details while in combat", 1, t
 assert(string.find(settings, "Clear search when inventory or bank closes, or you click outside", 1, true) and
   string.find(settings, "ShirsInventory_SetAutoClearSearch", 1, true),
   "settings must expose one per-character automatic-clear option for both search fields")
+assert(string.find(settings, "Use automatic items beside Hearthstone", 1, true) and
+  string.find(settings, "ShirsInventory_SetAutomaticHearthstoneItems", 1, true),
+  "settings must expose the backward-compatible automatic Hearthstone group")
+assert(string.find(settings, "Manage selected Hearthstone items", 1, true) and
+  string.find(settings, "ShirsInventory_ShowHearthstoneItems", 1, true) and
+  string.find(settings, 'SetText("Up")', 1, true) and
+  string.find(settings, 'SetText("Down")', 1, true) and
+  string.find(settings, 'SetText("Remove")', 1, true),
+  "settings are missing the selected-item manager and its ordering controls")
+assert(not string.find(settings, ":SetShown", 1, true),
+  "selected-item manager uses SetShown, which is not part of the Interface 11200 API floor")
 assert(string.find(settings, 'frame, "Clear search when inventory or bank closes, or you click outside", "autoClearSearch", -262', 1, true) and
-  string.find(settings, 'frame.itemsPerRowSlider:SetPoint("TOPLEFT", frame, "TOPLEFT", 45, -310)', 1, true) and
-  string.find(settings, 'frame.windowScaleSlider:SetPoint("TOPLEFT", frame, "TOPLEFT", 45, -375)', 1, true),
-  "automatic search checkbox and layout sliders need separate vertical rows")
+  string.find(settings, 'frame, "Use automatic items beside Hearthstone", "automaticHearthstoneItems", -292', 1, true) and
+  string.find(settings, 'frame.itemsPerRowSlider:SetPoint("TOPLEFT", frame, "TOPLEFT", 45, -385)', 1, true) and
+  string.find(settings, 'frame.windowScaleSlider:SetPoint("TOPLEFT", frame, "TOPLEFT", 45, -455)', 1, true),
+  "Hearthstone controls and layout sliders need separate vertical rows")
 assert(string.find(settings, '"Items per row: "', 1, true) and
   string.find(settings, 'SetMinMaxValues(10, 20)', 1, true) and
   string.find(settings, 'SetValueStep(1)', 1, true),

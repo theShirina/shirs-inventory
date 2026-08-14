@@ -2,7 +2,7 @@
 
 A standalone bag addon made and tested for Microbot's WoW 1.12.1 client.
 
-Current release: **0.6.4**.
+Current release: **0.6.4**. Current test build: **0.6.5-test**.
 
 ## What it does
 
@@ -24,6 +24,7 @@ Current release: **0.6.4**.
 - Waits for each exact bag-state update before submitting the next cursor move.
 - Keeps quest-bordered items at the opposite end of the occupied sorted block by default, with conjured items directly outside them.
 - Keeps Hearthstone, Onyxia Scale Cloak, field services, adjacent pets and mounts, and profession tools together at the selected edge.
+- Lets each character Ctrl-right-click up to 20 carried item types to sort them directly beside Hearthstone, with an ordered settings list and an option to disable the automatic group. Bank sorting stays unchanged.
 - Keeps the four Microbot world-buff scrolls next to each other in either sort mode and direction.
 - Sorts herbs and enchanting materials into their matching specialty bags while keeping incompatible profession reagents in normal bags.
 - Keeps quiver, ammo-pouch, and soul-bag items in compatible bags.
@@ -54,6 +55,8 @@ Shir's Inventory takes ownership of the bag bar when it loads.
 - `/si junk` — start a junk sale while a merchant's main tab is open.
 - `/si mark <item ID or item link>` — mark an item type as junk.
 - `/si unmark <item ID or item link>` — remove a manual junk mark.
+- `/si pin <item ID or item link>` — add an item type beside Hearthstone.
+- `/si unpin <item ID or item link>` — remove an item type from beside Hearthstone.
 - `/si settings` — open Shir's Inventory settings.
 - `/si bank` — reopen the combined bank window while the normal bank is open.
 
