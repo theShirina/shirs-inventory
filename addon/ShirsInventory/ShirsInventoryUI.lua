@@ -238,6 +238,495 @@ function ShirsInventory_GetOneBagLayout()
   }
 end
 
+local SHIRS_INVENTORY_CATEGORY_DEFINITIONS = {
+  { key = "quest", label = "Quest Items" },
+  { key = "keys", label = "Keys" },
+  { key = "mountsCompanions", label = "Mounts & Companions" },
+  { key = "armor", label = "Armor" },
+  { key = "weapons", label = "Weapons" },
+  { key = "equipment", label = "Equipment" },
+  { key = "bags", label = "Bags" },
+  { key = "ammo", label = "Projectiles & Ammo" },
+  { key = "recipes", label = "Recipes" },
+  { key = "foodDrink", label = "Food & Drink" },
+  { key = "potions", label = "Potions" },
+  { key = "elixirs", label = "Elixirs & Buffs" },
+  { key = "bandages", label = "Bandages" },
+  { key = "scrolls", label = "Scrolls" },
+  { key = "weaponBuffs", label = "Weapon Buffs" },
+  { key = "consumables", label = "Other Consumables" },
+  { key = "explosives", label = "Explosives" },
+  { key = "tradeGoods", label = "Trade Goods & Materials" },
+  { key = "junk", label = "Junk" },
+  { key = "miscellaneous", label = "Miscellaneous" },
+  { key = "empty", label = "Empty Slots" },
+}
+
+local SHIRS_INVENTORY_CATEGORY_EDIT_TARGETS = {
+  quest = true,
+  keys = true,
+  mountsCompanions = true,
+  armor = true,
+  weapons = true,
+  equipment = true,
+  bags = true,
+  ammo = true,
+  recipes = true,
+  foodDrink = true,
+  potions = true,
+  elixirs = true,
+  bandages = true,
+  scrolls = true,
+  weaponBuffs = true,
+  consumables = true,
+  explosives = true,
+  tradeGoods = true,
+  junk = true,
+  miscellaneous = true,
+}
+local shirsInventoryCategoryEditMode
+local shirsInventoryCategoryEditItemID
+local shirsInventoryCategoryEditHover
+local categoryHeaders = {}
+
+function ShirsInventory_GetCategoryDefinitions()
+  local definitions = {}
+  local index
+  for index = 1, table.getn(SHIRS_INVENTORY_CATEGORY_DEFINITIONS) - 1 do
+    local definition = SHIRS_INVENTORY_CATEGORY_DEFINITIONS[index]
+    table.insert(definitions, { key = definition.key, label = definition.label })
+  end
+  local custom = ShirsInventory_GetCustomCategories and ShirsInventory_GetCustomCategories() or {}
+  for index = 1, table.getn(custom) do
+    table.insert(definitions, { key = custom[index].key, label = custom[index].label, custom = true })
+  end
+  local empty = SHIRS_INVENTORY_CATEGORY_DEFINITIONS[table.getn(SHIRS_INVENTORY_CATEGORY_DEFINITIONS)]
+  table.insert(definitions, { key = empty.key, label = empty.label })
+  return definitions
+end
+
+function ShirsInventory_IsCategoryEditTarget(category)
+  return SHIRS_INVENTORY_CATEGORY_EDIT_TARGETS[category] == true or
+    (ShirsInventory_GetCustomCategoryLabel and ShirsInventory_GetCustomCategoryLabel(category) ~= nil)
+end
+
+function ShirsInventory_GetCategoryEditMode()
+  return shirsInventoryCategoryEditMode and
+    ShirsInventory_GetCategoryMode and ShirsInventory_GetCategoryMode() and true or false
+end
+
+function ShirsInventory_ClearCategoryEditDrag()
+  shirsInventoryCategoryEditItemID = nil
+  shirsInventoryCategoryEditHover = nil
+  if SetCursor then SetCursor(nil) end
+  return true
+end
+
+function ShirsInventory_HasCategoryEditDrag()
+  return shirsInventoryCategoryEditItemID and true or false
+end
+
+function ShirsInventory_SetCategoryEditMode(enabled)
+  if enabled and ShirsInventory_ShouldDeferCategoryRebuild and ShirsInventory_ShouldDeferCategoryRebuild() then
+    return false
+  end
+  ShirsInventory_ClearCategoryEditDrag()
+  shirsInventoryCategoryEditMode = enabled and
+    ShirsInventory_GetCategoryMode and ShirsInventory_GetCategoryMode() and true or false
+  return ShirsInventory_GetCategoryEditMode()
+end
+
+function ShirsInventory_ToggleCategoryEditMode()
+  return ShirsInventory_SetCategoryEditMode(not ShirsInventory_GetCategoryEditMode())
+end
+
+function ShirsInventory_BeginCategoryEditDrag(value)
+  if not ShirsInventory_GetCategoryEditMode() then return false end
+  local itemID = ShirsInventory_ParseItemID and ShirsInventory_ParseItemID(value) or tonumber(value)
+  if not itemID then return false end
+  shirsInventoryCategoryEditItemID = itemID
+  shirsInventoryCategoryEditHover = nil
+  if SetCursor then SetCursor("CAST_CURSOR") end
+  return true
+end
+
+function ShirsInventory_SetCategoryEditHover(category)
+  if not shirsInventoryCategoryEditItemID or not ShirsInventory_IsCategoryEditTarget(category) then
+    shirsInventoryCategoryEditHover = nil
+    return false
+  end
+  shirsInventoryCategoryEditHover = category
+  return category
+end
+
+function ShirsInventory_GetCategoryEditDropTarget(headers, cursorX, cursorY)
+  if cursorX == nil or cursorY == nil then
+    if not GetCursorPosition then return nil end
+    cursorX, cursorY = GetCursorPosition()
+  end
+  local frames = headers or categoryHeaders
+  local index
+  for index = 1, table.getn(frames) do
+    local header = frames[index]
+    if header and ShirsInventory_IsCategoryEditTarget(header.categoryKey) and
+      (not header.IsShown or header:IsShown()) then
+      local left = header.GetLeft and header:GetLeft() or nil
+      local right = header.GetRight and header:GetRight() or nil
+      local bottom = header.GetBottom and header:GetBottom() or nil
+      local top = header.GetTop and header:GetTop() or nil
+      local scale = header.GetEffectiveScale and header:GetEffectiveScale() or 1
+      if left and right and bottom and top and
+        cursorX >= left * scale and cursorX <= right * scale and
+        cursorY >= bottom * scale and cursorY <= top * scale then
+        return header.categoryKey
+      end
+    end
+  end
+  return nil
+end
+
+function ShirsInventory_FinishCategoryEditDrag()
+  local itemID = shirsInventoryCategoryEditItemID
+  local category = shirsInventoryCategoryEditHover
+  ShirsInventory_ClearCategoryEditDrag()
+  if not itemID or not category or not ShirsInventory_SetCategoryAssignment then return false end
+  local assigned = ShirsInventory_SetCategoryAssignment(itemID, category)
+  if assigned and ShirsInventory_Update then ShirsInventory_Update() end
+  return assigned
+end
+
+local shirsInventoryCategoryClasses
+
+local function ShirsInventory_GetCategoryClasses()
+  if shirsInventoryCategoryClasses then return shirsInventoryCategoryClasses end
+  local classes = GetAuctionItemClasses and {GetAuctionItemClasses()} or {}
+  if table.getn(classes) > 0 then
+    shirsInventoryCategoryClasses = {
+      weapon = classes[1],
+      armor = classes[2],
+      container = classes[3],
+      consumable = classes[4],
+      tradeGoods = classes[5],
+      projectile = classes[6],
+      quiver = classes[7],
+      recipe = classes[8],
+      miscellaneous = classes[10],
+    }
+    return shirsInventoryCategoryClasses
+  end
+  return {
+    weapon = "Weapon",
+    armor = "Armor",
+    container = "Container",
+    consumable = "Consumable",
+    tradeGoods = "Trade Goods",
+    projectile = "Projectile",
+    quiver = "Quiver",
+    recipe = "Recipe",
+    miscellaneous = "Miscellaneous",
+  }
+end
+
+local function ShirsInventory_CategoryTextSignalsEnabled()
+  return type(GetLocale) ~= "function" or GetLocale() == "enUS"
+end
+
+local function ShirsInventory_CategoryContains(text, needle)
+  if type(text) ~= "string" or type(needle) ~= "string" then return false end
+  return string.find(string.lower(text), string.lower(needle), 1, true) ~= nil
+end
+
+local function ShirsInventory_ClassifyCategorySemanticText(item, classes)
+  if not ShirsInventory_CategoryTextSignalsEnabled() then return nil end
+  local name = string.lower(tostring(item.name or ""))
+  local tooltip = string.lower(tostring(item.tooltipText or ""))
+  local consumable = item.itemType == "Consumable" or item.itemType == classes.consumable
+  local tradeGoods = item.itemType == "Trade Goods" or item.itemType == classes.tradeGoods
+  local miscellaneous = item.itemType == "Miscellaneous" or
+    item.itemType == classes.miscellaneous or item.itemType == nil
+  if miscellaneous and (
+    string.find(tooltip, "summons and dismisses a rideable", 1, true) or
+    string.find(tooltip, "emits a high frequency sound", 1, true) or
+    string.find(tooltip, "right click to summon and dismiss your", 1, true)
+  ) then
+    return "mountsCompanions"
+  end
+  if consumable and (
+    string.find(tooltip, "must remain seated while eating", 1, true) or
+    string.find(tooltip, "must remain seated while drinking", 1, true)
+  ) then
+    return "foodDrink"
+  end
+  if consumable and string.find(name, "potion", 1, true) then return "potions" end
+  if consumable and (
+    string.find(name, "elixir", 1, true) or string.find(name, "flask", 1, true)
+  ) then return "elixirs" end
+  if consumable and (
+    string.find(name, "bandage", 1, true) or string.find(name, "anti-venom", 1, true) or
+    string.find(name, "antivenom", 1, true)
+  ) then return "bandages" end
+  if consumable and string.sub(name, 1, 10) == "scroll of " then return "scrolls" end
+  if (consumable or tradeGoods) and (
+    string.find(name, "frost oil", 1, true) or string.find(name, "shadow oil", 1, true) or
+    string.find(name, "mana oil", 1, true) or string.find(name, "wizard oil", 1, true) or
+    string.find(name, "sharpening stone", 1, true) or string.find(name, "weightstone", 1, true)
+  ) then return "weaponBuffs" end
+  return nil
+end
+
+function ShirsInventory_ClassifyCategoryItem(item)
+  if not item or not item.hasItem then return "empty" end
+  if item.manualCategory then return item.manualCategory end
+  local classes = ShirsInventory_GetCategoryClasses()
+  if item.itemType == "Recipe" or item.itemType == classes.recipe then return "recipes" end
+  if item.itemType == "Quest" or item.quest or
+    (ShirsInventory_CategoryTextSignalsEnabled() and
+      ShirsInventory_CategoryContains(item.tooltipText, "Quest Item")) then return "quest" end
+  if item.itemType == "Key" then return "keys" end
+  local semantic = ShirsInventory_ClassifyCategorySemanticText(item, classes)
+  if semantic then return semantic end
+  if item.itemType == "Armor" or item.itemType == classes.armor then return "armor" end
+  if item.itemType == "Weapon" or item.itemType == classes.weapon then return "weapons" end
+  if item.itemType == "Container" or item.itemType == "Quiver" or
+    item.itemType == classes.container or item.itemType == classes.quiver then return "bags" end
+  if item.itemType == "Projectile" or item.itemType == classes.projectile then return "ammo" end
+  if item.itemSubType == "Explosives" then return "explosives" end
+  if item.itemType == "Consumable" or item.itemType == classes.consumable then return "consumables" end
+  if item.itemType == "Trade Goods" or item.itemType == classes.tradeGoods or
+    item.materialCategory then return "tradeGoods" end
+  if tonumber(item.quality) == 0 then return "junk" end
+  return "miscellaneous"
+end
+
+function ShirsInventory_BuildCategoryGroups(items)
+  local definitions = ShirsInventory_GetCategoryDefinitions()
+  local groupsByKey = {}
+  local definitionIndex
+  for definitionIndex = 1, table.getn(definitions) do
+    local definition = definitions[definitionIndex]
+    groupsByKey[definition.key] = {
+      key = definition.key,
+      label = definition.label,
+      custom = definition.custom,
+      items = {},
+    }
+  end
+  local itemIndex
+  for itemIndex = 1, table.getn(items or {}) do
+    local item = items[itemIndex]
+    local key = ShirsInventory_ClassifyCategoryItem(item)
+    table.insert(groupsByKey[key].items, item)
+  end
+  local emptyGroup = groupsByKey.empty
+  if emptyGroup then
+    emptyGroup.totalCount = table.getn(emptyGroup.items)
+    if emptyGroup.totalCount > 1 and ShirsInventory_GetCollapseEmptySlots and
+      ShirsInventory_GetCollapseEmptySlots() then
+      local representative = {}
+      local field, value
+      for field, value in pairs(emptyGroup.items[1]) do representative[field] = value end
+      representative.collapsedEmptyCount = emptyGroup.totalCount
+      emptyGroup.items = { representative }
+    end
+  end
+  local groups = {}
+  for definitionIndex = 1, table.getn(definitions) do
+    local definition = definitions[definitionIndex]
+    local group = groupsByKey[definition.key]
+    if table.getn(group.items) > 0 or group.custom then
+      local buckets, bucketOrder = {}, {}
+      local groupItemIndex
+      for groupItemIndex = 1, table.getn(group.items) do
+        local item = group.items[groupItemIndex]
+        local bucketKey
+        if item.hasItem and item.itemID then
+          bucketKey = "item:" .. item.itemID
+        else
+          bucketKey = "slot:" .. tostring(item.bag) .. ":" .. tostring(item.slot)
+        end
+        if not buckets[bucketKey] then
+          buckets[bucketKey] = {}
+          table.insert(bucketOrder, bucketKey)
+        end
+        table.insert(buckets[bucketKey], item)
+      end
+      group.items = {}
+      for groupItemIndex = 1, table.getn(bucketOrder) do
+        local bucket = buckets[bucketOrder[groupItemIndex]]
+        local copyIndex
+        for copyIndex = 1, table.getn(bucket) do table.insert(group.items, bucket[copyIndex]) end
+      end
+      table.insert(groups, group)
+    end
+  end
+  return groups
+end
+
+function ShirsInventory_GetCategoryGroupCount(group)
+  if not group then return 0 end
+  return group.totalCount or table.getn(group.items or {})
+end
+
+function ShirsInventory_GetCategoryHeaderText(group)
+  if not group then return "" end
+  if group.hideHeaderCount then return group.label or "" end
+  return (group.label or "") .. " (" .. ShirsInventory_GetCategoryGroupCount(group) .. ")"
+end
+
+local SHIRS_INVENTORY_COMPACT_CATEGORY_LABELS = {
+  quest = "Quest",
+  keys = "Keys",
+  mountsCompanions = "Pets",
+  armor = "Armor",
+  weapons = "Weap.",
+  equipment = "Gear",
+  bags = "Bags",
+  ammo = "Ammo",
+  recipes = "Recipe",
+  foodDrink = "Food",
+  potions = "Pots",
+  elixirs = "Buffs",
+  bandages = "Aid",
+  scrolls = "Scroll",
+  weaponBuffs = "W.Buff",
+  consumables = "Other",
+  explosives = "Bombs",
+  tradeGoods = "Mats",
+  junk = "Junk",
+  miscellaneous = "Misc",
+  empty = "Empty",
+}
+
+function ShirsInventory_GetCategoryHeaderTooltipText(group)
+  if not group then return "" end
+  if group.tooltipLabel then
+    return group.tooltipLabel .. " (" .. ShirsInventory_GetCategoryGroupCount(group) .. ")"
+  end
+  return ShirsInventory_GetCategoryHeaderText(group)
+end
+
+local function ShirsInventory_EncodeCompactCategoryID(value)
+  local digits = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+  local number = math.floor(tonumber(value) or 0)
+  if number <= 0 then return nil end
+  local encoded = ""
+  while number > 0 do
+    local remainder = math.mod(number, 36)
+    encoded = string.sub(digits, remainder + 1, remainder + 1) .. encoded
+    number = math.floor(number / 36)
+  end
+  return encoded
+end
+
+function ShirsInventory_GetCategoryHeaderDisplayText(group)
+  if not group then return "" end
+  local fullText = ShirsInventory_GetCategoryHeaderText(group)
+  local maximumCharacters = math.max(1, tonumber(group.columns) or 1) * 6
+  if string.len(fullText) <= maximumCharacters then return fullText end
+  local compact = SHIRS_INVENTORY_COMPACT_CATEGORY_LABELS[group.key]
+  if not compact and type(group.key) == "string" then
+    local _, _, customID = string.find(group.key, "^custom:(%d+)$")
+    local encodedID = customID and ShirsInventory_EncodeCompactCategoryID(customID) or nil
+    if encodedID then compact = "C" .. encodedID end
+  end
+  compact = compact or "Group"
+  local compactWithCount = compact
+  if not group.hideHeaderCount then
+    compactWithCount = compact .. " (" .. ShirsInventory_GetCategoryGroupCount(group) .. ")"
+  end
+  if string.len(compactWithCount) <= maximumCharacters then return compactWithCount end
+  if string.len(compact) <= maximumCharacters then return compact end
+  return string.sub(compact, 1, maximumCharacters)
+end
+
+function ShirsInventory_BuildCategoryFreeStates(items)
+  local states = {}
+  local index
+  for index = 1, table.getn(items or {}) do
+    table.insert(states, { bag = items[index].bag, hasItem = items[index].hasItem })
+  end
+  return states
+end
+
+function ShirsInventory_BuildCategoryLayout(groups, columns)
+  columns = math.max(10, math.min(20, math.floor(tonumber(columns) or 10)))
+  local layout = {
+    columns = columns,
+    width = 28 + columns * 40,
+    height = 0,
+    groups = {},
+  }
+  local shelf = {}
+  local shelfColumns = 0
+  local shelfRows = 0
+
+  local function FinishShelf()
+    if table.getn(shelf) == 0 then return end
+    local shelfHeight = 18 + shelfRows * 40 + 8
+    local shelfIndex
+    for shelfIndex = 1, table.getn(shelf) do
+      local group = shelf[shelfIndex]
+      group.labelY = layout.height
+      group.itemY = layout.height + 18
+      table.insert(layout.groups, group)
+    end
+    layout.height = layout.height + shelfHeight
+    shelf = {}
+    shelfColumns = 0
+    shelfRows = 0
+  end
+
+  local groupIndex
+  for groupIndex = 1, table.getn(groups or {}) do
+    local source = groups[groupIndex]
+    local itemCount = table.getn(source.items or {})
+    local groupColumns = math.min(columns, math.max(1, itemCount))
+    local collapsedEmpty = source.key == "empty" and itemCount == 1 and
+      source.items[1] and source.items[1].collapsedEmptyCount
+    local separatorColumns = shelfColumns > 0 and 1 or 0
+    local columnX
+    if collapsedEmpty then
+      columnX = columns - 1
+      if shelfColumns > 0 and shelfColumns + 1 > columnX then
+        FinishShelf()
+      end
+      columnX = columns - 1
+    else
+      if shelfColumns > 0 and shelfColumns + separatorColumns + groupColumns > columns then
+        FinishShelf()
+        separatorColumns = 0
+      end
+      columnX = shelfColumns + separatorColumns
+    end
+    local rows = math.ceil(itemCount / groupColumns)
+    local group = {
+      key = source.key,
+      label = collapsedEmpty and "Empty" or source.label,
+      tooltipLabel = source.label,
+      hideHeaderCount = collapsedEmpty and true or nil,
+      items = source.items,
+      totalCount = ShirsInventory_GetCategoryGroupCount(source),
+      columnX = columnX,
+      columns = groupColumns,
+      rows = rows,
+    }
+    table.insert(shelf, group)
+    if collapsedEmpty then
+      shelfColumns = columns
+    else
+      shelfColumns = columnX + groupColumns
+    end
+    shelfRows = math.max(shelfRows, rows)
+  end
+  FinishShelf()
+  return layout
+end
+
+function ShirsInventory_ShouldShowInventoryAction(action, bank)
+  if bank or not (ShirsInventory_GetCategoryMode and ShirsInventory_GetCategoryMode()) then return true end
+  return action == "sort" or action == "mode" or action == "settings"
+end
+
 function ShirsInventory_GetRarityBorderLayout()
   return {
     thickness = 1,
@@ -305,8 +794,7 @@ end
 function ShirsInventory_IsQuestItemType(itemType)
   if not itemType then return false end
   if itemType == "Quest" then return true end
-  if ITEM_CLASS_QUEST and itemType == ITEM_CLASS_QUEST then return true end
-  if type(AUCTION_CLASSES) == "table" and itemType == AUCTION_CLASSES[9] then return true end
+  if type(ITEM_CLASS_QUEST) == "string" and itemType == ITEM_CLASS_QUEST then return true end
   return false
 end
 
@@ -501,6 +989,23 @@ function ShirsInventory_HandleItemClick(button, mouseButton, ignoreModifiers)
     return true
   end
   local texture, count, locked, quality = GetContainerItemInfo(bag, slot)
+  if ShirsInventory_GetCategoryEditMode and ShirsInventory_GetCategoryEditMode() then
+    if not texture then return true end
+    local itemID = ShirsInventory_GetItemId(GetContainerItemLink(bag, slot))
+    if mouseButton == "RightButton" and not ignoreModifiers then
+      ShirsInventory_ClearCategoryEditDrag()
+      local cleared = ShirsInventory_ClearCategoryAssignment and ShirsInventory_ClearCategoryAssignment(itemID)
+      if cleared and ShirsInventory_Message then
+        ShirsInventory_Message("Returned this item type to automatic category placement.")
+      end
+      if cleared and ShirsInventory_Update then ShirsInventory_Update() end
+      return true
+    end
+    if mouseButton == "LeftButton" then
+      return ShirsInventory_BeginCategoryEditDrag and ShirsInventory_BeginCategoryEditDrag(itemID) or false
+    end
+    return true
+  end
   if not texture then
     if mouseButton == "LeftButton" then
       PickupContainerItem(bag, slot)
@@ -510,19 +1015,29 @@ function ShirsInventory_HandleItemClick(button, mouseButton, ignoreModifiers)
   end
 
   if mouseButton == "RightButton" and not ignoreModifiers and bag >= 0 and bag <= 4 and
+    not (ShirsInventory_GetCategoryMode and ShirsInventory_GetCategoryMode()) and
     IsControlKeyDown and IsControlKeyDown() and not (IsAltKeyDown and IsAltKeyDown()) then
     local itemId = ShirsInventory_GetItemId(GetContainerItemLink(bag, slot))
     local ok, status = ShirsInventory_ToggleHearthstoneItem(itemId)
     if status == "added" then
-      ShirsInventory_Message("Added this item type beside Hearthstone.")
+      if ShirsInventory_GetLockSelectedItemSlots() then
+        ShirsInventory_Message("Added this item type to the selected list. Its carried slots will stay locked during sorting.")
+      elseif ShirsInventory_GetAutomaticHearthstoneItems() then
+        ShirsInventory_Message("Added this item type to the selected list. Switch to Selected mode to use it.")
+      else
+        ShirsInventory_Message("Added this item type beside Hearthstone.")
+      end
     elseif status == "removed" then
-      ShirsInventory_Message("Removed this item type from beside Hearthstone.")
+      ShirsInventory_Message("Removed this item type from the selected list.")
     elseif status == "fixed" then
       ShirsInventory_Message("Hearthstone is always fixed at the selected edge.")
     elseif status == "full" then
-      ShirsInventory_Message("The Hearthstone item list is full.")
+      ShirsInventory_Message("The selected item list is full (30).")
     elseif not ok then
-      ShirsInventory_Message("This item could not be selected beside Hearthstone.")
+      ShirsInventory_Message("This item could not be added to the selected list.")
+    end
+    if type(ShirsInventory_RefreshHearthstoneItemsFrame) == "function" then
+      ShirsInventory_RefreshHearthstoneItemsFrame()
     end
     if ShirsInventory_Update then ShirsInventory_Update() end
     if ShirsInventoryBankFrame and ShirsInventoryBankFrame.IsShown and
@@ -795,6 +1310,7 @@ local inventoryButtons = {}
 local bagBarButtons = {}
 local bankButtons = {}
 local bankBagButtons = {}
+local categoryRebuildPending
 local bankPurchaseButton
 local saleElapsed = 0
 
@@ -1038,11 +1554,11 @@ function ShirsInventory_InventoryUsesIconControls()
   return true
 end
 
-function ShirsInventory_GetInventoryButtonSpecs()
+function ShirsInventory_GetInventoryButtonSpecs(bank)
   local mode = ShirsInventory_GetSortMode and ShirsInventory_GetSortMode() or "itemType"
   local direction = ShirsInventory_GetDirection and ShirsInventory_GetDirection() or "bottom"
   local iconSize = ShirsInventory_GetInventoryActionVisualModel().iconSize
-  return {
+  local specs = {
     sort = {
       text = "Sort",
       icon = "Interface\\Icons\\INV_Misc_Bag_08",
@@ -1084,6 +1600,31 @@ function ShirsInventory_GetInventoryButtonSpecs()
       tooltipHint = "Click to open Settings.",
     },
   }
+  if not bank and ShirsInventory_GetCategoryMode and ShirsInventory_GetCategoryMode() then
+    local editing = ShirsInventory_GetCategoryEditMode()
+    specs.sort = {
+      text = "Manage",
+      icon = "Interface\\Icons\\INV_Misc_Note_01",
+      iconSize = iconSize,
+      texCoord = {0.08, 0.92, 0.08, 0.92},
+      tooltipTitle = "Category settings",
+      tooltipDescription = "Show or hide Category Settings to create or delete visual categories and choose how Empty Slots appear.",
+      tooltipHint = "Click to show or hide Category Settings.",
+    }
+    specs.mode = {
+      text = editing and "Done" or "Edit",
+      icon = editing and "Interface\\Icons\\INV_Misc_Note_05" or "Interface\\Icons\\INV_Misc_Note_03",
+      iconSize = iconSize,
+      texCoord = {0.08, 0.92, 0.08, 0.92},
+      tooltipTitle = editing and "Finish category editing" or "Edit categories",
+      tooltipDescription = editing and
+        "Return item dragging to normal physical bag movement." or
+        "Make item dragging assign item types to category headings without moving bag slots.",
+      tooltipHint = editing and "Click to leave category edit mode." or
+        "Click, then drag an item onto a category heading.",
+    }
+  end
+  return specs
 end
 
 function ShirsInventory_LayoutInventoryControls(frame)
@@ -1115,7 +1656,7 @@ end
 function ShirsInventory_RefreshActionButtonStyles(frame, bank)
   if not frame or type(ShirsInventory_ApplyButtonStyle) ~= "function" then return end
   ShirsInventory_LayoutInventoryControls(frame)
-  local specs = ShirsInventory_GetInventoryButtonSpecs()
+  local specs = ShirsInventory_GetInventoryButtonSpecs(bank)
   if bank then
     specs.sort.tooltipTitle = "Sort bank"
     specs.sort.tooltipDescription = "Arrange the main bank and all equipped bank bags with Shir's sorting engine."
@@ -1128,6 +1669,21 @@ function ShirsInventory_RefreshActionButtonStyles(frame, bank)
   ShirsInventory_ApplyButtonStyle(frame.modeButton, specs.mode)
   ShirsInventory_ApplyButtonStyle(frame.directionButton, specs.direction)
   ShirsInventory_ApplyButtonStyle(frame.settingsButton, specs.settings)
+  local actions = {
+    { name = "sort", button = frame.sortButton },
+    { name = "mode", button = frame.modeButton },
+    { name = "direction", button = frame.directionButton },
+    { name = "settings", button = frame.settingsButton },
+  }
+  local actionIndex
+  for actionIndex = 1, table.getn(actions) do
+    local action = actions[actionIndex]
+    if ShirsInventory_ShouldShowInventoryAction(action.name, bank) then
+      action.button:Show()
+    else
+      action.button:Hide()
+    end
+  end
 end
 
 function ShirsInventory_RefreshInventoryButtonStyles()
@@ -1138,7 +1694,30 @@ function ShirsInventory_RefreshBankButtonStyles()
   ShirsInventory_RefreshActionButtonStyles(ShirsInventoryBankFrame, true)
 end
 
-function ShirsInventory_OnModeButtonClick()
+function ShirsInventory_OnSortButtonClick(bank)
+  if not bank and ShirsInventory_GetCategoryMode and ShirsInventory_GetCategoryMode() then
+    if ShirsInventory_ToggleCategoryManager then return ShirsInventory_ToggleCategoryManager() end
+    return false
+  end
+  if bank then
+    if ShirsInventory_SortBank then return ShirsInventory_SortBank() end
+  elseif ShirsInventory_SortBags then
+    return ShirsInventory_SortBags()
+  end
+  return false
+end
+
+function ShirsInventory_OnModeButtonClick(bank)
+  if not bank and ShirsInventory_GetCategoryMode and ShirsInventory_GetCategoryMode() then
+    local wasEditing = ShirsInventory_GetCategoryEditMode()
+    local editing = ShirsInventory_ToggleCategoryEditMode()
+    if not wasEditing and not editing and ShirsInventory_Message then
+      ShirsInventory_Message("Finish the current item move before editing categories.")
+    end
+    if ShirsInventory_Update then ShirsInventory_Update() end
+    ShirsInventory_UpdateControlLabels()
+    return editing
+  end
   local mode
   if ShirsInventory_ToggleSortMode then mode = ShirsInventory_ToggleSortMode() end
   ShirsInventory_UpdateControlLabels()
@@ -1388,6 +1967,15 @@ local function ShirsInventory_OnItemEnter(button)
   ShirsInventory_SetItemTooltip(button)
   local itemId = ShirsInventory_GetItemId(GetContainerItemLink(button.bag, button.slot))
   ShirsInventory_AddAccountItemTooltip(GameTooltip, itemId)
+  if ShirsInventory_GetCategoryEditMode and ShirsInventory_GetCategoryEditMode() then
+    GameTooltip:AddLine("Drag onto a category heading to place this item type there", 0.4, 0.85, 1, true)
+    if ShirsInventory_GetCategoryAssignment and ShirsInventory_GetCategoryAssignment(itemId) then
+      GameTooltip:AddLine("Right-click to restore automatic placement", 0.65, 0.85, 1, true)
+    end
+    GameTooltip:Show()
+    if ShirsInventory_HasCategoryEditDrag() and SetCursor then SetCursor("CAST_CURSOR") end
+    return
+  end
   local _, _, locked, quality, readable = GetContainerItemInfo(button.bag, button.slot)
   if ShirsInventory_ShouldShowJunkHint(button) then
     if (not ShirsInventory_IsFeatureEnabled or ShirsInventory_IsFeatureEnabled("junk")) and
@@ -1402,7 +1990,20 @@ local function ShirsInventory_OnItemEnter(button)
     end
   end
   if button.bag >= 0 and button.bag <= 4 then
-    if ShirsInventory_GetHearthstoneItemIndex(itemId) then
+    local selectedItem = ShirsInventory_GetHearthstoneItemIndex(itemId) ~= nil
+    if ShirsInventory_GetLockSelectedItemSlots() then
+      if selectedItem then
+        GameTooltip:AddLine("Ctrl-right-click to unlock this item type's slots", 0.55, 0.8, 1)
+      elseif itemId ~= 6948 then
+        GameTooltip:AddLine("Ctrl-right-click to lock this item type's slots", 0.55, 0.8, 1)
+      end
+    elseif ShirsInventory_GetAutomaticHearthstoneItems() then
+      if selectedItem then
+        GameTooltip:AddLine("Ctrl-right-click to remove from selected list", 0.55, 0.8, 1)
+      elseif itemId ~= 6948 then
+        GameTooltip:AddLine("Ctrl-right-click to add to selected list", 0.55, 0.8, 1)
+      end
+    elseif selectedItem then
       GameTooltip:AddLine("Ctrl-right-click to remove from beside Hearthstone", 0.55, 0.8, 1)
     elseif itemId ~= 6948 then
       GameTooltip:AddLine("Ctrl-right-click to keep beside Hearthstone", 0.55, 0.8, 1)
@@ -1479,11 +2080,25 @@ local function ShirsInventory_CreateItemButton(index, ownerFrame, namePrefix, co
 
   button:SetScript("OnClick", function() ShirsInventory_HandleItemClick(this, arg1) end)
   button:SetScript("OnDragStart", function() ShirsInventory_HandleItemClick(this, "LeftButton", true) end)
-  button:SetScript("OnReceiveDrag", function() ShirsInventory_HandleItemClick(this, "LeftButton", true) end)
+  button:SetScript("OnDragStop", function()
+    if ShirsInventory_GetCategoryEditMode and ShirsInventory_GetCategoryEditMode() then
+      ShirsInventory_SetCategoryEditHover(ShirsInventory_GetCategoryEditDropTarget())
+      ShirsInventory_FinishCategoryEditDrag()
+    end
+  end)
+  button:SetScript("OnReceiveDrag", function()
+    if not (ShirsInventory_GetCategoryEditMode and ShirsInventory_GetCategoryEditMode()) then
+      ShirsInventory_HandleItemClick(this, "LeftButton", true)
+    end
+  end)
   button:SetScript("OnEnter", function() ShirsInventory_OnItemEnter(this) end)
   button:SetScript("OnLeave", function()
     GameTooltip:Hide()
-    ResetCursor()
+    if ShirsInventory_HasCategoryEditDrag and ShirsInventory_HasCategoryEditDrag() then
+      if SetCursor then SetCursor("CAST_CURSOR") end
+    else
+      ResetCursor()
+    end
   end)
   button:SetScript("OnUpdate", function()
     ShirsInventory_UpdateCooldownDisplay(this, arg1)
@@ -1886,7 +2501,13 @@ function ShirsInventory_ApplyWindowScaleSetting()
   return true
 end
 
-local function ShirsInventory_RebuildGrid()
+local function ShirsInventory_HideCategoryHeaders()
+  local index
+  for index = 1, table.getn(categoryHeaders) do categoryHeaders[index]:Hide() end
+end
+
+function ShirsInventory_RebuildStandardGrid()
+  ShirsInventory_HideCategoryHeaders()
   local counts = ShirsInventory_GetInventorySlotCounts()
   local freeStates = {}
   local slots = ShirsInventory_BuildInventorySlots(counts)
@@ -1918,10 +2539,242 @@ local function ShirsInventory_RebuildGrid()
   ShirsInventoryFrame.freeText:SetText(ShirsInventory_CountFreeInventorySlots(freeStates) .. " free")
 end
 
+local shirsInventoryCategoryScanTooltip
+
+function ShirsInventory_GetCategoryTooltipText(bag, slot)
+  if type(CreateFrame) ~= "function" or type(getglobal) ~= "function" then return "" end
+  if not shirsInventoryCategoryScanTooltip then
+    shirsInventoryCategoryScanTooltip = CreateFrame(
+      "GameTooltip", "ShirsInventoryCategoryScanTooltip", UIParent, "GameTooltipTemplate"
+    )
+    if shirsInventoryCategoryScanTooltip.SetOwner then
+      shirsInventoryCategoryScanTooltip:SetOwner(UIParent, "ANCHOR_NONE")
+    end
+  end
+  local tooltip = shirsInventoryCategoryScanTooltip
+  if tooltip.ClearLines then tooltip:ClearLines() end
+  if not tooltip.SetBagItem then return "" end
+  tooltip:SetBagItem(bag, slot)
+  local lines = {}
+  local lineCount = tooltip.NumLines and tooltip:NumLines() or 0
+  local lineIndex
+  for lineIndex = 1, lineCount do
+    local left = getglobal("ShirsInventoryCategoryScanTooltipTextLeft" .. lineIndex)
+    local right = getglobal("ShirsInventoryCategoryScanTooltipTextRight" .. lineIndex)
+    local leftText = left and left.GetText and left:GetText() or nil
+    local rightText = right and right.GetText and right:GetText() or nil
+    if type(leftText) == "string" and leftText ~= "" then table.insert(lines, leftText) end
+    if type(rightText) == "string" and rightText ~= "" then table.insert(lines, rightText) end
+  end
+  if tooltip.Hide then tooltip:Hide() end
+  return table.concat(lines, "\n")
+end
+
+local function ShirsInventory_ShouldScanCategoryTooltip(itemType, quality)
+  if not ShirsInventory_CategoryTextSignalsEnabled() then return false end
+  return itemType == "Consumable" or itemType == "Miscellaneous" or tonumber(quality) == 0
+end
+
+local function ShirsInventory_BuildCategoryInventoryItems(slots)
+  local items = {}
+  local index
+  for index = 1, table.getn(slots) do
+    local address = slots[index]
+    local texture, count, locked, quality, readable = GetContainerItemInfo(address.bag, address.slot)
+    local link = texture and GetContainerItemLink and GetContainerItemLink(address.bag, address.slot) or nil
+    local info = ShirsInventory_GetItemInfoFields(link)
+    local itemID = link and ShirsInventory_GetItemId and ShirsInventory_GetItemId(link) or nil
+    local resolvedQuality = ShirsInventory_ResolveItemQuality(quality, info.quality)
+    local materialCategory = itemID and ShirsInventory_GetMaterialCategory and
+      ShirsInventory_GetMaterialCategory(itemID, info.itemType, info.itemSubType) or nil
+    local tooltipText = ""
+    if texture and ShirsInventory_ShouldScanCategoryTooltip(info.itemType, resolvedQuality) then
+      tooltipText = ShirsInventory_GetCategoryTooltipText(address.bag, address.slot)
+    end
+    table.insert(items, {
+      bag = address.bag,
+      slot = address.slot,
+      itemID = itemID,
+      hasItem = texture and true or false,
+      texture = texture,
+      count = count,
+      locked = locked,
+      readable = readable,
+      quality = resolvedQuality,
+      itemType = info.itemType,
+      itemSubType = info.itemSubType,
+      materialCategory = materialCategory,
+      manualCategory = itemID and ShirsInventory_GetCategoryAssignment and
+        ShirsInventory_GetCategoryAssignment(itemID) or nil,
+      quest = ShirsInventory_IsQuestItemType(info.itemType),
+      name = info.name,
+      tooltipText = tooltipText,
+    })
+  end
+  return items
+end
+
+function ShirsInventory_ShouldDeferCategoryRebuild()
+  if ShirsInventory_HasCategoryEditDrag and ShirsInventory_HasCategoryEditDrag() then return true end
+  if CursorHasItem and CursorHasItem() then return true end
+  if GetCursorInfo then
+    local cursorType = GetCursorInfo()
+    if cursorType == "item" then return true end
+  end
+  if GetContainerItemInfo and ShirsInventory_GetInventorySlotCounts and ShirsInventory_BuildInventorySlots then
+    local slots = ShirsInventory_BuildInventorySlots(ShirsInventory_GetInventorySlotCounts())
+    local index
+    for index = 1, table.getn(slots) do
+      local address = slots[index]
+      local _, _, locked = GetContainerItemInfo(address.bag, address.slot)
+      if locked then return true end
+    end
+  end
+  return false
+end
+
+function ShirsInventory_HasPendingCategoryRebuild()
+  return categoryRebuildPending and true or false
+end
+
+local function ShirsInventory_GetCategoryHeader(index)
+  local header = categoryHeaders[index]
+  if header then return header end
+  header = CreateFrame("Button", nil, ShirsInventoryFrame)
+  header:SetHeight(18)
+  header.text = header:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+  header.text:SetAllPoints(header)
+  header.text:SetTextColor(1, 0.78, 0.18)
+  header.text:SetJustifyH("LEFT")
+  header:SetScript("OnEnter", function()
+    if GameTooltip and GameTooltip.SetOwner and this.shirsFullCategoryText then
+      GameTooltip:SetOwner(this, "ANCHOR_TOPLEFT")
+      GameTooltip:SetText(this.shirsFullCategoryText, 1, 0.82, 0)
+      GameTooltip:Show()
+    end
+    if ShirsInventory_GetCategoryEditMode() and ShirsInventory_SetCategoryEditHover(this.categoryKey) then
+      this.text:SetTextColor(0.25, 1, 0.35)
+    end
+  end)
+  header:SetScript("OnLeave", function()
+    if GameTooltip then GameTooltip:Hide() end
+    ShirsInventory_SetCategoryEditHover(nil)
+    if ShirsInventory_GetCategoryEditMode() and this.categoryKey ~= "empty" then
+      this.text:SetTextColor(0.4, 0.85, 1)
+    else
+      this.text:SetTextColor(1, 0.78, 0.18)
+    end
+    if ShirsInventory_HasCategoryEditDrag() and SetCursor then SetCursor("CAST_CURSOR") end
+  end)
+  header:SetScript("OnClick", function()
+    if arg1 == "LeftButton" and ShirsInventory_HasCategoryEditDrag() then
+      ShirsInventory_SetCategoryEditHover(this.categoryKey)
+      ShirsInventory_FinishCategoryEditDrag()
+    end
+  end)
+  categoryHeaders[index] = header
+  return header
+end
+
+function ShirsInventory_RebuildCategoryGrid()
+  if ShirsInventory_ShouldDeferCategoryRebuild() then
+    categoryRebuildPending = true
+    return false, "deferred"
+  end
+  categoryRebuildPending = nil
+  local counts = ShirsInventory_GetInventorySlotCounts()
+  local slots = ShirsInventory_BuildInventorySlots(counts)
+  local items = ShirsInventory_BuildCategoryInventoryItems(slots)
+  local groups = ShirsInventory_BuildCategoryGroups(items)
+  local layout = ShirsInventory_BuildCategoryLayout(groups, ShirsInventory_GetItemsPerRow())
+  local bagBarLayout = ShirsInventory_GetBagBarLayout()
+  local freeStates = ShirsInventory_BuildCategoryFreeStates(items)
+  local buttonIndex = 0
+  local groupIndex
+
+  ShirsInventoryFrame:SetWidth(layout.width)
+  ShirsInventoryFrame:SetHeight(layout.height + 92 + bagBarLayout.heightExtra)
+  ShirsInventory_RecoverInventoryViewport(ShirsInventoryFrame)
+  ShirsInventory_UpdateBagBar()
+
+  for groupIndex = 1, table.getn(layout.groups) do
+    local group = layout.groups[groupIndex]
+    local header = ShirsInventory_GetCategoryHeader(groupIndex)
+    header:ClearAllPoints()
+    header:SetWidth(group.columns * 40)
+    header:SetPoint(
+      "TOPLEFT", ShirsInventoryFrame, "TOPLEFT", 14 + group.columnX * 40,
+      bagBarLayout.gridTopOffset - group.labelY
+    )
+    header.categoryKey = group.key
+    header.shirsFullCategoryText = ShirsInventory_GetCategoryHeaderTooltipText(group)
+    header.text:SetText(ShirsInventory_GetCategoryHeaderDisplayText(group))
+    if ShirsInventory_GetCategoryEditMode() then
+      if group.key == "empty" then
+        header.text:SetTextColor(0.55, 0.55, 0.55)
+      else
+        header.text:SetTextColor(0.4, 0.85, 1)
+      end
+    else
+      header.text:SetTextColor(1, 0.78, 0.18)
+    end
+    header:Show()
+    local itemIndex
+    for itemIndex = 1, table.getn(group.items) do
+      local item = group.items[itemIndex]
+      buttonIndex = buttonIndex + 1
+      local button = inventoryButtons[buttonIndex] or ShirsInventory_CreateItemButton(buttonIndex)
+      button.shirsInventorySearchEnabled = true
+      button.shirsInventorySearchFrame = nil
+      button.bag = item.bag
+      button.slot = item.slot
+      button:SetID(item.slot)
+      button:ClearAllPoints()
+      local column = math.mod(itemIndex - 1, group.columns)
+      local row = math.floor((itemIndex - 1) / group.columns)
+      button:SetPoint(
+        "TOPLEFT", ShirsInventoryFrame, "TOPLEFT",
+        14 + (group.columnX + column) * 40,
+        bagBarLayout.gridTopOffset - group.itemY - row * 40
+      )
+      button:Show()
+      ShirsInventory_UpdateItemButton(button)
+      if item.collapsedEmptyCount then SetItemButtonCount(button, item.collapsedEmptyCount) end
+    end
+  end
+  local headerIndex
+  for headerIndex = table.getn(layout.groups) + 1, table.getn(categoryHeaders) do
+    categoryHeaders[headerIndex]:Hide()
+  end
+  for buttonIndex = buttonIndex + 1, table.getn(inventoryButtons) do
+    inventoryButtons[buttonIndex]:Hide()
+  end
+  ShirsInventoryFrame.freeText:SetText(ShirsInventory_CountFreeInventorySlots(freeStates) .. " free")
+  return true
+end
+
 function ShirsInventory_Update()
   if not ShirsInventoryFrame or not ShirsInventoryFrame:IsShown() then return end
-  ShirsInventory_RebuildGrid()
+  if ShirsInventory_GetCategoryMode and ShirsInventory_GetCategoryMode() then
+    if ShirsInventory_ShouldDeferCategoryRebuild() then
+      categoryRebuildPending = true
+    else
+      categoryRebuildPending = nil
+      ShirsInventory_RebuildCategoryGrid()
+    end
+  else
+    categoryRebuildPending = nil
+    ShirsInventory_RebuildStandardGrid()
+  end
   ShirsInventory_UpdateControlLabels()
+end
+
+function ShirsInventory_ProcessDeferredCategoryRebuild()
+  if not categoryRebuildPending then return false end
+  if not ShirsInventoryFrame or not ShirsInventoryFrame:IsShown() then return false end
+  if ShirsInventory_ShouldDeferCategoryRebuild() then return false end
+  ShirsInventory_Update()
+  return not categoryRebuildPending
 end
 
 function ShirsInventory_RequestBankSlotPurchase()
@@ -1961,14 +2814,12 @@ function ShirsInventory_CreateBankActionButtons(frame)
   frame.sortButton:SetWidth(64)
   frame.sortButton:SetHeight(22)
   frame.sortButton:SetText("Sort")
-  frame.sortButton:SetScript("OnClick", function()
-    if ShirsInventory_SortBank then ShirsInventory_SortBank() end
-  end)
+  frame.sortButton:SetScript("OnClick", function() ShirsInventory_OnSortButtonClick(true) end)
 
   frame.modeButton = CreateFrame("Button", nil, frame)
   frame.modeButton:SetWidth(80)
   frame.modeButton:SetHeight(22)
-  frame.modeButton:SetScript("OnClick", function() ShirsInventory_OnModeButtonClick() end)
+  frame.modeButton:SetScript("OnClick", function() ShirsInventory_OnModeButtonClick(true) end)
 
   frame.directionButton = CreateFrame("Button", nil, frame)
   frame.directionButton:SetWidth(64)
@@ -2418,15 +3269,13 @@ local function ShirsInventory_CreateMainFrame()
   frame.sortButton:SetHeight(22)
   frame.sortButton:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 14, 13)
   frame.sortButton:SetText("Sort")
-  frame.sortButton:SetScript("OnClick", function()
-    if ShirsInventory_SortBags then ShirsInventory_SortBags() end
-  end)
+  frame.sortButton:SetScript("OnClick", function() ShirsInventory_OnSortButtonClick(false) end)
 
   frame.modeButton = CreateFrame("Button", nil, frame)
   frame.modeButton:SetWidth(80)
   frame.modeButton:SetHeight(22)
   frame.modeButton:SetPoint("LEFT", frame.sortButton, "RIGHT", 4, 0)
-  frame.modeButton:SetScript("OnClick", function() ShirsInventory_OnModeButtonClick() end)
+  frame.modeButton:SetScript("OnClick", function() ShirsInventory_OnModeButtonClick(false) end)
 
   frame.directionButton = CreateFrame("Button", nil, frame)
   frame.directionButton:SetWidth(64)
@@ -2456,6 +3305,7 @@ local function ShirsInventory_CreateMainFrame()
   end)
   frame:SetScript("OnHide", function()
     if ShirsInventory_OnInventoryVisibilityChanged then ShirsInventory_OnInventoryVisibilityChanged() end
+    ShirsInventory_SetCategoryEditMode(false)
     ShirsInventory_ClearSearch(frame)
     if frame.searchBox and frame.searchBox.ClearFocus then frame.searchBox:ClearFocus() end
     ShirsInventory_SetBagChecks(0)
@@ -2464,6 +3314,7 @@ local function ShirsInventory_CreateMainFrame()
   end)
   frame:SetScript("OnUpdate", function()
     ShirsInventory_ProcessDeferredSearchFocus(this)
+    ShirsInventory_ProcessDeferredCategoryRebuild()
   end)
   frame:SetScript("OnDragStart", function() this:StartMoving() end)
   frame:SetScript("OnDragStop", function()
@@ -2500,20 +3351,35 @@ function ShirsInventory_HandleSlashCommand(message)
     local ok, status, itemId = ShirsInventory_SetHearthstoneItem(value, command == "pin")
     if ok then
       if status == "added" then
-        ShirsInventory_Message("Added item " .. itemId .. " beside Hearthstone.")
+        if ShirsInventory_GetLockSelectedItemSlots() then
+          ShirsInventory_Message("Added item " .. itemId .. " to the selected list. Its carried slots will stay locked during sorting.")
+        elseif ShirsInventory_GetAutomaticHearthstoneItems() then
+          ShirsInventory_Message("Added item " .. itemId .. " to the selected list. Switch to Selected mode to use it.")
+        else
+          ShirsInventory_Message("Added item " .. itemId .. " beside Hearthstone.")
+        end
       elseif status == "removed" then
-        ShirsInventory_Message("Removed item " .. itemId .. " from beside Hearthstone.")
+        ShirsInventory_Message("Removed item " .. itemId .. " from the selected list.")
       elseif status == "present" then
-        ShirsInventory_Message("Item " .. itemId .. " is already beside Hearthstone.")
+        if ShirsInventory_GetLockSelectedItemSlots() then
+          ShirsInventory_Message("Item " .. itemId .. " is already in the selected list. Its carried slots stay locked during sorting.")
+        elseif ShirsInventory_GetAutomaticHearthstoneItems() then
+          ShirsInventory_Message("Item " .. itemId .. " is already in the selected list. Switch to Selected mode to use it.")
+        else
+          ShirsInventory_Message("Item " .. itemId .. " is already beside Hearthstone.")
+        end
       elseif status == "absent" then
-        ShirsInventory_Message("Item " .. itemId .. " is not in the Hearthstone list.")
+        ShirsInventory_Message("Item " .. itemId .. " is not in the selected list.")
       end
     elseif status == "fixed" then
       ShirsInventory_Message("Hearthstone is always fixed at the selected edge.")
     elseif status == "full" then
-      ShirsInventory_Message("The Hearthstone item list is full.")
+      ShirsInventory_Message("The selected item list is full (30).")
     else
       ShirsInventory_Message("Use /si " .. command .. " <item ID or item link>.")
+    end
+    if type(ShirsInventory_RefreshHearthstoneItemsFrame) == "function" then
+      ShirsInventory_RefreshHearthstoneItemsFrame()
     end
     return ok
   elseif command == "mark" or command == "unmark" then

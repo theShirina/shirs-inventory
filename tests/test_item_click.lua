@@ -1,6 +1,7 @@
 local corePath, junkPath, uiPath = arg[1], arg[2], arg[3]
 ShirsInventoryDB = { junkItems = {} }
-DEFAULT_CHAT_FRAME = { AddMessage = function() end }
+local chatMessages = {}
+DEFAULT_CHAT_FRAME = { AddMessage = function(_, text) table.insert(chatMessages, text) end }
 
 local altDown = true
 local controlDown = false
@@ -81,6 +82,8 @@ local bankRefreshesBeforeSelection = bankRefreshes
 handled = ShirsInventory_HandleItemClick(button, "RightButton")
 assert(handled and ShirsInventory_GetHearthstoneItemIndex(7076) == 1,
   "Ctrl-right-click should select the item beside Hearthstone")
+assert(string.find(chatMessages[table.getn(chatMessages)] or "", "Switch to Selected mode", 1, true),
+  "Ctrl-right-click in Automatic mode did not explain when the saved selection becomes active")
 assert(used == 0 and picked == 0,
   "selecting a Hearthstone item must not use or move it")
 assert(inventoryRefreshes == refreshesBeforeSelection + 1 and
@@ -99,9 +102,30 @@ controlDown = false
 assert(ShirsInventory_HandleSlashCommand("pin 7076") and
   ShirsInventory_GetHearthstoneItemIndex(7076) == 1,
   "pin slash fallback did not add the selected item")
+assert(string.find(chatMessages[table.getn(chatMessages)] or "", "Switch to Selected mode", 1, true),
+  "slash pin in Automatic mode did not explain when the saved selection becomes active")
 assert(ShirsInventory_HandleSlashCommand("unpin 7076") and
   not ShirsInventory_GetHearthstoneItemIndex(7076),
   "unpin slash fallback did not remove the selected item")
+
+ShirsInventory_SetLockSelectedItemSlots(true)
+controlDown = true
+assert(ShirsInventory_HandleItemClick(button, "RightButton") and
+  ShirsInventory_GetHearthstoneItemIndex(7076) == 1,
+  "Ctrl-right-click did not add an item type while slot locking was enabled")
+assert(string.find(chatMessages[table.getn(chatMessages)] or "", "stay locked during sorting", 1, true),
+  "Ctrl-right-click did not explain active selected-slot locking")
+assert(ShirsInventory_HandleItemClick(button, "RightButton") and
+  not ShirsInventory_GetHearthstoneItemIndex(7076),
+  "second Ctrl-right-click did not remove the locked item type")
+controlDown = false
+assert(ShirsInventory_HandleSlashCommand("pin 7076"),
+  "slash pin did not add an item type while slot locking was enabled")
+assert(string.find(chatMessages[table.getn(chatMessages)] or "", "stay locked during sorting", 1, true),
+  "slash pin did not explain active selected-slot locking")
+assert(ShirsInventory_HandleSlashCommand("unpin 7076"),
+  "slash unpin did not remove the locked item type")
+ShirsInventory_SetLockSelectedItemSlots(false)
 
 ShirsInventory_HandleItemClick(button, "RightButton")
 assert(used == 1, "plain right-click should preserve native use behavior")
@@ -142,7 +166,9 @@ assert(resetCursor, "ordinary item hover should reset the cursor when no special
 
 local uiSource = assert(io.open(uiPath, "rb")):read("*a")
 assert(string.find(uiSource, "Ctrl%-right%-click to keep beside Hearthstone") and
-  string.find(uiSource, "Ctrl%-right%-click to remove from beside Hearthstone"),
-  "item tooltip does not explain the Hearthstone selection control and current state")
+  string.find(uiSource, "Ctrl%-right%-click to remove from beside Hearthstone") and
+  string.find(uiSource, "Ctrl%-right%-click to lock this item type's slots") and
+  string.find(uiSource, "Ctrl%-right%-click to unlock this item type's slots"),
+  "item tooltip does not explain Hearthstone and locked-slot selection states")
 
 print("ITEM_CLICK_TEST=PASS")

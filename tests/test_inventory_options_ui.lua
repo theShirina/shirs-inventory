@@ -6,6 +6,537 @@ assert(loadfile(corePath))()
 assert(loadfile(uiPath))()
 assert(loadfile(settingsPath))()
 
+assert(type(ShirsInventory_GetCategoryMode) == "function" and
+  type(ShirsInventory_SetCategoryMode) == "function",
+  "category-view setting API is missing")
+assert(not ShirsInventory_GetCategoryMode(),
+  "category view must default off")
+assert(ShirsInventory_SetCategoryMode(true) and ShirsInventory_GetCategoryMode(),
+  "category view did not persist on")
+assert(not ShirsInventory_SetCategoryMode(false) and not ShirsInventory_GetCategoryMode(),
+  "category view did not persist off")
+ShirsInventoryDB.categoryMode = "invalid"
+assert(not ShirsInventory_GetCategoryMode() and ShirsInventoryDB.categoryMode == false,
+  "invalid saved category-view values must repair to off")
+assert(type(ShirsInventory_GetCollapseEmptySlots) == "function" and
+  type(ShirsInventory_SetCollapseEmptySlots) == "function",
+  "collapsed Empty Slots setting API is missing")
+assert(not ShirsInventory_GetCollapseEmptySlots(),
+  "Empty Slots must default to showing every real empty slot")
+assert(ShirsInventory_SetCollapseEmptySlots(true) and ShirsInventory_GetCollapseEmptySlots(),
+  "collapsed Empty Slots setting did not persist on")
+assert(not ShirsInventory_SetCollapseEmptySlots(false) and not ShirsInventory_GetCollapseEmptySlots(),
+  "collapsed Empty Slots setting did not persist off")
+ShirsInventoryDB.collapseEmptySlots = "invalid"
+assert(not ShirsInventory_GetCollapseEmptySlots() and ShirsInventoryDB.collapseEmptySlots == false,
+  "invalid collapsed Empty Slots values must repair to off")
+assert(type(ShirsInventory_GetCategorySettingsPosition) == "function" and
+  type(ShirsInventory_SaveCategorySettingsFrameCoordinates) == "function" and
+  type(ShirsInventory_SaveCategorySettingsFramePosition) == "function",
+  "Category Settings position API is missing")
+assert(ShirsInventory_GetCategorySettingsPosition() == nil,
+  "Category Settings must use its default position before the user moves it")
+assert(ShirsInventory_SaveCategorySettingsFrameCoordinates("TOPLEFT", "BOTTOMLEFT", 321, 654),
+  "Category Settings coordinates did not save")
+local savedCategorySettingsPosition = ShirsInventory_GetCategorySettingsPosition()
+assert(savedCategorySettingsPosition.point == "TOPLEFT" and
+  savedCategorySettingsPosition.relativePoint == "BOTTOMLEFT" and
+  savedCategorySettingsPosition.x == 321 and savedCategorySettingsPosition.y == 654,
+  "Category Settings coordinates did not persist per character")
+assert(not ShirsInventory_SaveCategorySettingsFrameCoordinates("CENTER", "CENTER", 10, 20),
+  "Category Settings accepted noncanonical anchors")
+assert(not ShirsInventory_SaveCategorySettingsFrameCoordinates(
+  "TOPLEFT", "BOTTOMLEFT", 1 / 0, 20
+), "Category Settings accepted a non-finite coordinate")
+ShirsInventoryDB.categorySettingsPosition = {
+  point = "TOPLEFT", relativePoint = "BOTTOMLEFT", x = 1 / 0, y = 0 / 0,
+}
+assert(ShirsInventory_GetCategorySettingsPosition() == nil and
+  ShirsInventoryDB.categorySettingsPosition == nil,
+  "non-finite Category Settings coordinates did not fail closed")
+ShirsInventoryDB.categorySettingsPosition = { point = false, x = "bad", y = 4 }
+assert(ShirsInventory_GetCategorySettingsPosition() == nil and
+  ShirsInventoryDB.categorySettingsPosition == nil,
+  "malformed Category Settings coordinates did not fail closed")
+assert(type(ShirsInventory_GetCategoryAssignment) == "function" and
+  type(ShirsInventory_SetCategoryAssignment) == "function" and
+  type(ShirsInventory_ClearCategoryAssignment) == "function",
+  "manual category-assignment APIs are missing")
+assert(ShirsInventory_GetCategoryAssignment(12361) == nil,
+  "manual category assignments did not start empty")
+assert(ShirsInventory_SetCategoryAssignment(12361, "equipment") == "equipment" and
+  ShirsInventory_GetCategoryAssignment(12361) == "equipment",
+  "manual category assignment did not persist by item ID")
+assert(ShirsInventory_SetCategoryAssignment(12361, "mountsCompanions") == "mountsCompanions" and
+  ShirsInventory_SetCategoryAssignment(12361, "weaponBuffs") == "weaponBuffs" and
+  ShirsInventory_SetCategoryAssignment(12361, "equipment") == "equipment",
+  "manual category assignment did not accept the broader built-in targets")
+assert(not ShirsInventory_SetCategoryAssignment(12361, "empty") and
+  ShirsInventory_GetCategoryAssignment(12361) == "equipment",
+  "manual category assignment accepted the non-item Empty Slots group")
+assert(ShirsInventory_ClearCategoryAssignment(12361) and
+  ShirsInventory_GetCategoryAssignment(12361) == nil,
+  "manual category assignment did not return to automatic classification")
+assert(type(ShirsInventory_CreateCustomCategory) == "function" and
+  type(ShirsInventory_DeleteCustomCategory) == "function" and
+  type(ShirsInventory_GetCustomCategories) == "function",
+  "custom category model APIs are missing")
+ShirsInventoryDB.customCategories = {
+  { key = "custom:1", label = "  Engineering  " },
+  { key = "custom:1", label = "Duplicate key" },
+  { key = "custom:2", label = "engineering" },
+  { key = "empty", label = "Reserved" },
+  { key = "custom:3", label = string.rep("x", 29) },
+  { key = "custom:" .. string.rep("9", 400), label = "Oversized ID" },
+  "invalid",
+}
+ShirsInventoryDB.nextCustomCategoryID = "invalid"
+local repairedCustomCategories = ShirsInventory_GetCustomCategories()
+assert(table.getn(repairedCustomCategories) == 1 and
+  repairedCustomCategories[1].key == "custom:1" and repairedCustomCategories[1].label == "Engineering",
+  "malformed, duplicate, reserved, or overlong custom categories were not repaired")
+local repairedSecondKey = ShirsInventory_CreateCustomCategory("Second")
+assert(repairedSecondKey == "custom:2", "repaired custom-category sequence did not resume safely")
+assert(ShirsInventory_DeleteCustomCategory("custom:1") and
+  ShirsInventory_DeleteCustomCategory(repairedSecondKey),
+  "repaired custom categories could not be deleted")
+local malformedNextIDs = { 1 / 0, 0 / 0, 1e20 }
+local malformedIndex
+for malformedIndex = 1, table.getn(malformedNextIDs) do
+  ShirsInventoryDB.customCategories = {}
+  ShirsInventoryDB.nextCustomCategoryID = malformedNextIDs[malformedIndex]
+  local safeKey = ShirsInventory_CreateCustomCategory("Safe " .. malformedIndex)
+  local safeCategories = ShirsInventory_GetCustomCategories()
+  assert(safeKey == "custom:1" and table.getn(safeCategories) == 1 and
+    safeCategories[1].key == "custom:1",
+    "malformed numeric custom-category sequence did not repair to a stable bounded key: " ..
+      tostring(malformedIndex) .. "/" .. tostring(safeKey) .. "/" .. tostring(table.getn(safeCategories)))
+end
+ShirsInventoryDB.customCategories = {}
+ShirsInventoryDB.nextCustomCategoryID = 1
+local customCategoryKey = ShirsInventory_CreateCustomCategory("Engineering Supplies")
+local customCategories = ShirsInventory_GetCustomCategories()
+assert(customCategoryKey == "custom:1" and table.getn(customCategories) == 1 and
+  customCategories[1].key == customCategoryKey and customCategories[1].label == "Engineering Supplies",
+  "custom category creation did not preserve its key, name, and display order")
+assert(not ShirsInventory_CreateCustomCategory(" engineering supplies ") and
+  not ShirsInventory_CreateCustomCategory("   ") and
+  not ShirsInventory_CreateCustomCategory("Bad\nName") and
+  not ShirsInventory_CreateCustomCategory("|cffff0000Spoofed|r"),
+  "custom categories accepted a duplicate, blank, control character, or WoW markup name")
+assert(ShirsInventory_SetCategoryAssignment(12361, customCategoryKey) == customCategoryKey,
+  "manual category assignment rejected a valid custom category")
+local customDefinitions = ShirsInventory_GetCategoryDefinitions()
+assert(customDefinitions[table.getn(customDefinitions) - 1].key == customCategoryKey and
+  customDefinitions[table.getn(customDefinitions)].key == "empty",
+  "custom category was not placed immediately before Empty Slots")
+local emptyCustomGroups = ShirsInventory_BuildCategoryGroups({})
+assert(table.getn(emptyCustomGroups) == 1 and emptyCustomGroups[1].key == customCategoryKey and
+  table.getn(emptyCustomGroups[1].items) == 0,
+  "new empty custom category did not remain visible as an item-drop target")
+assert(ShirsInventory_DeleteCustomCategory(customCategoryKey) and
+  ShirsInventory_GetCategoryAssignment(12361) == nil and
+  table.getn(ShirsInventory_GetCustomCategories()) == 0,
+  "deleting a custom category did not remove it and restore assigned items to automatic placement")
+assert(type(ShirsInventory_GetCategorySettingsSnapshot) == "function" and
+  type(ShirsInventory_ApplyCategorySettingsSnapshot) == "function",
+  "category settings snapshot APIs are missing")
+local importedCategorySnapshot = {
+  version = 1,
+  customCategories = { { key = "custom:7", label = "Imported supplies" } },
+  nextCustomCategoryID = 8,
+  categoryAssignments = {
+    [51001] = "custom:7",
+    [51002] = "potions",
+    [51003] = "empty",
+    [51004.5] = "weapons",
+    [1e309] = "armor",
+    ["999999999999999999999"] = "junk",
+  },
+  collapseEmptySlots = true,
+}
+assert(ShirsInventory_ApplyCategorySettingsSnapshot(importedCategorySnapshot),
+  "valid same-account category settings snapshot was rejected")
+local appliedSnapshot = ShirsInventory_GetCategorySettingsSnapshot()
+assert(appliedSnapshot.version == 1 and appliedSnapshot.collapseEmptySlots and
+  table.getn(appliedSnapshot.customCategories) == 1 and
+  appliedSnapshot.customCategories[1].key == "custom:7" and
+  appliedSnapshot.customCategories[1].label == "Imported supplies" and
+  appliedSnapshot.categoryAssignments[51001] == "custom:7" and
+  appliedSnapshot.categoryAssignments[51002] == "potions" and
+  appliedSnapshot.categoryAssignments[51003] == nil and
+  appliedSnapshot.categoryAssignments[51004.5] == nil and
+  appliedSnapshot.categoryAssignments[1e309] == nil and
+  appliedSnapshot.categoryAssignments["999999999999999999999"] == nil,
+  "category settings snapshot did not import custom categories, valid assignments, and display choice safely")
+appliedSnapshot.customCategories[1].label = "Mutated copy"
+appliedSnapshot.categoryAssignments[51001] = nil
+assert(ShirsInventory_GetCustomCategoryLabel("custom:7") == "Imported supplies" and
+  ShirsInventory_GetCategoryAssignment(51001) == "custom:7",
+  "category settings snapshot getter leaked mutable SavedVariable references")
+local beforeRejectedImport = ShirsInventory_GetCategorySettingsSnapshot()
+assert(not ShirsInventory_ApplyCategorySettingsSnapshot({
+  version = 1, customCategories = "bad", categoryAssignments = {}, collapseEmptySlots = false,
+}) and ShirsInventory_GetCustomCategoryLabel("custom:7") == "Imported supplies" and
+  ShirsInventory_GetCollapseEmptySlots(),
+  "malformed category settings import overwrote the current character")
+ShirsInventoryDB.customCategories = {}
+ShirsInventoryDB.categoryAssignments = {}
+ShirsInventoryDB.nextCustomCategoryID = 1
+ShirsInventory_SetCollapseEmptySlots(false)
+assert(type(ShirsInventory_GetCategoryEditMode) == "function" and
+  type(ShirsInventory_SetCategoryEditMode) == "function" and
+  type(ShirsInventory_BeginCategoryEditDrag) == "function" and
+  type(ShirsInventory_SetCategoryEditHover) == "function" and
+  type(ShirsInventory_FinishCategoryEditDrag) == "function",
+  "category edit-mode virtual-drag APIs are missing")
+ShirsInventory_SetCategoryMode(true)
+assert(ShirsInventory_SetCategoryEditMode(true) and ShirsInventory_GetCategoryEditMode(),
+  "category edit mode did not turn on inside category view")
+assert(ShirsInventory_BeginCategoryEditDrag(12361) and
+  ShirsInventory_SetCategoryEditHover("equipment") and
+  ShirsInventory_FinishCategoryEditDrag() == "equipment" and
+  ShirsInventory_GetCategoryAssignment(12361) == "equipment",
+  "virtual category drag did not assign the item ID to the hovered category")
+local scaledCategoryHeader = { categoryKey = "quest" }
+function scaledCategoryHeader:IsShown() return true end
+function scaledCategoryHeader:GetLeft() return 100 end
+function scaledCategoryHeader:GetRight() return 200 end
+function scaledCategoryHeader:GetBottom() return 80 end
+function scaledCategoryHeader:GetTop() return 120 end
+function scaledCategoryHeader:GetEffectiveScale() return 0.5 end
+assert(ShirsInventory_GetCategoryEditDropTarget({scaledCategoryHeader}, 75, 50) == "quest" and
+  ShirsInventory_GetCategoryEditDropTarget({scaledCategoryHeader}, 30, 20) == nil,
+  "scaled cursor hit-testing did not resolve a category-heading drag target")
+local savedGetCursorPosition = GetCursorPosition
+GetCursorPosition = function() return 0, 0 end
+local noHeaderLookupOk, noHeaderLookupResult = pcall(ShirsInventory_GetCategoryEditDropTarget)
+GetCursorPosition = savedGetCursorPosition
+assert(noHeaderLookupOk and noHeaderLookupResult == nil,
+  "real no-argument category drop lookup crashed before category headers existed")
+assert(ShirsInventory_BeginCategoryEditDrag(12361) and
+  not ShirsInventory_SetCategoryEditHover("empty") and
+  not ShirsInventory_FinishCategoryEditDrag() and
+  ShirsInventory_GetCategoryAssignment(12361) == "equipment",
+  "virtual category drag accepted Empty Slots or changed the saved assignment")
+ShirsInventory_ClearCategoryAssignment(12361)
+ShirsInventory_SetCategoryEditMode(false)
+ShirsInventory_SetCategoryMode(false)
+
+assert(type(ShirsInventory_ClassifyCategoryItem) == "function" and
+  type(ShirsInventory_BuildCategoryGroups) == "function",
+  "category-view model API is missing")
+local categoryItems = {
+  { bag = 0, slot = 1, hasItem = true, itemType = "Quest", name = "Quest Relic" },
+  { bag = 0, slot = 2, hasItem = true, itemType = "Key", name = "Dungeon Key" },
+  { bag = 0, slot = 3, hasItem = true, itemType = "Miscellaneous", quality = 0,
+    name = "Swift Steed", tooltipText = "Use: Summons and dismisses a rideable mount." },
+  { bag = 0, slot = 4, hasItem = true, itemType = "Armor", name = "Cloth Robe" },
+  { bag = 0, slot = 5, hasItem = true, itemType = "Weapon", name = "Steel Sword" },
+  { bag = 0, slot = 6, hasItem = true, itemType = "Armor", name = "Old Manual Gear",
+    manualCategory = "equipment" },
+  { bag = 1, slot = 1, hasItem = true, itemType = "Container", name = "Traveler's Bag" },
+  { bag = 1, slot = 2, hasItem = true, itemType = "Projectile", name = "Sharp Arrow" },
+  { bag = 1, slot = 3, hasItem = true, itemType = "Recipe", name = "Recipe: Soup" },
+  { bag = 1, slot = 4, hasItem = true, itemType = "Consumable", name = "Roasted Boar",
+    tooltipText = "Must remain seated while eating." },
+  { bag = 1, slot = 5, hasItem = true, itemType = "Consumable", name = "Major Healing Potion" },
+  { bag = 1, slot = 6, hasItem = true, itemType = "Consumable", name = "Elixir of Wisdom" },
+  { bag = 2, slot = 1, hasItem = true, itemType = "Consumable", name = "Heavy Runecloth Bandage" },
+  { bag = 2, slot = 2, hasItem = true, itemType = "Consumable", name = "Scroll of Strength" },
+  { bag = 2, slot = 3, hasItem = true, itemType = "Trade Goods", name = "Dense Sharpening Stone" },
+  { bag = 2, slot = 4, hasItem = true, itemType = "Consumable", name = "Mysterious Tonic" },
+  { bag = 2, slot = 5, hasItem = true, itemType = "Trade Goods", itemSubType = "Explosives",
+    name = "Thorium Grenade" },
+  { bag = 2, slot = 6, hasItem = true, itemType = "Trade Goods", name = "Copper Ore" },
+  { bag = 3, slot = 1, hasItem = true, quality = 0, itemType = "Miscellaneous", name = "Broken Buckle" },
+  { bag = 3, slot = 2, hasItem = true, itemType = "Miscellaneous", name = "Odd Rock" },
+  { bag = 3, slot = 3, hasItem = false },
+}
+local categoryGroups = ShirsInventory_BuildCategoryGroups(categoryItems)
+local groupedCopies = ShirsInventory_BuildCategoryGroups({
+  { bag = 0, slot = 1, hasItem = true, itemID = 100, itemType = "Miscellaneous" },
+  { bag = 0, slot = 2, hasItem = true, itemID = 200, itemType = "Miscellaneous" },
+  { bag = 0, slot = 3, hasItem = true, itemID = 100, itemType = "Miscellaneous" },
+  { bag = 0, slot = 4, hasItem = true, itemID = 300, itemType = "Miscellaneous" },
+  { bag = 0, slot = 5, hasItem = true, itemID = 200, itemType = "Miscellaneous" },
+})
+local groupedMisc = groupedCopies[1]
+assert(groupedMisc.items[1].itemID == 100 and groupedMisc.items[2].itemID == 100 and
+  groupedMisc.items[3].itemID == 200 and groupedMisc.items[4].itemID == 200 and
+  groupedMisc.items[5].itemID == 300,
+  "identical item types were not kept adjacent inside their visual category")
+local emptySlotItems = {
+  { bag = 0, slot = 6, hasItem = false },
+  { bag = 1, slot = 2, hasItem = false },
+  { bag = 3, slot = 9, hasItem = false },
+}
+ShirsInventory_SetCollapseEmptySlots(false)
+local expandedEmptyGroup = ShirsInventory_BuildCategoryGroups(emptySlotItems)[1]
+assert(expandedEmptyGroup.key == "empty" and table.getn(expandedEmptyGroup.items) == 3 and
+  expandedEmptyGroup.totalCount == 3,
+  "expanded Empty Slots did not retain every real empty slot")
+local expandedEmptyLayout = ShirsInventory_BuildCategoryLayout({expandedEmptyGroup}, 10)
+assert(expandedEmptyLayout.groups[1].label == "Empty Slots" and
+  ShirsInventory_GetCategoryHeaderText(expandedEmptyLayout.groups[1]) == "Empty Slots (3)",
+  "expanded Empty Slots heading was shortened even though it has normal width")
+ShirsInventory_SetCollapseEmptySlots(true)
+local collapsedEmptyGroup = ShirsInventory_BuildCategoryGroups(emptySlotItems)[1]
+assert(collapsedEmptyGroup.key == "empty" and table.getn(collapsedEmptyGroup.items) == 1 and
+  collapsedEmptyGroup.totalCount == 3 and collapsedEmptyGroup.items[1].collapsedEmptyCount == 3 and
+  collapsedEmptyGroup.items[1].bag == 0 and collapsedEmptyGroup.items[1].slot == 6,
+  "collapsed Empty Slots did not keep one real representative while preserving the total count")
+assert(ShirsInventory_GetCategoryGroupCount(collapsedEmptyGroup) == 3,
+  "collapsed Empty Slots render helper lost the heading total")
+local collapsedFreeStates = ShirsInventory_BuildCategoryFreeStates(emptySlotItems)
+assert(ShirsInventory_CountFreeInventorySlots(collapsedFreeStates) == 3,
+  "collapsed Empty Slots lost the full footer free-slot total")
+local collapsedEmptyLayout = ShirsInventory_BuildCategoryLayout({collapsedEmptyGroup}, 10)
+assert(collapsedEmptyLayout.groups[1].totalCount == 3 and collapsedEmptyLayout.groups[1].rows == 1 and
+  collapsedEmptyLayout.groups[1].columnX == 9 and collapsedEmptyLayout.groups[1].label == "Empty" and
+  ShirsInventory_GetCategoryHeaderText(collapsedEmptyLayout.groups[1]) == "Empty",
+  "collapsed Empty Slots layout lost its count, one-slot height, right alignment, or exact short heading")
+assert(ShirsInventory_GetCategoryHeaderTooltipText and
+  ShirsInventory_GetCategoryHeaderTooltipText(collapsedEmptyLayout.groups[1]) == "Empty Slots (3)",
+  "collapsed Empty heading tooltip lost the full category name or true free-slot count")
+assert(type(ShirsInventory_GetCategoryHeaderDisplayText) == "function" and
+  type(ShirsInventory_GetCategoryHeaderTooltipText) == "function",
+  "category headings are missing compact display and full tooltip models")
+local narrowOtherLayout = ShirsInventory_BuildCategoryLayout({
+  { key = "consumables", label = "Other Consumables", items = { {} } },
+}, 10)
+assert(ShirsInventory_GetCategoryHeaderDisplayText(narrowOtherLayout.groups[1]) == "Other" and
+  ShirsInventory_GetCategoryHeaderTooltipText(narrowOtherLayout.groups[1]) == "Other Consumables (1)",
+  "one-column Other Consumables heading was not shortened without losing its full tooltip")
+local twoColumnOtherLayout = ShirsInventory_BuildCategoryLayout({
+  { key = "consumables", label = "Other Consumables", items = { {}, {} } },
+}, 10)
+assert(ShirsInventory_GetCategoryHeaderDisplayText(twoColumnOtherLayout.groups[1]) == "Other (2)",
+  "two-column Other Consumables heading did not retain its count when the compact form fits")
+local wideOtherLayout = ShirsInventory_BuildCategoryLayout({
+  { key = "consumables", label = "Other Consumables", items = { {}, {}, {}, {}, {}, {}, {} } },
+}, 10)
+assert(ShirsInventory_GetCategoryHeaderDisplayText(wideOtherLayout.groups[1]) == "Other Consumables (7)",
+  "wide category heading was shortened even though its full label fits")
+local narrowCustomLayout = ShirsInventory_BuildCategoryLayout({
+  { key = "custom:123", label = "Very Long Custom Category", custom = true, items = { {} } },
+}, 10)
+assert(ShirsInventory_GetCategoryHeaderDisplayText(narrowCustomLayout.groups[1]) == "C3F" and
+  ShirsInventory_GetCategoryHeaderTooltipText(narrowCustomLayout.groups[1]) == "Very Long Custom Category (1)",
+  "one-column custom category did not receive a stable compact ID and full tooltip")
+local largeCustomLayout = ShirsInventory_BuildCategoryLayout({
+  { key = "custom:99999", label = "Large Custom A", custom = true, items = { {} } },
+  { key = "custom:999999", label = "Large Custom B", custom = true, items = { {} } },
+}, 10)
+assert(ShirsInventory_GetCategoryHeaderDisplayText(largeCustomLayout.groups[1]) == "C255R" and
+  ShirsInventory_GetCategoryHeaderDisplayText(largeCustomLayout.groups[2]) == "CLFLR" and
+  ShirsInventory_GetCategoryHeaderDisplayText(largeCustomLayout.groups[1]) ~=
+    ShirsInventory_GetCategoryHeaderDisplayText(largeCustomLayout.groups[2]),
+  "large valid custom category IDs collapsed to the same one-column heading")
+local rightAlignedEmptyLayout = ShirsInventory_BuildCategoryLayout({
+  { key = "junk", label = "Junk", items = { {}, {} } },
+  collapsedEmptyGroup,
+}, 10)
+assert(rightAlignedEmptyLayout.groups[1].columnX == 0 and
+  rightAlignedEmptyLayout.groups[2].columnX == 9 and
+  rightAlignedEmptyLayout.groups[1].labelY == rightAlignedEmptyLayout.groups[2].labelY,
+  "single Empty Slots indicator did not use the right edge of its shared shelf")
+ShirsInventory_SetCollapseEmptySlots(false)
+assert(ShirsInventory_ClassifyCategoryItem({
+  hasItem = true, itemType = "Consumable", quality = 1, manualCategory = "equipment"
+}) == "equipment", "manual category assignment did not override automatic metadata")
+assert(ShirsInventory_ClassifyCategoryItem({ hasItem = true, itemType = "Quest", quality = 0 }) == "quest",
+  "quest identity must win over poor quality so quest items never appear as junk")
+assert(ShirsInventory_ClassifyCategoryItem({
+  hasItem = true, itemType = "Recipe", quality = 1, tooltipText = "Quest Item"
+}) == "recipes", "recipe metadata did not win over a quest-tooltip signal")
+assert(ShirsInventory_ClassifyCategoryItem({
+  hasItem = true, itemType = "Miscellaneous", quality = 0,
+  tooltipText = "Right Click to summon and dismiss your companion"
+}) == "mountsCompanions", "companion tooltip did not win over gray-quality junk")
+assert(ShirsInventory_ClassifyCategoryItem({
+  hasItem = true, itemType = "Consumable", name = "Potion Scroll"
+}) == "potions", "deterministic consumable precedence did not put Potions before Scrolls")
+assert(ShirsInventory_ClassifyCategoryItem({
+  hasItem = true, itemType = "Armor", name = "Potion Bandolier", quality = 2
+}) == "armor", "consumable name signals overrode authoritative Armor metadata")
+assert(ShirsInventory_ClassifyCategoryItem({
+  hasItem = true, itemType = "Weapon", name = "Elixir Blade", quality = 3
+}) == "weapons", "consumable name signals overrode authoritative Weapon metadata")
+GetLocale = function() return "deDE" end
+assert(ShirsInventory_ClassifyCategoryItem({
+  hasItem = true, itemType = "Consumable", name = "Healing Potion",
+  tooltipText = "Must remain seated while eating."
+}) == "consumables", "English semantic signals leaked into an unsupported client locale")
+GetLocale = nil
+GetAuctionItemClasses = function()
+  return "Waffe", "Ruestung", "Behaelter", "Verbrauchbar", "Handwerkswaren",
+    "Projektil", "Kocher", "Rezept", "Reagenz", "Verschiedenes"
+end
+assert(ShirsInventory_ClassifyCategoryItem({ hasItem = true, itemType = "Waffe", quality = 2 }) == "weapons" and
+  ShirsInventory_ClassifyCategoryItem({ hasItem = true, itemType = "Ruestung", quality = 2 }) == "armor" and
+  ShirsInventory_ClassifyCategoryItem({ hasItem = true, itemType = "Behaelter", quality = 1 }) == "bags" and
+  ShirsInventory_ClassifyCategoryItem({ hasItem = true, itemType = "Projektil", quality = 1 }) == "ammo" and
+  ShirsInventory_ClassifyCategoryItem({ hasItem = true, itemType = "Rezept", quality = 1 }) == "recipes" and
+  ShirsInventory_ClassifyCategoryItem({ hasItem = true, itemType = "Verbrauchbar", quality = 1 }) == "consumables" and
+  ShirsInventory_ClassifyCategoryItem({ hasItem = true, itemType = "Handwerkswaren", quality = 1 }) == "tradeGoods",
+  "broader category classification must honor localized auction item classes")
+ITEM_CLASS_QUEST = "Aufgabe"
+assert(ShirsInventory_IsQuestItemType("Aufgabe") and
+  ShirsInventory_ClassifyCategoryItem({ hasItem = true, itemType = "Aufgabe", quest = true, quality = 0 }) == "quest",
+  "category classification must honor the localized quest-item constant")
+ITEM_CLASS_QUEST = nil
+assert(ShirsInventory_ClassifyCategoryItem({ hasItem = true, itemType = nil, quality = nil }) == "miscellaneous",
+  "unavailable item metadata must fail safely into Miscellaneous")
+local expectedKeys = {
+  "quest", "keys", "mountsCompanions", "armor", "weapons", "equipment", "bags", "ammo",
+  "recipes", "foodDrink", "potions", "elixirs", "bandages", "scrolls", "weaponBuffs",
+  "consumables", "explosives", "tradeGoods", "junk", "miscellaneous", "empty",
+}
+assert(table.getn(categoryGroups) == table.getn(expectedKeys),
+  "broader category view must expose each non-empty fixed group exactly once")
+local groupIndex
+for groupIndex = 1, table.getn(expectedKeys) do
+  assert(categoryGroups[groupIndex].key == expectedKeys[groupIndex],
+    "broader category groups are not in the fixed display order")
+  assert(table.getn(categoryGroups[groupIndex].items) == 1,
+    "broader category group lost or duplicated an item")
+end
+assert(categoryGroups[1].items[1].bag == 0 and categoryGroups[1].items[1].slot == 1 and
+  categoryGroups[19].items[1].bag == 3 and categoryGroups[19].items[1].slot == 1,
+  "broader category view must preserve each item's real bag and slot address")
+assert(type(ShirsInventory_BuildCategoryLayout) == "function" and
+  type(ShirsInventory_ShouldShowInventoryAction) == "function",
+  "category-view layout and control APIs are missing")
+local categoryLayout = ShirsInventory_BuildCategoryLayout(categoryGroups, 10)
+assert(categoryLayout.columns == 10 and categoryLayout.width == 428,
+  "category view must retain the selected inventory width")
+assert(table.getn(categoryLayout.groups) == 21 and categoryLayout.groups[1].label == "Quest Items" and
+  categoryLayout.groups[3].label == "Mounts & Companions" and
+  categoryLayout.groups[16].label == "Other Consumables",
+  "category layout did not retain the broader fixed group labels")
+assert(categoryLayout.groups[1].items[1].bag == 0 and categoryLayout.groups[1].items[1].slot == 1,
+  "category layout lost the real slot address")
+assert(categoryLayout.groups[1].columnX == 0 and categoryLayout.groups[2].columnX == 2 and
+  categoryLayout.groups[5].columnX == 8 and categoryLayout.groups[6].columnX == 0 and
+  categoryLayout.groups[1].labelY == categoryLayout.groups[5].labelY and
+  categoryLayout.groups[6].labelY > categoryLayout.groups[5].labelY,
+  "small category groups did not retain one blank item-space separator while shelf packing")
+local packedCategoryLayout = ShirsInventory_BuildCategoryLayout({
+  { key = "potions", label = "Potions", items = { {}, {} } },
+  { key = "elixirs", label = "Elixirs & Buffs", items = { {}, {} } },
+  { key = "consumables", label = "Other Consumables", items = { {}, {}, {}, {}, {}, {}, {} } },
+  { key = "tradeGoods", label = "Trade Goods & Materials", items = {
+    {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {},
+  } },
+}, 10)
+assert(packedCategoryLayout.groups[1].columnX == 0 and packedCategoryLayout.groups[1].columns == 2 and
+  packedCategoryLayout.groups[2].columnX == 3 and packedCategoryLayout.groups[2].columns == 2 and
+  packedCategoryLayout.groups[1].labelY == packedCategoryLayout.groups[2].labelY,
+  "two small categories did not share a shelf with one blank item-space between them")
+assert(packedCategoryLayout.groups[3].columnX == 0 and
+  packedCategoryLayout.groups[3].labelY > packedCategoryLayout.groups[2].labelY,
+  "a category that did not fit was not moved intact to the next shelf")
+assert(packedCategoryLayout.groups[4].columns == 10 and packedCategoryLayout.groups[4].rows == 2 and
+  packedCategoryLayout.groups[4].labelY > packedCategoryLayout.groups[3].labelY,
+  "a large category did not span the available width and wrap within its own group")
+assert(packedCategoryLayout.height == 238,
+  "packed category shelf height did not use the tallest group in each shelf exactly once")
+ShirsInventory_SetCategoryMode(true)
+assert(ShirsInventory_ShouldShowInventoryAction("sort", false) and
+  ShirsInventory_ShouldShowInventoryAction("mode", false) and
+  not ShirsInventory_ShouldShowInventoryAction("direction", false) and
+  ShirsInventory_ShouldShowInventoryAction("settings", false),
+  "category view must replace physical Sort with Categories and keep Edit and Settings")
+local categoryActionSpecs = ShirsInventory_GetInventoryButtonSpecs(false)
+assert(categoryActionSpecs.sort.text == "Manage" and
+  categoryActionSpecs.sort.tooltipTitle == "Category settings" and
+  string.find(categoryActionSpecs.sort.tooltipDescription or "", "create", 1, true),
+  "category view did not present its Categories replacement as a settings manager")
+local categoryManagerOpens, physicalSorts = 0, 0
+local savedToggleCategoryManager = ShirsInventory_ToggleCategoryManager
+local savedSortBags = ShirsInventory_SortBags
+ShirsInventory_ToggleCategoryManager = function() categoryManagerOpens = categoryManagerOpens + 1 return true end
+ShirsInventory_SortBags = function() physicalSorts = physicalSorts + 1 return true end
+assert(ShirsInventory_OnSortButtonClick(false) and categoryManagerOpens == 1 and physicalSorts == 0,
+  "Categories button invoked physical sorting instead of the custom-category manager")
+assert(ShirsInventory_ShouldShowInventoryAction("sort", true),
+  "category view must not change the bank's standard controls")
+assert(string.find(ShirsInventory_GetInventoryButtonSpecs(true).mode.tooltipTitle or "", "Grouping", 1, true),
+  "category view replaced the bank's grouping control with the inventory Edit control")
+ShirsInventory_SetCategoryMode(false)
+assert(ShirsInventory_OnSortButtonClick(false) and physicalSorts == 1,
+  "standard-mode Sort button did not retain physical sorting")
+ShirsInventory_ToggleCategoryManager = savedToggleCategoryManager
+ShirsInventory_SortBags = savedSortBags
+assert(ShirsInventory_ShouldShowInventoryAction("sort", false),
+  "standard inventory mode must keep sorting controls")
+
+assert(type(ShirsInventory_RebuildStandardGrid) == "function" and
+  type(ShirsInventory_RebuildCategoryGrid) == "function",
+  "inventory renderer entry points are missing")
+assert(type(ShirsInventory_ShouldDeferCategoryRebuild) == "function" and
+  type(ShirsInventory_ProcessDeferredCategoryRebuild) == "function" and
+  type(ShirsInventory_HasPendingCategoryRebuild) == "function",
+  "category renderer is missing its cursor-safety deferral APIs")
+CursorHasItem = function() return true end
+local directCategoryRebuild, directCategoryReason = ShirsInventory_RebuildCategoryGrid()
+assert(not directCategoryRebuild and directCategoryReason == "deferred" and
+  ShirsInventory_HasPendingCategoryRebuild(),
+  "direct category rebuild did not fail closed during a cursor transaction")
+CursorHasItem = function() return false end
+GetCursorInfo = function() return "item" end
+assert(ShirsInventory_ShouldDeferCategoryRebuild(),
+  "category renderer did not recognize an item cursor through GetCursorInfo")
+GetCursorInfo = function() return nil end
+local originalGetContainerNumSlots = GetContainerNumSlots
+local originalGetContainerItemInfo = GetContainerItemInfo
+GetContainerNumSlots = function(bag) if bag == 0 then return 1 end return 0 end
+GetContainerItemInfo = function() return "locked-texture", 1, true, 1 end
+assert(ShirsInventory_ShouldDeferCategoryRebuild(),
+  "category renderer did not defer while a carried slot was locked")
+GetContainerNumSlots = originalGetContainerNumSlots
+GetContainerItemInfo = originalGetContainerItemInfo
+local standardRebuilds, categoryRebuilds = 0, 0
+local originalStandardRebuild = ShirsInventory_RebuildStandardGrid
+local originalCategoryRebuild = ShirsInventory_RebuildCategoryGrid
+ShirsInventory_RebuildStandardGrid = function() standardRebuilds = standardRebuilds + 1 end
+ShirsInventory_RebuildCategoryGrid = function() categoryRebuilds = categoryRebuilds + 1 end
+local originalRefreshInventoryStyles = ShirsInventory_RefreshInventoryButtonStyles
+ShirsInventory_RefreshInventoryButtonStyles = function() end
+ShirsInventoryFrame = { IsShown = function() return true end }
+ShirsInventory_SetCategoryMode(false)
+ShirsInventory_Update()
+ShirsInventory_SetCategoryMode(true)
+CursorHasItem = function() return true end
+ShirsInventory_Update()
+assert(categoryRebuilds == 0 and ShirsInventory_HasPendingCategoryRebuild(),
+  "category update rebound display buttons while the cursor held an item")
+CursorHasItem = function() return false end
+GetCursorInfo = function() return nil end
+ShirsInventory_ProcessDeferredCategoryRebuild()
+assert(standardRebuilds == 1 and categoryRebuilds == 1 and
+  not ShirsInventory_HasPendingCategoryRebuild(),
+  "inventory update did not select the saved standard/category renderer")
+ShirsInventory_RebuildStandardGrid = originalStandardRebuild
+ShirsInventory_RebuildCategoryGrid = originalCategoryRebuild
+ShirsInventory_RefreshInventoryButtonStyles = originalRefreshInventoryStyles
+ShirsInventoryFrame = nil
+ShirsInventory_SetCategoryMode(false)
+
+assert(type(ShirsInventory_SetCategoryModeAndReload) == "function",
+  "category-view reload trigger is missing")
+local categoryReloads = 0
+local function CountCategoryReload() categoryReloads = categoryReloads + 1 end
+assert(ShirsInventory_SetCategoryModeAndReload(true, CountCategoryReload) and
+  ShirsInventory_GetCategoryMode() and categoryReloads == 1,
+  "enabling category view must save the setting and trigger one UI reload")
+assert(not ShirsInventory_SetCategoryModeAndReload(true, CountCategoryReload) and categoryReloads == 1,
+  "choosing the active category mode must not reload again")
+assert(ShirsInventory_SetCategoryModeAndReload(false, CountCategoryReload) and
+  not ShirsInventory_GetCategoryMode() and categoryReloads == 2,
+  "disabling category view must save the setting and trigger one UI reload")
+
 assert(type(ShirsInventory_GetItemsPerRow) == "function" and
   type(ShirsInventory_SetItemsPerRow) == "function",
   "items-per-row option API is missing")
@@ -206,11 +737,11 @@ local sliderHost = {}
 assert(ShirsInventory_CreateLayoutSliders(sliderHost),
   "settings did not construct the two layout sliders")
 assert(sliderHost.itemsPerRowSlider.low == 10 and sliderHost.itemsPerRowSlider.high == 20 and
-  sliderHost.itemsPerRowSlider.step == 1 and sliderHost.itemsPerRowSlider.width == 300,
-  "items-per-row slider has the wrong bounds, step, or width")
+  sliderHost.itemsPerRowSlider.step == 1 and sliderHost.itemsPerRowSlider.width == 320,
+  "items-per-row slider has the wrong bounds, step, or premium width")
 assert(sliderHost.windowScaleSlider.low == 0.65 and sliderHost.windowScaleSlider.high == 1 and
-  sliderHost.windowScaleSlider.step == 0.05 and sliderHost.windowScaleSlider.width == 300,
-  "window-scale slider has the wrong bounds, step, or width")
+  sliderHost.windowScaleSlider.step == 0.05 and sliderHost.windowScaleSlider.width == 320,
+  "window-scale slider has the wrong bounds, step, or premium width")
 local oldThis = this
 this = sliderHost.itemsPerRowSlider
 this:SetValue(17)
@@ -286,10 +817,19 @@ assert(string.find(settings, "Hide item ownership details while in combat", 1, t
 assert(string.find(settings, "Clear search when inventory or bank closes, or you click outside", 1, true) and
   string.find(settings, "ShirsInventory_SetAutoClearSearch", 1, true),
   "settings must expose one per-character automatic-clear option for both search fields")
-assert(string.find(settings, "Use automatic items beside Hearthstone", 1, true) and
+assert(string.find(settings, "Hearthstone mode: Automatic (off = selected list)", 1, true) and
+  string.find(settings, '"automaticHearthstoneItems"', 1, true) and
   string.find(settings, "ShirsInventory_SetAutomaticHearthstoneItems", 1, true),
-  "settings must expose the backward-compatible automatic Hearthstone group")
-assert(string.find(settings, "Manage selected Hearthstone items", 1, true) and
+  "settings must expose the exclusive automatic/selected Hearthstone mode")
+assert(string.find(settings, "Lock selected item slots while sorting (bags only)", 1, true) and
+  string.find(settings, '"lockSelectedItemSlots"', 1, true) and
+  string.find(settings, "ShirsInventory_SetLockSelectedItemSlots", 1, true),
+  "settings must expose the carried-only selected-slot lock option")
+assert(string.find(settings, "Use category view (reloads UI; bag sorting is disabled)", 1, true) and
+  string.find(settings, '"categoryMode"', 1, true) and
+  string.find(settings, "ShirsInventory_SetCategoryModeAndReload", 1, true),
+  "settings must expose the reload-gated category view")
+assert(string.find(settings, "Manage selected item list", 1, true) and
   string.find(settings, "ShirsInventory_ShowHearthstoneItems", 1, true) and
   string.find(settings, 'SetText("Up")', 1, true) and
   string.find(settings, 'SetText("Down")', 1, true) and
@@ -297,11 +837,35 @@ assert(string.find(settings, "Manage selected Hearthstone items", 1, true) and
   "settings are missing the selected-item manager and its ordering controls")
 assert(not string.find(settings, ":SetShown", 1, true),
   "selected-item manager uses SetShown, which is not part of the Interface 11200 API floor")
-assert(string.find(settings, 'frame, "Clear search when inventory or bank closes, or you click outside", "autoClearSearch", -262', 1, true) and
-  string.find(settings, 'frame, "Use automatic items beside Hearthstone", "automaticHearthstoneItems", -292', 1, true) and
-  string.find(settings, 'frame.itemsPerRowSlider:SetPoint("TOPLEFT", frame, "TOPLEFT", 45, -385)', 1, true) and
-  string.find(settings, 'frame.windowScaleSlider:SetPoint("TOPLEFT", frame, "TOPLEFT", 45, -455)', 1, true),
-  "Hearthstone controls and layout sliders need separate vertical rows")
+assert(string.find(settings, 'ShirsInventory_CreatePanel("ShirsInventorySettingsFrame", 440, 610, "DIALOG")', 1, true) and
+  string.find(settings, 'frame.help:SetWidth(392)', 1, true) and
+  string.find(settings, 'check.label:SetWidth(362)', 1, true) and
+  string.find(settings, 'check.label:SetHeight(28)', 1, true),
+  "premium settings frame does not reserve exact safe text widths")
+assert(string.find(settings, 'ShirsInventory_CreateSectionHeading(frame, "BEHAVIOR", -82)', 1, true) and
+  string.find(settings, 'ShirsInventory_CreateSectionHeading(frame, "ITEMS & DISPLAY", -228)', 1, true) and
+  string.find(settings, 'ShirsInventory_CreateSectionHeading(frame, "WINDOW LAYOUT", -466)', 1, true),
+  "premium settings section headings are missing or misplaced")
+assert(string.find(settings, 'frame, "Ignore gray + manually marked junk while sorting", "ignoreJunkSorting", -107', 1, true) and
+  string.find(settings, 'frame, "Clear search when inventory or bank closes, or you click outside", "autoClearSearch", -194', 1, true) and
+  string.find(settings, 'frame, "Show quest and rarity borders on items", "showRarityBoxes", -253', 1, true) and
+  string.find(settings, 'frame, "Hearthstone mode: Automatic (off = selected list)", "automaticHearthstoneItems", -340', 1, true) and
+  string.find(settings, 'frame, "Lock selected item slots while sorting (bags only)", "lockSelectedItemSlots", -369', 1, true),
+  "premium settings rows do not use the bounded section layout")
+assert(string.find(settings, 'frame.hearthstoneItemsButton:SetPoint("TOPLEFT", frame, "TOPLEFT", 70, -401)', 1, true) and
+  string.find(settings, 'frame.hearthstoneItemsButton:SetWidth(300)', 1, true) and
+  string.find(settings, 'frame, "Use category view (reloads UI; bag sorting is disabled)", "categoryMode", -430', 1, true) and
+  string.find(settings, 'frame.itemsPerRowSlider:SetPoint("TOPLEFT", frame, "TOPLEFT", 60, -495)', 1, true) and
+  string.find(settings, 'frame.windowScaleSlider:SetPoint("TOPLEFT", frame, "TOPLEFT", 60, -538)', 1, true),
+  "premium settings actions and sliders do not align to the shared grid")
+assert(string.find(settings, 'ShirsInventory_CreatePanel("ShirsInventoryHearthstoneItemsFrame", 440, 470, "DIALOG")', 1, true) and
+  string.find(settings, 'row:SetWidth(392)', 1, true) and
+  string.find(settings, 'row:SetHeight(32)', 1, true) and
+  string.find(settings, '24, -102 - ((rowIndex - 1) * 36)', 1, true) and
+  string.find(settings, 'row.grip:SetText("::")', 1, true) and
+  string.find(settings, 'row.name:SetWidth(166)', 1, true) and
+  string.find(settings, 'row.name:SetHeight(30)', 1, true),
+  "premium selected-item manager geometry is missing")
 assert(string.find(settings, '"Items per row: "', 1, true) and
   string.find(settings, 'SetMinMaxValues(10, 20)', 1, true) and
   string.find(settings, 'SetValueStep(1)', 1, true),
@@ -339,5 +903,476 @@ assert(not string.find(settings, 'merchantSellButton:SetText("Sell Junk")', 1, t
   "merchant Sell Junk still uses the wide text button")
 assert(string.find(settings, "MerchantRepairText:Hide()", 1, true),
   "merchant repair label remains visible behind the icon row")
+
+-- Construct the real settings frame under an Interface 11200-style mock. Source
+-- strings alone cannot prove the created controls receive bounded geometry.
+local constructedFrames = {}
+local constructedGlobals = {}
+local function NewRegion()
+  local region = { visible = true, scripts = {} }
+  function region:SetWidth(value) self.width = value end
+  function region:SetHeight(value) self.height = value end
+  function region:SetPoint(point, relative, relativePoint, x, y)
+    self.point = { point = point, relative = relative, relativePoint = relativePoint, x = x, y = y }
+  end
+  function region:SetText(value) self.text = value end
+  function region:GetText() return self.text or "" end
+  function region:SetAutoFocus(value) self.autoFocus = value end
+  function region:SetMaxLetters(value) self.maxLetters = value end
+  function region:ClearFocus() self.focused = false end
+  function region:SetTextColor(...) self.textColor = arg end
+  function region:SetJustifyH(value) self.justifyH = value end
+  function region:SetJustifyV(value) self.justifyV = value end
+  function region:SetTexture(value) self.texture = value end
+  function region:SetTexCoord(...) self.texCoord = arg end
+  function region:SetVertexColor(...) self.vertexColor = arg end
+  function region:SetAllPoints(target) self.allPoints = target or true end
+  function region:SetBackdrop(value) self.backdrop = value end
+  function region:SetBackdropColor(...) self.backdropColor = arg end
+  function region:SetBackdropBorderColor(...) self.backdropBorderColor = arg end
+  function region:SetFrameStrata(value) self.strata = value end
+  function region:SetFrameLevel(value) self.frameLevel = value end
+  function region:GetFrameLevel() return self.frameLevel or 1 end
+  function region:SetToplevel(value) self.toplevel = value end
+  function region:EnableMouse(value) self.mouseEnabled = value end
+  function region:SetMovable(value) self.movable = value end
+  function region:SetClampedToScreen(value) self.clamped = value end
+  function region:RegisterForDrag(...) self.dragButtons = arg end
+  function region:RegisterEvent(value) self.event = value end
+  function region:SetScript(name, handler) self.scripts[name] = handler end
+  function region:SetParent(value) self.parent = value end
+  function region:ClearAllPoints() self.point = nil end
+  function region:StartMoving() end
+  function region:StopMovingOrSizing() end
+  function region:Show() self.visible = true end
+  function region:Hide() self.visible = false end
+  function region:IsShown() return self.visible end
+  function region:IsVisible() return self.visible end
+  function region:SetChecked(value) self.checked = value end
+  function region:GetChecked() return self.checked end
+  function region:SetMinMaxValues(low, high) self.low, self.high = low, high end
+  function region:SetValueStep(value) self.step = value end
+  function region:SetValue(value) self.value = value end
+  function region:GetValue() return self.value end
+  function region:Enable() self.enabled = true end
+  function region:Disable() self.enabled = false end
+  function region:CreateFontString()
+    local child = NewRegion()
+    child.parent = self
+    return child
+  end
+  function region:CreateTexture()
+    local child = NewRegion()
+    child.parent = self
+    return child
+  end
+  return region
+end
+
+UIParent = NewRegion()
+MerchantFrame = NewRegion()
+MerchantRepairItemButton = NewRegion()
+MerchantRepairText = NewRegion()
+GameTooltip = NewRegion()
+function GameTooltip:SetOwner() end
+function GameTooltip:AddLine() end
+UISpecialFrames = {}
+function CreateFrame(frameType, name, parent, template)
+  local frame = NewRegion()
+  frame.frameType, frame.name, frame.parent, frame.template = frameType, name, parent, template
+  if name == "ShirsInventoryCategoryScanTooltip" then
+    function frame:SetOwner(owner, anchor) self.owner, self.anchor = owner, anchor end
+    function frame:ClearLines() end
+    function frame:SetBagItem(bag, slot) self.scannedBag, self.scannedSlot = bag, slot end
+    function frame:NumLines() return 2 end
+    local firstLine = NewRegion()
+    firstLine:SetText("Roasted Boar")
+    local secondLine = NewRegion()
+    secondLine:SetText("Must remain seated while eating.")
+    constructedGlobals.ShirsInventoryCategoryScanTooltipTextLeft1 = firstLine
+    constructedGlobals.ShirsInventoryCategoryScanTooltipTextLeft2 = secondLine
+  end
+  table.insert(constructedFrames, frame)
+  if name then
+    constructedGlobals[name] = frame
+    getfenv(0)[name] = frame
+  end
+  return frame
+end
+function getglobal(name)
+  if constructedGlobals[name] then return constructedGlobals[name] end
+  local region = NewRegion()
+  constructedGlobals[name] = region
+  return region
+end
+local scannedCategoryTooltip = ShirsInventory_GetCategoryTooltipText(2, 7)
+local categoryScanTooltip = constructedGlobals.ShirsInventoryCategoryScanTooltip
+assert(categoryScanTooltip and categoryScanTooltip.template == "GameTooltipTemplate" and
+  categoryScanTooltip.scannedBag == 2 and categoryScanTooltip.scannedSlot == 7 and
+  string.find(scannedCategoryTooltip, "Must remain seated while eating", 1, true),
+  "broader category tooltip scanner did not use the real bag/slot or collect legacy tooltip lines")
+ShirsInventory_RefreshButtonStyles = function() end
+ShirsInventory_UpdateStandaloneControls = function() end
+local settingsReloads = 0
+function ReloadUI() settingsReloads = settingsReloads + 1 end
+ShirsInventory_CreateSettingsUI()
+local builtSettings = constructedGlobals.ShirsInventorySettingsFrame
+assert(builtSettings and builtSettings.width == 440 and builtSettings.height == 610 and
+  builtSettings.point.point == "CENTER" and builtSettings.point.y == 20,
+  "real settings constructor did not build the premium frame geometry")
+assert(type(ShirsInventory_ShowCategoryManager) == "function" and
+  type(ShirsInventory_ToggleCategoryManager) == "function" and
+  type(ShirsInventory_PositionCategoryManager) == "function" and
+  type(ShirsInventory_RefreshCategoryManager) == "function",
+  "custom category manager UI APIs are missing")
+local categoryImportCalls = {}
+ShirsInventory_AccountGetCurrentRealm = function() return "CurrentRealm" end
+ShirsInventory_AccountGetCurrentCharacter = function() return "Currentchar" end
+ShirsInventory_AccountGetCategoryImportSources = function()
+  return {
+    { realm = "AlphaRealm", character = "Altsmith", label = "Altsmith - AlphaRealm" },
+    { realm = "BetaRealm", character = "Banktoon", label = "Banktoon - BetaRealm" },
+  }
+end
+ShirsInventory_AccountImportCategorySettings = function(realm, character)
+  table.insert(categoryImportCalls, realm .. ":" .. character)
+  return true
+end
+local categoryManagerAnchor = NewRegion()
+ShirsInventoryFrame = { sortButton = categoryManagerAnchor }
+local categoryManagerPositionProbe = NewRegion()
+assert(ShirsInventory_PositionCategoryManager(categoryManagerPositionProbe) and
+  categoryManagerPositionProbe.point.point == "TOPRIGHT" and
+  categoryManagerPositionProbe.point.relative == categoryManagerAnchor and
+  categoryManagerPositionProbe.point.relativePoint == "BOTTOMRIGHT",
+  "category manager did not stay below the Categories button so the button remains clickable")
+assert(ShirsInventory_SaveCategorySettingsFrameCoordinates("TOPLEFT", "BOTTOMLEFT", 275, 725),
+  "Category Settings test position did not save")
+assert(ShirsInventory_PositionCategoryManager(categoryManagerPositionProbe) and
+  categoryManagerPositionProbe.point.point == "TOPLEFT" and
+  categoryManagerPositionProbe.point.relative == UIParent and
+  categoryManagerPositionProbe.point.relativePoint == "BOTTOMLEFT" and
+  categoryManagerPositionProbe.point.x == 275 and categoryManagerPositionProbe.point.y == 725,
+  "Category Settings did not restore its saved per-character position")
+assert(ShirsInventory_ShowCategoryManager(), "custom category manager did not open")
+local builtCategoryManager = constructedGlobals.ShirsInventoryCategoryManagerFrame
+assert(builtCategoryManager:IsShown() and ShirsInventory_ToggleCategoryManager() and
+  not builtCategoryManager:IsShown() and ShirsInventory_ToggleCategoryManager() and
+  builtCategoryManager:IsShown(),
+  "Categories button did not toggle the category manager closed and open")
+assert(builtCategoryManager and builtCategoryManager.width == 440 and builtCategoryManager.height == 680 and
+  builtCategoryManager.title.text == "Category settings" and
+  builtCategoryManager.customCategoriesHeading and
+  builtCategoryManager.customCategoriesHeading.text == "CUSTOM CATEGORIES" and
+  builtCategoryManager.displayHeading and builtCategoryManager.displayHeading.text == "DISPLAY" and
+  builtCategoryManager.importHeading and builtCategoryManager.importHeading.text == "IMPORT FROM CHARACTER" and
+  builtCategoryManager.importSourceText and
+  builtCategoryManager.importSourceText.text == "Altsmith - AlphaRealm" and
+  builtCategoryManager.importPrevious and builtCategoryManager.importNext and builtCategoryManager.importButton and
+  builtCategoryManager.nameInput.maxLetters == 28 and table.getn(builtCategoryManager.rows) == 12 and
+  builtCategoryManager.collapseEmptySlots and
+  builtCategoryManager.collapseEmptySlots.label.text == "Collapse Empty Slots to one slot",
+  "custom category manager did not build its bounded create/delete and Empty Slots layout")
+assert(builtCategoryManager.point.point == "TOPLEFT" and builtCategoryManager.point.x == 275 and
+  builtCategoryManager.point.y == 725,
+  "Category Settings constructor ignored its saved position")
+builtCategoryManager.GetLeft = function() return 411 end
+builtCategoryManager.GetTop = function() return 688 end
+builtCategoryManager.scripts.OnDragStop()
+local draggedCategorySettingsPosition = ShirsInventory_GetCategorySettingsPosition()
+assert(draggedCategorySettingsPosition.x == 411 and draggedCategorySettingsPosition.y == 688,
+  "dragging Category Settings did not save its new position")
+ShirsInventory_ToggleCategoryManager()
+ShirsInventory_ToggleCategoryManager()
+assert(builtCategoryManager.point.point == "TOPLEFT" and builtCategoryManager.point.x == 411 and
+  builtCategoryManager.point.y == 688,
+  "Category Settings snapped back after reopening")
+local categoryManagerThis = this
+this = builtCategoryManager.collapseEmptySlots
+this:SetChecked(1)
+this.scripts.OnClick()
+assert(ShirsInventory_GetCollapseEmptySlots(),
+  "category manager did not enable one-slot Empty Slots display")
+this:SetChecked(nil)
+this.scripts.OnClick()
+assert(not ShirsInventory_GetCollapseEmptySlots(),
+  "category manager did not restore all Empty Slots")
+this = builtCategoryManager.importNext
+this.scripts.OnClick()
+assert(builtCategoryManager.importSourceText.text == "Banktoon - BetaRealm" and
+  table.getn(categoryImportCalls) == 0,
+  "category import source selector did not advance without importing")
+this = builtCategoryManager.importButton
+this.scripts.OnClick()
+assert(table.getn(categoryImportCalls) == 0 and builtCategoryManager.importButton.text == "Confirm",
+  "first category import click did not arm a safe confirmation")
+this.scripts.OnClick()
+assert(table.getn(categoryImportCalls) == 1 and categoryImportCalls[1] == "BetaRealm:Banktoon" and
+  builtCategoryManager.importButton.text == "Import",
+  "confirmed category import did not use the selected same-account character exactly once")
+local savedCategoryImportSources = ShirsInventory_AccountGetCategoryImportSources
+ShirsInventory_AccountGetCategoryImportSources = function() return {} end
+ShirsInventory_RefreshCategoryManager()
+assert(builtCategoryManager.importSourceText.text == "No other saved characters" and
+  builtCategoryManager.importButton.enabled == false and
+  builtCategoryManager.importPrevious.enabled == false and builtCategoryManager.importNext.enabled == false,
+  "category import controls did not fail closed when no other character snapshot exists")
+ShirsInventory_AccountGetCategoryImportSources = savedCategoryImportSources
+ShirsInventory_RefreshCategoryManager()
+this = builtCategoryManager.create
+builtCategoryManager.nameInput:SetText("Explosives")
+this.scripts.OnClick()
+assert(table.getn(ShirsInventory_GetCustomCategories()) == 1 and
+  builtCategoryManager.rows[1].label.text == "Explosives" and builtCategoryManager.rows[1].visible,
+  "custom category manager Create button did not add and refresh a category")
+this = builtCategoryManager.rows[1].delete
+this.scripts.OnClick()
+assert(table.getn(ShirsInventory_GetCustomCategories()) == 0 and not builtCategoryManager.rows[1].visible,
+  "custom category manager Delete button did not remove and refresh a category")
+this = categoryManagerThis
+assert(builtSettings.help and builtSettings.help.width == 392 and builtSettings.help.height == 30,
+  "real settings constructor did not bound the help copy")
+assert(builtSettings.behaviorHeading and builtSettings.behaviorRule and
+  builtSettings.behaviorRule.width == 392 and builtSettings.behaviorRule.height == 1 and
+  builtSettings.itemsHeading and builtSettings.itemsRule and
+  builtSettings.layoutHeading and builtSettings.layoutRule,
+  "real settings constructor did not build the section hierarchy")
+assert(builtSettings.autoClearSearch.label.width == 362 and
+  builtSettings.autoClearSearch.label.height == 28 and
+  builtSettings.autoClearSearch.label.justifyH == "LEFT" and
+  builtSettings.autoClearSearch.label.justifyV == "MIDDLE",
+  "long checkbox labels are not constrained inside the settings margin")
+assert(builtSettings.lockSelectedItemSlots and
+  builtSettings.lockSelectedItemSlots.label.width == 362 and
+  builtSettings.lockSelectedItemSlots.label.height == 28 and
+  builtSettings.lockSelectedItemSlots.point.y == -369 and
+  builtSettings.hearthstoneItemsButton.width == 300 and
+  builtSettings.hearthstoneItemsButton.point.y == -401 and
+  builtSettings.categoryMode and builtSettings.categoryMode.point.y == -430 and
+  builtSettings.itemsPerRowSlider.width == 320 and builtSettings.windowScaleSlider.width == 320 and
+  builtSettings.itemsPerRowSlider.point.x == 60 and builtSettings.itemsPerRowSlider.point.y == -495 and
+  builtSettings.windowScaleSlider.point.x == 60 and builtSettings.windowScaleSlider.point.y == -538 and
+  builtSettings.closeButton.width == 96 and builtSettings.closeButton.point.y == 14,
+  "real settings constructor produced misaligned action or slider geometry")
+
+local settingsThis = this
+assert(not ShirsInventory_GetLockSelectedItemSlots(),
+  "selected-slot lock option did not construct from its safe default")
+this = builtSettings.lockSelectedItemSlots
+this:SetChecked(1)
+this.scripts.OnClick()
+assert(ShirsInventory_GetLockSelectedItemSlots(),
+  "selected-slot lock checkbox did not persist on")
+this:SetChecked(nil)
+this.scripts.OnClick()
+assert(not ShirsInventory_GetLockSelectedItemSlots(),
+  "selected-slot lock checkbox did not persist off")
+assert(not ShirsInventory_GetCategoryMode(),
+  "constructed category-view checkbox did not start from the safe default")
+this = builtSettings.categoryMode
+this:SetChecked(1)
+this.scripts.OnClick()
+assert(ShirsInventory_GetCategoryMode() and settingsReloads == 1,
+  "category-view checkbox did not persist on and reload the UI")
+this = settingsThis
+
+-- The count must refresh even before the selected-item manager is constructed.
+local controlDown, altDown = true, false
+function IsControlKeyDown() return controlDown end
+function IsAltKeyDown() return altDown end
+function GetContainerItemInfo() return "gem-texture", 1, nil, 2 end
+function GetContainerItemLink() return "|Hitem:12361:0:0:0|h[Blue Sapphire]|h" end
+local liveItemButton = { bag = 0, slot = 1 }
+local categoryEditPhysicalPickups = 0
+PickupContainerItem = function() categoryEditPhysicalPickups = categoryEditPhysicalPickups + 1 end
+controlDown = false
+assert(ShirsInventory_SetCategoryEditMode(true) and
+  ShirsInventory_HandleItemClick(liveItemButton, "LeftButton", true) and
+  ShirsInventory_SetCategoryEditHover("quest") and
+  ShirsInventory_FinishCategoryEditDrag() == "quest" and
+  ShirsInventory_GetCategoryAssignment(12361) == "quest" and
+  categoryEditPhysicalPickups == 0,
+  "category edit drag touched the physical cursor or failed to save the visual assignment")
+assert(ShirsInventory_HandleItemClick(liveItemButton, "RightButton") and
+  ShirsInventory_GetCategoryAssignment(12361) == nil,
+  "category edit right-click did not restore automatic classification")
+ShirsInventory_SetCategoryEditMode(false)
+controlDown = true
+ShirsInventory_ClearHearthstoneItems()
+assert(ShirsInventory_HandleItemClick(liveItemButton, "RightButton") and
+  ShirsInventory_GetHearthstoneItemCount() == 0,
+  "category view must not intercept Ctrl-right-click for selected-item sorting")
+ShirsInventory_SetCategoryMode(false)
+assert(ShirsInventory_HandleItemClick(liveItemButton, "RightButton") and
+  builtSettings.hearthstoneItemsButton.text == "Manage selected item list (1)",
+  "live Ctrl-right-click add did not refresh the count before manager construction")
+assert(ShirsInventory_HandleItemClick(liveItemButton, "RightButton") and
+  builtSettings.hearthstoneItemsButton.text == "Manage selected item list (0)",
+  "live Ctrl-right-click remove did not refresh the count before manager construction")
+
+builtSettings.hearthstoneItemsButton.scripts.OnClick()
+local builtManager = constructedGlobals.ShirsInventoryHearthstoneItemsFrame
+assert(builtManager and builtManager.width == 440 and builtManager.height == 470 and
+  builtManager.point.point == "CENTER" and builtManager.point.y == 10,
+  "real selected-item manager constructor has the wrong frame geometry")
+assert(builtManager.title.text == "Selected item list",
+  "selected-item manager title does not cover both edge and lock uses")
+assert(builtManager.help.width == 392 and builtManager.help.height == 30 and
+  string.find(builtManager.help.text or "", "Drag by the :: grip", 1, true) and
+  builtManager.selectedItemHeading and builtManager.orderActionHeading and
+  builtManager.columnRule and builtManager.columnRule.width == 392,
+  "selected-item manager is missing its bounded header hierarchy")
+assert(table.getn(builtManager.rows) == 8,
+  "selected-item manager did not construct exactly eight paginated rows")
+local constructedRowIndex
+for constructedRowIndex = 1, table.getn(builtManager.rows) do
+  local row = builtManager.rows[constructedRowIndex]
+  assert(row.width == 392 and row.height == 32 and row.point.x == 24 and
+    row.point.y == -102 - ((constructedRowIndex - 1) * 36),
+    "selected-item manager row geometry is wrong")
+  assert(row.grip and row.grip.text == "::" and row.grip.width == 18 and row.grip.height == 32 and
+    row.grip.point.x == 0 and
+    row.icon.width == 28 and row.icon.height == 28 and row.icon.point.x == 20 and
+    row.name.width == 166 and row.name.height == 30 and row.name.point.x == 56 and
+    row.dragArea and row.dragArea.width == 222 and row.dragArea.height == 32 and
+    row.dragArea.dragButtons and row.dragArea.dragButtons[1] == "LeftButton" and
+    row.dragArea.scripts.OnDragStart and row.dragArea.scripts.OnDragStop and
+    row.dragArea.scripts.OnEnter and row.dragArea.scripts.OnLeave and
+    row.dragHighlight and not row.dragHighlight.visible and
+    row.up.width == 38 and row.up.point.x == 230 and
+    row.down.width == 48 and row.down.point.x == 272 and
+    row.remove.width == 68 and row.remove.point.x == 324,
+    "selected-item row content or drag target exceeds its identity or action column")
+end
+assert(builtManager.pageText.width == 90 and builtManager.pageText.height == 14 and
+  builtManager.previous.width == 46 and builtManager.next.width == 46 and
+  builtManager.clear.width == 90 and builtManager.close.width == 90,
+  "selected-item manager footer geometry is incomplete")
+
+ShirsInventory_ClearHearthstoneItems()
+assert(ShirsInventory_SetHearthstoneItem(15138, true) and
+  ShirsInventory_SetHearthstoneItem(12361, true))
+ShirsInventory_RefreshHearthstoneItemsFrame()
+assert(builtManager.rows[1].itemID == 15138 and not builtManager.rows[1].up.enabled and
+  builtManager.rows[1].down.enabled,
+  "manager refresh did not preserve first-row movement state")
+local constructorThis = this
+this = builtManager.rows[1].down
+this.scripts.OnClick()
+local reorderedItems = ShirsInventory_GetHearthstoneItems()
+assert(reorderedItems[1] == 12361 and reorderedItems[2] == 15138 and
+  builtManager.rows[1].itemID == 12361,
+  "manager Down action did not reorder and refresh immediately")
+this = builtManager.rows[1].remove
+this.scripts.OnClick()
+assert(ShirsInventory_GetHearthstoneItemCount() == 1 and builtManager.rows[1].itemID == 15138,
+  "manager Remove action did not update and refresh immediately")
+this = builtManager.clear
+this.scripts.OnClick()
+assert(ShirsInventory_GetHearthstoneItemCount() == 0 and builtManager.emptyText.visible,
+  "manager Clear All action did not empty and refresh the manager")
+
+assert(ShirsInventory_SetHearthstoneItem(15138, true) and
+  ShirsInventory_SetHearthstoneItem(12361, true) and
+  ShirsInventory_SetHearthstoneItem(22222, true) and
+  ShirsInventory_SetHearthstoneItem(33333, true))
+ShirsInventory_RefreshHearthstoneItemsFrame()
+local mouseFocus
+function GetMouseFocus() return mouseFocus end
+local dragSource = builtManager.rows[1].dragArea
+this = dragSource
+dragSource.scripts.OnDragStart()
+assert(builtManager.rows[1].dragHighlight.visible,
+  "starting a selected-item drag did not show source feedback")
+local dragTarget = builtManager.rows[3].dragArea
+this = dragTarget
+dragTarget.scripts.OnEnter()
+assert(builtManager.rows[3].dragHighlight.visible and
+  builtManager.rows[3].dragHighlight.vertexColor[1] == 1,
+  "hovering a selected-item drop target did not show distinct target feedback")
+dragTarget.scripts.OnLeave()
+assert(not builtManager.rows[3].dragHighlight.visible,
+  "leaving a selected-item drop target did not clear target feedback")
+dragTarget.scripts.OnEnter()
+mouseFocus = dragTarget
+dragSource.scripts.OnDragStop()
+local draggedItems = ShirsInventory_GetHearthstoneItems()
+assert(draggedItems[1] == 12361 and draggedItems[2] == 22222 and
+  draggedItems[3] == 15138 and draggedItems[4] == 33333 and
+  builtManager.rows[1].itemID == 12361 and builtManager.rows[3].itemID == 15138 and
+  not builtManager.rows[1].dragHighlight.visible,
+  "dragging a selected item onto another row did not persist and refresh the new order")
+local stableDragOrder = table.concat(draggedItems, ",")
+dragSource = builtManager.rows[1].dragArea
+this = dragSource
+mouseFocus = dragSource
+dragSource.scripts.OnDragStart()
+dragSource.scripts.OnDragStop()
+assert(table.concat(ShirsInventory_GetHearthstoneItems(), ",") == stableDragOrder,
+  "dropping a selected item on itself changed the order")
+mouseFocus = nil
+dragSource.scripts.OnDragStart()
+dragSource.scripts.OnDragStop()
+assert(table.concat(ShirsInventory_GetHearthstoneItems(), ",") == stableDragOrder,
+  "dropping a selected item outside another selected row changed the order")
+ShirsInventory_ClearHearthstoneItems()
+ShirsInventory_RefreshHearthstoneItemsFrame()
+local pageItemIndex
+for pageItemIndex = 1, 30 do
+  assert(ShirsInventory_SetHearthstoneItem(92000 + pageItemIndex, true),
+    "30-item manager paging setup rejected a valid selection")
+end
+ShirsInventory_RefreshHearthstoneItemsFrame()
+assert(builtManager.pageText.text == "Page 1 / 4" and builtManager.next.enabled,
+  "30 selected items did not produce four manager pages")
+this = builtManager.next
+builtManager.next.scripts.OnClick()
+builtManager.next.scripts.OnClick()
+builtManager.next.scripts.OnClick()
+assert(builtManager.pageText.text == "Page 4 / 4" and
+  builtManager.rows[1].itemID == 92025 and builtManager.rows[6].itemID == 92030 and
+  builtManager.rows[7].itemID == nil and not builtManager.next.enabled and builtManager.previous.enabled,
+  "the fourth selected-item manager page did not expose entries 25 through 30")
+ShirsInventory_ClearHearthstoneItems()
+ShirsInventory_RefreshHearthstoneItemsFrame()
+this = constructorThis
+
+-- Reproduce the live path: keep both settings surfaces open, then mutate the
+-- selection from a carried item. Neither surface may require close/reopen.
+assert(ShirsInventory_HandleItemClick(liveItemButton, "RightButton"),
+  "live Ctrl-right-click add path was not handled")
+assert(ShirsInventory_GetHearthstoneItemCount() == 1 and
+  builtSettings.hearthstoneItemsButton.text == "Manage selected item list (1)" and
+  builtManager.rows[1].itemID == 12361 and not builtManager.emptyText.visible,
+  "live Ctrl-right-click add did not refresh the open manager and count immediately")
+assert(ShirsInventory_HandleItemClick(liveItemButton, "RightButton"),
+  "live Ctrl-right-click remove path was not handled")
+assert(ShirsInventory_GetHearthstoneItemCount() == 0 and
+  builtSettings.hearthstoneItemsButton.text == "Manage selected item list (0)" and
+  builtManager.rows[1].itemID == nil and builtManager.emptyText.visible,
+  "live Ctrl-right-click remove did not refresh the open manager and count immediately")
+
+assert(ShirsInventory_HandleSlashCommand("pin 12361"),
+  "slash pin path did not add the selected item")
+assert(ShirsInventory_GetHearthstoneItemCount() == 1 and
+  builtSettings.hearthstoneItemsButton.text == "Manage selected item list (1)" and
+  builtManager.rows[1].itemID == 12361 and not builtManager.emptyText.visible,
+  "slash pin did not refresh the open manager and count immediately")
+assert(ShirsInventory_HandleSlashCommand("unpin 12361"),
+  "slash unpin path did not remove the selected item")
+assert(ShirsInventory_GetHearthstoneItemCount() == 0 and
+  builtSettings.hearthstoneItemsButton.text == "Manage selected item list (0)" and
+  builtManager.rows[1].itemID == nil and builtManager.emptyText.visible,
+  "slash unpin did not refresh the open manager and count immediately")
+this = constructorThis
+
+local settingsSpecialCount, managerSpecialCount = 0, 0
+local specialIndex
+for specialIndex = 1, table.getn(UISpecialFrames) do
+  if UISpecialFrames[specialIndex] == "ShirsInventorySettingsFrame" then settingsSpecialCount = settingsSpecialCount + 1 end
+  if UISpecialFrames[specialIndex] == "ShirsInventoryHearthstoneItemsFrame" then managerSpecialCount = managerSpecialCount + 1 end
+end
+assert(settingsSpecialCount == 1 and managerSpecialCount == 1,
+  "settings frames were not registered exactly once for Escape handling")
 
 print("INVENTORY_OPTIONS_UI_TEST=PASS")

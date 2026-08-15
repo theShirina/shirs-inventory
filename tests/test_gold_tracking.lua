@@ -97,7 +97,7 @@ expectFormat(nil, "0c")
 
 -- Account DB shape and login recording.
 assert(type(ShirsInventory_AccountEnsureDB()) == "table", "account DB should be created")
-assert(ShirsInventory_AccountEnsureDB().version == 2, "account DB should carry the item-tracking schema version")
+assert(ShirsInventory_AccountEnsureDB().version == 3, "account DB should carry the category-import schema version")
 local recorded = ShirsInventory_AccountRecordCurrentGold()
 assert(recorded == 1234567, "login record should return the current copper")
 assert(ShirsInventoryAccountDB.realms["TestRealm"]["Altsmith"] == 1234567,
@@ -248,6 +248,69 @@ assert(flagged == 0, "no line should be flagged current when the character is no
 
 local linesEmpty, totalEmpty = ShirsInventory_AccountBuildTooltipLines("MissingRealm", "Altsmith")
 assert(table.getn(linesEmpty) == 0 and totalEmpty == 0, "unknown realm should yield no lines and zero total")
+
+-- Category settings are mirrored account-wide per realm+character so another
+-- character can import a validated copy without touching window position or unrelated settings.
+assert(type(ShirsInventory_AccountSaveCurrentCategorySettings) == "function" and
+  type(ShirsInventory_AccountGetCategoryImportSources) == "function" and
+  type(ShirsInventory_AccountImportCategorySettings) == "function",
+  "same-account category settings import APIs are missing")
+assert(ShirsInventory_ApplyCategorySettingsSnapshot({
+  version = 1,
+  customCategories = { { key = "custom:11", label = "Smithing" } },
+  categoryAssignments = { [70001] = "custom:11", [70002] = "weapons" },
+  collapseEmptySlots = true,
+}) and ShirsInventory_AccountSaveCurrentCategorySettings(),
+  "current character category settings were not mirrored account-wide")
+local savedSmithSnapshot = ShirsInventoryAccountDB.categorySettings.TestRealm.Altsmith
+assert(savedSmithSnapshot.customCategories[1].label == "Smithing" and
+  savedSmithSnapshot.categoryAssignments[70001] == "custom:11" and
+  savedSmithSnapshot.collapseEmptySlots,
+  "account category mirror lost custom categories, assignments, or display settings")
+currentCharacter = "Banktoon"
+assert(ShirsInventory_ApplyCategorySettingsSnapshot({
+  version = 1, customCategories = {}, categoryAssignments = {}, collapseEmptySlots = false,
+}) and ShirsInventory_AccountSaveCurrentCategorySettings(),
+  "second character category settings were not mirrored")
+ShirsInventoryAccountDB.categorySettings.TestRealm.Malformed = {
+  version = 1, customCategories = "bad", categoryAssignments = {}, collapseEmptySlots = false,
+}
+ShirsInventoryAccountDB.categorySettings.OtherRealm = {
+  Outsider = savedSmithSnapshot,
+}
+local importSources = ShirsInventory_AccountGetCategoryImportSources("TestRealm", "Banktoon")
+assert(table.getn(importSources) == 2 and
+  importSources[1].realm == "OtherRealm" and importSources[1].character == "Outsider" and
+  importSources[2].realm == "TestRealm" and importSources[2].character == "Altsmith",
+  "category import sources did not scan the same account, exclude current character, sort, and reject malformed profiles")
+assert(ShirsInventory_AccountImportCategorySettings("TestRealm", "Altsmith") and
+  ShirsInventory_GetCustomCategoryLabel("custom:11") == "Smithing" and
+  ShirsInventory_GetCategoryAssignment(70001) == "custom:11" and
+  ShirsInventory_GetCollapseEmptySlots(),
+  "same-account category settings import did not replace the current category setup")
+assert(ShirsInventoryAccountDB.categorySettings.TestRealm.Banktoon.categoryAssignments[70002] == "weapons",
+  "successful import did not refresh the current character's account mirror")
+local importedCopy = ShirsInventory_AccountGetCategorySettings("TestRealm", "Altsmith")
+importedCopy.customCategories[1].label = "Mutated"
+assert(ShirsInventoryAccountDB.categorySettings.TestRealm.Altsmith.customCategories[1].label == "Smithing",
+  "account category settings getter leaked mutable SavedVariable references")
+assert(not ShirsInventory_AccountImportCategorySettings("TestRealm", "Malformed") and
+  ShirsInventory_GetCustomCategoryLabel("custom:11") == "Smithing",
+  "malformed account category profile overwrote current settings")
+local liveCategoryKey = ShirsInventory_CreateCustomCategory("Live changes")
+assert(liveCategoryKey and
+  ShirsInventoryAccountDB.categorySettings.TestRealm.Banktoon.customCategories[2].label == "Live changes",
+  "custom category creation did not refresh the account import mirror")
+assert(ShirsInventory_SetCategoryAssignment(70003, liveCategoryKey) == liveCategoryKey and
+  ShirsInventoryAccountDB.categorySettings.TestRealm.Banktoon.categoryAssignments[70003] == liveCategoryKey,
+  "manual category assignment did not refresh the account import mirror")
+ShirsInventory_SetCollapseEmptySlots(false)
+assert(not ShirsInventoryAccountDB.categorySettings.TestRealm.Banktoon.collapseEmptySlots,
+  "Empty Slots display change did not refresh the account import mirror")
+assert(ShirsInventory_DeleteCustomCategory(liveCategoryKey) and
+  ShirsInventoryAccountDB.categorySettings.TestRealm.Banktoon.categoryAssignments[70003] == nil,
+  "custom category deletion did not refresh and clean the account import mirror")
+currentCharacter = "Altsmith"
 
 -- Full-suite account display cannot be disabled by obsolete feature state.
 local hidden = false

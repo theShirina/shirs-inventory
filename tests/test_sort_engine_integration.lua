@@ -117,6 +117,10 @@ function GetItemInfo(itemID)
     -- name, link, rarity, level, type, subtype, maxStack, equipLoc, texture.
     return "Elixir of Lion's Strength", "link", 1, 1, "Consumable", "Consumable", 5, "", "texture"
   end
+  if itemID == 26189 then
+    return "Eternal Greater Fire Protection Potion", "link", 6, 58,
+      "Consumable", "Consumable", 1, "", "texture"
+  end
   if itemID == 6948 then
     return "Hearthstone", "link", 1, 1, "Miscellaneous", "Junk", 1, "", "texture"
   end
@@ -271,13 +275,20 @@ assert(ShirsInventory_GetAdjacencyGroup(26084) == nil,
 assert(ShirsInventory_GetEdgeAnchorRank(2454, "Elixir of Lion's Strength", "Consumable", "Consumable") == nil,
   "ordinary item became an edge anchor")
 
--- Per-character selections must sit immediately outside Hearthstone in their
--- saved order. They apply only to carried bags; automatic groups can be turned
--- off without disabling Hearthstone or user selections.
+-- The toggle chooses one carried-bag mode. Automatic mode uses only the
+-- built-in groups; selected mode uses only the saved per-character list.
+-- Hearthstone stays fixed, and bank sorting keeps its existing behavior.
 ShirsInventory_ClearHearthstoneItems()
 ShirsInventory_SetAutomaticHearthstoneItems(true)
 assert(ShirsInventory_SetHearthstoneItem(2454, true))
 assert(ShirsInventory_SetHearthstoneItem(100, true))
+assert(ShirsInventory_GetEdgeAnchorRank(
+  2454, "Elixir of Lion's Strength", "Consumable", "Consumable", nil, false, 0
+) == nil, "automatic Hearthstone mode still applied a user selection")
+assert(ShirsInventory_GetEdgeAnchorRank(
+  15138, "Onyxia Scale Cloak", "Armor", "Cloth", nil, false, 0
+) == 1.5, "automatic Hearthstone mode did not rank Onyxia Scale Cloak")
+ShirsInventory_SetAutomaticHearthstoneItems(false)
 local selectedRankOne = ShirsInventory_GetEdgeAnchorRank(
   2454, "Elixir of Lion's Strength", "Consumable", "Consumable", nil, false, 0
 )
@@ -286,25 +297,25 @@ local selectedRankTwo = ShirsInventory_GetEdgeAnchorRank(
 )
 assert(selectedRankOne and selectedRankTwo and selectedRankOne > 1 and
   selectedRankTwo > selectedRankOne and selectedRankTwo < 1.5,
-  "selected items did not occupy their saved order directly outside Hearthstone")
+  "selected mode did not place saved items directly outside Hearthstone")
+assert(ShirsInventory_GetEdgeAnchorRank(
+  15138, "Onyxia Scale Cloak", "Armor", "Cloth", nil, false, 0
+) == nil, "selected mode still ranked an automatic Hearthstone item")
 assert(ShirsInventory_GetEdgeAnchorRank(
   2454, "Elixir of Lion's Strength", "Consumable", "Consumable", nil, false, BANK_CONTAINER
 ) == nil, "carried-bag Hearthstone selection leaked into bank sorting")
-ShirsInventory_SetAutomaticHearthstoneItems(false)
-assert(ShirsInventory_GetEdgeAnchorRank(15138, "Onyxia Scale Cloak", "Armor", "Cloth", nil, false, 0) == nil,
-  "disabled automatic Hearthstone group still ranked Onyxia Scale Cloak in carried bags")
 assert(ShirsInventory_GetEdgeAnchorRank(
   15138, "Onyxia Scale Cloak", "Armor", "Cloth", nil, false, BANK_CONTAINER
-) == 1.5, "automatic Hearthstone toggle changed main-bank sorting")
+) == 1.5, "selected mode changed main-bank sorting")
 assert(ShirsInventory_GetEdgeAnchorRank(
   15138, "Onyxia Scale Cloak", "Armor", "Cloth", nil, false, 5
-) == 1.5, "automatic Hearthstone toggle changed bank-bag sorting")
+) == 1.5, "selected mode changed bank-bag sorting")
+assert(ShirsInventory_GetEdgeAnchorRank(6948, "Hearthstone", "Miscellaneous", "Junk", nil, false, 0) == 1,
+  "selected mode disabled the fixed Hearthstone anchor")
+ShirsInventory_SetAutomaticHearthstoneItems(true)
 assert(ShirsInventory_GetEdgeAnchorRank(
   2454, "Elixir of Lion's Strength", "Consumable", "Consumable", nil, false, 0
-) == selectedRankOne, "disabling automatic Hearthstone items also disabled a user selection")
-assert(ShirsInventory_GetEdgeAnchorRank(6948, "Hearthstone", "Miscellaneous", "Junk", nil, false, 0) == 1,
-  "disabling automatic Hearthstone items disabled the fixed Hearthstone anchor")
-ShirsInventory_SetAutomaticHearthstoneItems(true)
+) == nil, "returning to automatic mode did not stop applying the selected list")
 ShirsInventory_ClearHearthstoneItems()
 
 assert(ShirsInventory_IsQuestBorderItem("Quest", 1),
@@ -346,6 +357,231 @@ local function tickOnce()
   runnerUpdate()
 end
 
+-- Pairwise-disjoint transactions may share one rendered frame. Keep the burst
+-- bounded and leave its combined predicted state behind the full scan gate.
+slotCount = 33
+bags[0] = {}
+local pacingItemIndex
+for pacingItemIndex = 1, slotCount do
+  bags[0][pacingItemIndex] = { id = 133 - pacingItemIndex, count = 1 }
+end
+ShirsInventory_ClearHearthstoneItems()
+ShirsInventory_SetAutomaticHearthstoneItems(true)
+ShirsInventory_SetLockSelectedItemSlots(false)
+ShirsInventory_SetDirection("top")
+ShirsInventory_SetSortMode("itemType")
+local pacingOriginalMoveCursorItem = ShirsInventory_MoveCursorItem
+local pacingMoveFrames = {}
+local pacingFrameMoves = {}
+local pacingFrame = 0
+local pacingOriginalGetContainerItemInfo = GetContainerItemInfo
+local pacingInfoCalls = 0
+GetContainerItemInfo = function(container, position)
+  pacingInfoCalls = pacingInfoCalls + 1
+  return pacingOriginalGetContainerItemInfo(container, position)
+end
+ShirsInventory_MoveCursorItem = function(sourceContainer, sourcePosition, destinationContainer, destinationPosition)
+  pacingFrameMoves[pacingFrame] = (pacingFrameMoves[pacingFrame] or 0) + 1
+  assert(pacingFrameMoves[pacingFrame] <= ShirsInventory_GetSortMovesPerUpdate(),
+    "sorter exceeded its cursor transaction frame cap")
+  table.insert(pacingMoveFrames, pacingFrame)
+  return pacingOriginalMoveCursorItem(sourceContainer, sourcePosition, destinationContainer, destinationPosition)
+end
+local pacingOk, pacingStatus = ShirsInventory_SortBags()
+assert(pacingOk and pacingStatus == "started", "frame-paced sort did not start")
+local function tickFrame()
+  pacingFrame = pacingFrame + 1
+  now = now + (1 / 60)
+  arg1 = 1 / 60
+  runnerUpdate()
+end
+local pacingWait
+for pacingWait = 1, 30 do
+  tickFrame()
+  if table.getn(pacingMoveFrames) > 0 then break end
+end
+assert(table.getn(pacingMoveFrames) == 4, "frame-paced sort did not submit its four-move first burst")
+assert(pacingInfoCalls <= 45,
+  "bounded disjoint scheduling performed an extra full-inventory scan")
+local firstPacingMoveFrame = pacingMoveFrames[1]
+assert(pacingMoveFrames[4] == firstPacingMoveFrame,
+  "pairwise-disjoint first burst crossed a rendered-frame boundary")
+tickFrame()
+assert(table.getn(pacingMoveFrames) == 8 and pacingMoveFrames[5] == firstPacingMoveFrame + 1,
+  "acknowledged burst did not advance on the next rendered frame")
+tickFrame()
+assert(table.getn(pacingMoveFrames) == 12,
+  "third safety-paced burst did not retain the four-move hard cap")
+tickFrame()
+assert(table.getn(pacingMoveFrames) == 15,
+  "fourth safety-paced burst was not reduced to three moves")
+tickFrame()
+assert(table.getn(pacingMoveFrames) == 16,
+  "safety-paced sort did not resume after its reduced fourth burst")
+for pacingWait = 1, 30 do
+  if not ShirsInventory_IsRunning() then break end
+  tickFrame()
+end
+assert(not ShirsInventory_IsRunning(), "frame-paced sort did not complete")
+for pacingItemIndex = 1, slotCount do
+  assert(bags[0][pacingItemIndex] and bags[0][pacingItemIndex].id == 99 + pacingItemIndex,
+    "frame-paced sort produced the wrong final order at slot " .. pacingItemIndex)
+end
+ShirsInventory_MoveCursorItem = pacingOriginalMoveCursorItem
+GetContainerItemInfo = pacingOriginalGetContainerItemInfo
+
+-- Microbot may accept cursor transactions while its bag APIs keep exposing the
+-- pre-move state until the Lua callback returns. Independent swaps must still
+-- share a bounded frame burst; dependent moves that reuse an unacknowledged
+-- endpoint must wait for the next exact full-state acknowledgement.
+slotCount = 8
+bags[0] = {}
+local asyncItemIndex
+for asyncItemIndex = 1, slotCount do
+  bags[0][asyncItemIndex] = { id = 108 - asyncItemIndex, count = 1 }
+end
+ShirsInventory_ClearHearthstoneItems()
+ShirsInventory_SetAutomaticHearthstoneItems(true)
+ShirsInventory_SetLockSelectedItemSlots(false)
+ShirsInventory_SetDirection("top")
+ShirsInventory_SetSortMode("itemType")
+local asyncOriginalMoveCursorItem = ShirsInventory_MoveCursorItem
+local asyncQueuedMoves = {}
+local asyncMoveFrames = {}
+local asyncFrame = 0
+local asyncTouchedByFrame = {}
+ShirsInventory_MoveCursorItem = function(sourceContainer, sourcePosition, destinationContainer, destinationPosition)
+  local touched = asyncTouchedByFrame[asyncFrame]
+  if not touched then
+    touched = {}
+    asyncTouchedByFrame[asyncFrame] = touched
+  end
+  local sourceKey = sourceContainer .. ":" .. sourcePosition
+  local destinationKey = destinationContainer .. ":" .. destinationPosition
+  assert(not touched[sourceKey] and not touched[destinationKey],
+    "asynchronous burst reused an unacknowledged physical slot")
+  touched[sourceKey] = true
+  touched[destinationKey] = true
+  table.insert(asyncQueuedMoves, {
+    sourceContainer = sourceContainer,
+    sourcePosition = sourcePosition,
+    destinationContainer = destinationContainer,
+    destinationPosition = destinationPosition,
+  })
+  table.insert(asyncMoveFrames, asyncFrame)
+  return true
+end
+local function FlushAsyncMoves()
+  local queuedIndex
+  for queuedIndex = 1, table.getn(asyncQueuedMoves) do
+    local queued = asyncQueuedMoves[queuedIndex]
+    assert(asyncOriginalMoveCursorItem(
+      queued.sourceContainer, queued.sourcePosition,
+      queued.destinationContainer, queued.destinationPosition
+    ), "client-side asynchronous cursor transaction did not settle")
+  end
+  asyncQueuedMoves = {}
+end
+local asyncOk, asyncStatus = ShirsInventory_SortBags()
+assert(asyncOk and asyncStatus == "started", "asynchronous independent-swap sort did not start")
+local asyncWait
+for asyncWait = 1, 30 do
+  if not ShirsInventory_IsRunning() then break end
+  asyncFrame = asyncFrame + 1
+  now = now + (1 / 60)
+  arg1 = 1 / 60
+  runnerUpdate()
+  FlushAsyncMoves()
+end
+assert(not ShirsInventory_IsRunning(), "asynchronous independent-swap sort did not complete")
+assert(table.getn(asyncMoveFrames) == 4,
+  "asynchronous independent-swap sort changed its cursor move count")
+assert(asyncMoveFrames[4] == asyncMoveFrames[1],
+  "stale same-callback bag reads forced independent swaps into one move per frame")
+for asyncItemIndex = 1, slotCount do
+  assert(bags[0][asyncItemIndex] and bags[0][asyncItemIndex].id == 99 + asyncItemIndex,
+    "asynchronous independent-swap sort produced the wrong final order")
+end
+
+bags[0] = {}
+for asyncItemIndex = 1, slotCount do
+  bags[0][asyncItemIndex] = { id = 108 - asyncItemIndex, count = 1 }
+end
+asyncQueuedMoves = {}
+asyncMoveFrames = {}
+asyncFrame = 0
+asyncTouchedByFrame = {}
+local asyncQueueMoveCursorItem = ShirsInventory_MoveCursorItem
+local candidateLockedAfterFirst = false
+ShirsInventory_MoveCursorItem = function(sourceContainer, sourcePosition, destinationContainer, destinationPosition)
+  local accepted = asyncQueueMoveCursorItem(
+    sourceContainer, sourcePosition, destinationContainer, destinationPosition
+  )
+  if accepted and table.getn(asyncMoveFrames) == 1 then candidateLockedAfterFirst = true end
+  return accepted
+end
+local candidateOriginalGetContainerItemInfo = GetContainerItemInfo
+GetContainerItemInfo = function(container, position)
+  local texture, count, locked = candidateOriginalGetContainerItemInfo(container, position)
+  if candidateLockedAfterFirst and container == 0 and position == 7 then locked = true end
+  return texture, count, locked
+end
+asyncOk, asyncStatus = ShirsInventory_SortBags()
+assert(asyncOk and asyncStatus == "started", "newly locked candidate-endpoint sort did not start")
+asyncFrame = asyncFrame + 1
+now = now + (1 / 60)
+arg1 = 1 / 60
+runnerUpdate()
+assert(table.getn(asyncMoveFrames) == 1,
+  "bounded burst touched a disjoint source that became locked after its opening scan")
+candidateLockedAfterFirst = false
+GetContainerItemInfo = candidateOriginalGetContainerItemInfo
+FlushAsyncMoves()
+for asyncWait = 1, 30 do
+  if not ShirsInventory_IsRunning() then break end
+  asyncFrame = asyncFrame + 1
+  now = now + (1 / 60)
+  arg1 = 1 / 60
+  runnerUpdate()
+  FlushAsyncMoves()
+end
+assert(not ShirsInventory_IsRunning(), "newly locked candidate-endpoint sort did not recover")
+for asyncItemIndex = 1, slotCount do
+  assert(bags[0][asyncItemIndex] and bags[0][asyncItemIndex].id == 99 + asyncItemIndex,
+    "newly locked candidate-endpoint sort produced the wrong final order")
+end
+ShirsInventory_MoveCursorItem = asyncQueueMoveCursorItem
+
+slotCount = 3
+bags[0] = {
+  { id = 200, count = 3 },
+  { id = 200, count = 3 },
+  { id = 200, count = 3 },
+}
+asyncQueuedMoves = {}
+asyncMoveFrames = {}
+asyncFrame = 0
+asyncTouchedByFrame = {}
+asyncOk, asyncStatus = ShirsInventory_SortBags()
+assert(asyncOk and asyncStatus == "started", "asynchronous dependent-stack sort did not start")
+for asyncWait = 1, 30 do
+  if not ShirsInventory_IsRunning() then break end
+  asyncFrame = asyncFrame + 1
+  now = now + (1 / 60)
+  arg1 = 1 / 60
+  runnerUpdate()
+  FlushAsyncMoves()
+end
+assert(not ShirsInventory_IsRunning(), "asynchronous dependent-stack sort did not complete")
+assert(table.getn(asyncMoveFrames) == 2,
+  "asynchronous dependent-stack sort changed its cursor move count")
+assert(asyncMoveFrames[1] ~= asyncMoveFrames[2],
+  "dependent stack merges reused one physical destination before acknowledgement")
+assert(bags[0][1] and bags[0][1].id == 200 and bags[0][1].count == 9 and
+  not bags[0][2] and not bags[0][3],
+  "asynchronous dependent-stack sort produced the wrong final stacks")
+ShirsInventory_MoveCursorItem = asyncOriginalMoveCursorItem
+
 -- The real item reader must pass container ownership into edge selection. A
 -- selected carried item sorts beside Hearthstone in bags, but remains in normal
 -- category order in the bank.
@@ -356,6 +592,7 @@ bags[0] = {
 }
 ShirsInventory_ClearHearthstoneItems()
 assert(ShirsInventory_SetHearthstoneItem(100, true))
+ShirsInventory_SetAutomaticHearthstoneItems(false)
 ShirsInventory_SetDirection("top")
 ShirsInventory_SetSortMode("itemType")
 local selectedOk, selectedStatus = ShirsInventory_SortBags()
@@ -374,6 +611,107 @@ assert(selectedOk and selectedStatus == "started", "idempotent selected-item sor
 tickUntilDone()
 assert(ShirsInventory_GetSortDiagnostics().moves == 0,
   "repeating an already-correct selected-item sort moved an item")
+
+-- Vanilla can reject one cursor submission while a bag update is in flight.
+-- The sorter must retry that unchanged state instead of treating it as a cycle.
+slotCount = 3
+bags[0] = {
+  { id = 26189, count = 1 },
+  { id = 6948, count = 1 },
+  nil,
+}
+ShirsInventory_ClearHearthstoneItems()
+assert(ShirsInventory_SetHearthstoneItem(26189, true))
+ShirsInventory_SetAutomaticHearthstoneItems(false)
+ShirsInventory_SetDirection("bottom")
+ShirsInventory_SetSortMode("itemType")
+local originalMoveCursorItem = ShirsInventory_MoveCursorItem
+local transientMoveAttempts = 0
+ShirsInventory_MoveCursorItem = function(sourceContainer, sourcePosition, destinationContainer, destinationPosition)
+  transientMoveAttempts = transientMoveAttempts + 1
+  if transientMoveAttempts == 1 then return false end
+  return originalMoveCursorItem(sourceContainer, sourcePosition, destinationContainer, destinationPosition)
+end
+local retryOk, retryStatus = ShirsInventory_SortBags()
+assert(retryOk and retryStatus == "started", "transient-failure selected-item sort did not start")
+tickUntilDone()
+local retryDiagnostics = ShirsInventory_GetSortDiagnostics()
+assert(retryDiagnostics.reason == "complete",
+  "one transient cursor failure stopped the selected-item sort as " .. tostring(retryDiagnostics.reason))
+assert(retryDiagnostics.failedMoves == 1 and transientMoveAttempts > 1,
+  "transient cursor failure was not recorded and retried")
+assert(not bags[0][1] and bags[0][2] and bags[0][2].id == 26189 and
+  bags[0][3] and bags[0][3].id == 6948,
+  "selected item did not reach Hearthstone after a transient cursor failure")
+ShirsInventory_MoveCursorItem = originalMoveCursorItem
+ShirsInventory_SetAutomaticHearthstoneItems(true)
+
+-- A rejected transaction after an accepted prefix must not inherit the
+-- prefix's 0.01-second acknowledgement cadence. Acknowledge the prefix early,
+-- then hold the rejected endpoint retry for the full 0.29-second minimum.
+slotCount = 8
+bags[0] = {}
+local midRejectItemIndex
+for midRejectItemIndex = 1, slotCount do
+  bags[0][midRejectItemIndex] = { id = 108 - midRejectItemIndex, count = 1 }
+end
+ShirsInventory_ClearHearthstoneItems()
+ShirsInventory_SetAutomaticHearthstoneItems(true)
+ShirsInventory_SetDirection("top")
+ShirsInventory_SetSortMode("itemType")
+local midRejectAccepted = 0
+local midRejectTime
+local midRejectRetryTime
+local midRejectSourceContainer
+local midRejectSourcePosition
+local midRejectDestinationContainer
+local midRejectDestinationPosition
+ShirsInventory_MoveCursorItem = function(sourceContainer, sourcePosition, destinationContainer, destinationPosition)
+  if not midRejectTime and midRejectAccepted == 1 then
+    midRejectTime = now
+    midRejectSourceContainer = sourceContainer
+    midRejectSourcePosition = sourcePosition
+    midRejectDestinationContainer = destinationContainer
+    midRejectDestinationPosition = destinationPosition
+    return false
+  end
+  if midRejectTime and not midRejectRetryTime and
+    sourceContainer == midRejectSourceContainer and sourcePosition == midRejectSourcePosition and
+    destinationContainer == midRejectDestinationContainer and destinationPosition == midRejectDestinationPosition then
+    midRejectRetryTime = now
+  end
+  local accepted = originalMoveCursorItem(
+    sourceContainer, sourcePosition, destinationContainer, destinationPosition
+  )
+  if accepted then midRejectAccepted = midRejectAccepted + 1 end
+  return accepted
+end
+retryOk, retryStatus = ShirsInventory_SortBags()
+assert(retryOk and retryStatus == "started", "mid-burst rejection sort did not start")
+now = now + 0.01
+arg1 = 0.01
+runnerUpdate()
+assert(midRejectTime and midRejectAccepted == 1,
+  "mid-burst timing fixture did not accept one move before rejection")
+local midRejectWait
+for midRejectWait = 1, 100 do
+  now = now + 0.01
+  arg1 = 0.01
+  runnerUpdate()
+  if midRejectRetryTime then break end
+end
+assert(midRejectRetryTime and midRejectRetryTime - midRejectTime >= 0.289,
+  "mid-burst rejection retried on the pending acknowledgement cadence")
+tickUntilDone()
+retryDiagnostics = ShirsInventory_GetSortDiagnostics()
+assert(retryDiagnostics.reason == "complete" and retryDiagnostics.failedMoves == 1,
+  "mid-burst rejection did not recover cleanly")
+for midRejectItemIndex = 1, slotCount do
+  assert(bags[0][midRejectItemIndex] and bags[0][midRejectItemIndex].id == 99 + midRejectItemIndex,
+    "mid-burst rejection produced the wrong final order")
+end
+assert(not cursorItem, "mid-burst rejection left an item on the cursor")
+ShirsInventory_MoveCursorItem = originalMoveCursorItem
 
 slotCounts[BANK_CONTAINER] = 2
 bags[BANK_CONTAINER] = {
@@ -476,8 +814,9 @@ assert(not bags[0][1] and bags[0][2] and bags[0][2].id == 100 and
   bags[0][4] and bags[0][4].id == 6948,
   "Bottom did not keep Onyxia Scale Cloak directly beside Hearthstone")
 
--- Confirmed-move sorting must submit only one cursor transaction, then wait
--- until the exact result is visible in a fresh bag scan.
+-- A dependent cycle reuses the prior move's physical source slot, so it must
+-- cross an exact full-state acknowledgement even when the harness updates
+-- synchronously.
 slotCount = 3
 bags[0] = {
   { id = 103, count = 1 },
@@ -495,11 +834,55 @@ end
 local ok, status = ShirsInventory_SortBags()
 assert(ok and status == "started", "confirmed-move sort did not start")
 tickOnce()
-assert(batchSubmissions == 1, "runner submitted a second move before the first was acknowledged")
+assert(batchSubmissions == 1, "dependent cycle reused one physical slot inside an unacknowledged burst")
 tickUntilDone()
+assert(batchSubmissions == 2, "dependent cycle did not resume after exact acknowledgement")
 assert(not cursorItem, "confirmed-move sort left an item on the cursor")
 assert(bags[0][1] and bags[0][1].id == 101 and bags[0][2].id == 102 and bags[0][3].id == 103,
   "confirmed-move sort produced the wrong final order")
+ShirsInventory_MoveCursorItem = realBatchMoveCursorItem
+
+-- If one move is accepted but not yet visible, later disjoint endpoints may
+-- finish the bounded burst. No later burst may start until the combined exact
+-- predicted state appears.
+slotCount = 7
+bags[0] = {
+  { id = 106, count = 1 },
+  { id = 105, count = 1 },
+  { id = 104, count = 1 },
+  { id = 103, count = 1 },
+  { id = 102, count = 1 },
+  { id = 101, count = 1 },
+  { id = 100, count = 1 },
+}
+local delayedSecondMoves = {}
+ShirsInventory_MoveCursorItem = function(srcContainer, srcSlot, dstContainer, dstSlot)
+  table.insert(delayedSecondMoves, {srcContainer, srcSlot, dstContainer, dstSlot})
+  if table.getn(delayedSecondMoves) == 2 then return true end
+  return realBatchMoveCursorItem(srcContainer, srcSlot, dstContainer, dstSlot)
+end
+ok, status = ShirsInventory_SortBags()
+assert(ok and status == "started", "delayed-second-move burst did not start")
+tickOnce()
+diagnostics = ShirsInventory_GetSortDiagnostics()
+assert(table.getn(delayedSecondMoves) == 3 and diagnostics.moves == 0,
+  "delayed disjoint burst did not retain one combined pending acknowledgement")
+tickOnce()
+assert(table.getn(delayedSecondMoves) == 3,
+  "partial delayed burst allowed another cursor transaction before exact acknowledgement")
+local delayedSecond = delayedSecondMoves[2]
+local delayedSecondItem = bags[delayedSecond[1]][delayedSecond[2]]
+bags[delayedSecond[1]][delayedSecond[2]] = bags[delayedSecond[3]][delayedSecond[4]]
+bags[delayedSecond[3]][delayedSecond[4]] = delayedSecondItem
+tickUntilDone()
+diagnostics = ShirsInventory_GetSortDiagnostics()
+assert(diagnostics.reason == "complete" and diagnostics.moves == 3,
+  "delayed second move did not recover to a complete three-move sort")
+for delayedSecondIndex = 1, 7 do
+  assert(bags[0][delayedSecondIndex] and bags[0][delayedSecondIndex].id == 99 + delayedSecondIndex,
+    "delayed-second-move final order is wrong at slot " .. delayedSecondIndex)
+end
+assert(not cursorItem, "delayed-second-move burst left an item on the cursor")
 ShirsInventory_MoveCursorItem = realBatchMoveCursorItem
 
 slotCount = 5
@@ -597,6 +980,156 @@ tickUntilDone()
 assert(bags[0][1] and bags[0][1].id == 500, "marked junk did not rejoin normal sorting")
 assert(bags[0][2] and bags[0][2].id == 100 and bags[0][3].id == 200, "normal item order changed")
 assert(bags[0][4] and bags[0][4].id == 400 and not bags[0][5], "gray junk did not rejoin normal sorting")
+
+-- Selected-slot locking treats the selected list as physical carried-slot
+-- obstacles. Slot 3 remains fixed while 1, 2, 4, and 5 form the logical Top
+-- sorting sequence. No cursor transaction may touch the locked slot.
+slotCount = 5
+bags[0] = {
+  { id = 201, count = 1 },
+  { id = 200, count = 1 },
+  { id = 250, count = 1 },
+  { id = 100, count = 1 },
+  nil,
+}
+ShirsInventory_ClearHearthstoneItems()
+assert(ShirsInventory_SetHearthstoneItem(250, true))
+ShirsInventory_SetAutomaticHearthstoneItems(false)
+ShirsInventory_SetLockSelectedItemSlots(true)
+ShirsInventory_SetDirection("top")
+local unlockedMoveCursorItem = ShirsInventory_MoveCursorItem
+local lockedSlotMoveAttempts = 0
+ShirsInventory_MoveCursorItem = function(sourceContainer, sourcePosition, destinationContainer, destinationPosition)
+  if (sourceContainer == 0 and sourcePosition == 3) or
+    (destinationContainer == 0 and destinationPosition == 3) then
+    lockedSlotMoveAttempts = lockedSlotMoveAttempts + 1
+  end
+  return unlockedMoveCursorItem(sourceContainer, sourcePosition, destinationContainer, destinationPosition)
+end
+ok, status = ShirsInventory_SortBags()
+assert(ok and status == "started", "selected-slot Top sort did not start")
+tickUntilDone()
+local lockedTopIDs = {}
+local lockedTopIndex
+for lockedTopIndex = 1, 5 do
+  lockedTopIDs[lockedTopIndex] = bags[0][lockedTopIndex] and bags[0][lockedTopIndex].id or "empty"
+end
+assert(bags[0][1] and bags[0][1].id == 100 and
+  bags[0][2] and bags[0][2].id == 200 and
+  bags[0][3] and bags[0][3].id == 250 and
+  bags[0][4] and bags[0][4].id == 201 and not bags[0][5],
+  "Top did not skip locked physical slot 3: " .. table.concat(lockedTopIDs, ","))
+assert(lockedSlotMoveAttempts == 0, "Top submitted a cursor move involving locked slot 3")
+
+ok, status = ShirsInventory_SortBags()
+assert(ok and status == "started", "idempotent selected-slot Top sort did not start")
+tickUntilDone()
+assert(ShirsInventory_GetSortDiagnostics().moves == 0 and lockedSlotMoveAttempts == 0,
+  "repeating a correct selected-slot Top sort moved an item")
+
+bags[0] = {
+  { id = 201, count = 1 },
+  { id = 200, count = 1 },
+  { id = 250, count = 1 },
+  { id = 100, count = 1 },
+  nil,
+}
+lockedSlotMoveAttempts = 0
+ShirsInventory_SetDirection("bottom")
+ok, status = ShirsInventory_SortBags()
+assert(ok and status == "started", "selected-slot Bottom sort did not start")
+tickUntilDone()
+assert(not bags[0][1] and bags[0][2] and bags[0][2].id == 100 and
+  bags[0][3] and bags[0][3].id == 250 and
+  bags[0][4] and bags[0][4].id == 200 and
+  bags[0][5] and bags[0][5].id == 201,
+  "Bottom counted locked physical slot 3 as sortable capacity")
+assert(lockedSlotMoveAttempts == 0, "Bottom submitted a cursor move involving locked slot 3")
+ShirsInventory_MoveCursorItem = unlockedMoveCursorItem
+
+-- Every stack of a selected type owns its physical slot. Locked stacks are not
+-- merged with each other even when Automatic mode is active.
+slotCount = 6
+bags[0] = {
+  { id = 201, count = 1 },
+  { id = 250, count = 3 },
+  { id = 200, count = 1 },
+  { id = 250, count = 4 },
+  { id = 100, count = 1 },
+  nil,
+}
+ShirsInventory_SetAutomaticHearthstoneItems(true)
+ShirsInventory_SetDirection("top")
+local duplicateLockedMoveAttempts = 0
+ShirsInventory_MoveCursorItem = function(sourceContainer, sourcePosition, destinationContainer, destinationPosition)
+  if sourceContainer == 0 and (sourcePosition == 2 or sourcePosition == 4) then
+    duplicateLockedMoveAttempts = duplicateLockedMoveAttempts + 1
+  end
+  if destinationContainer == 0 and (destinationPosition == 2 or destinationPosition == 4) then
+    duplicateLockedMoveAttempts = duplicateLockedMoveAttempts + 1
+  end
+  return unlockedMoveCursorItem(sourceContainer, sourcePosition, destinationContainer, destinationPosition)
+end
+ok, status = ShirsInventory_SortBags()
+assert(ok and status == "started", "duplicate selected-slot sort did not start")
+tickUntilDone()
+assert(bags[0][1] and bags[0][1].id == 100 and
+  bags[0][2] and bags[0][2].id == 250 and bags[0][2].count == 3 and
+  bags[0][3] and bags[0][3].id == 200 and
+  bags[0][4] and bags[0][4].id == 250 and bags[0][4].count == 4 and
+  bags[0][5] and bags[0][5].id == 201 and not bags[0][6],
+  "duplicate selected stacks did not stay fixed and independent")
+assert(duplicateLockedMoveAttempts == 0,
+  "a cursor move touched one of the duplicate selected locked slots")
+ShirsInventory_MoveCursorItem = unlockedMoveCursorItem
+
+-- Turning locking off restores Selected mode's Hearthstone-adjacent edge rank.
+slotCount = 5
+bags[0] = {
+  { id = 201, count = 1 },
+  { id = 200, count = 1 },
+  { id = 250, count = 1 },
+  { id = 100, count = 1 },
+  nil,
+}
+ShirsInventory_SetAutomaticHearthstoneItems(false)
+ShirsInventory_SetLockSelectedItemSlots(false)
+ok, status = ShirsInventory_SortBags()
+assert(ok and status == "started", "unlocked Selected mode sort did not start")
+tickUntilDone()
+assert(bags[0][1] and bags[0][1].id == 250 and
+  bags[0][2] and bags[0][2].id == 100 and
+  bags[0][3] and bags[0][3].id == 200 and
+  bags[0][4] and bags[0][4].id == 201 and not bags[0][5],
+  "disabling selected-slot locking did not restore selected edge placement")
+
+-- The selected list and its slot-lock option remain carried-bag-only.
+slotCounts[BANK_CONTAINER] = 5
+bags[BANK_CONTAINER] = {
+  { id = 201, count = 1 },
+  { id = 250, count = 1 },
+  { id = 200, count = 1 },
+  { id = 100, count = 1 },
+  nil,
+}
+ShirsInventory_SetLockSelectedItemSlots(true)
+BankFrame:Show()
+ok, status = ShirsInventory_SortBank()
+assert(ok and status == "started", "selected-slot bank-isolation sort did not start")
+tickUntilDone()
+assert(bags[BANK_CONTAINER][1] and bags[BANK_CONTAINER][1].id == 100 and
+  bags[BANK_CONTAINER][2] and bags[BANK_CONTAINER][2].id == 200 and
+  bags[BANK_CONTAINER][3] and bags[BANK_CONTAINER][3].id == 201 and
+  bags[BANK_CONTAINER][4] and bags[BANK_CONTAINER][4].id == 250 and
+  not bags[BANK_CONTAINER][5],
+  "carried selected-slot locking leaked into bank sorting")
+BankFrame:Hide()
+slotCounts[BANK_CONTAINER] = nil
+bags[BANK_CONTAINER] = nil
+slotCount = 5
+ShirsInventory_SetLockSelectedItemSlots(false)
+ShirsInventory_SetAutomaticHearthstoneItems(true)
+ShirsInventory_ClearHearthstoneItems()
 
 -- A sort run owns one immutable target plan. If item metadata changes while
 -- cursor moves are being acknowledged, rebuilding the plan can reverse the

@@ -45,6 +45,12 @@ assert(ShirsInventory_IsFeatureEnabled("sorter"), "full-suite sorter is disabled
 assert(not ShirsInventory_SetFeatureEnabled("sorter", false),
   "obsolete feature API disabled the sorter")
 
+ShirsInventory_SetCategoryMode(true)
+local categoryStarted, categoryReason = ShirsInventory_SortBags()
+assert(not categoryStarted and categoryReason == "category-mode",
+  "category view must block physical bag sorting")
+ShirsInventory_SetCategoryMode(false)
+
 assert(type(ShirsInventory_GetBankSortContainers) == "function", "bank sorter scope is missing")
 local bankContainers = ShirsInventory_GetBankSortContainers()
 local expectedBankContainers = {-1, 5, 6, 7, 8, 9, 10}

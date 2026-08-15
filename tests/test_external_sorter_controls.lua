@@ -1,6 +1,11 @@
 local settingsPath = arg[1]
 local calls = {}
 function ShirsInventory_SortBags() table.insert(calls, "sort"); return true end
+function ShirsInventory_OnSortButtonClick(bank)
+  assert(not bank, "standalone carried-inventory control was routed as a bank action")
+  table.insert(calls, "sort")
+  return true
+end
 function ShirsInventory_OnModeButtonClick() table.insert(calls, "mode"); return "rarity" end
 function ShirsInventory_ToggleDirection() table.insert(calls, "direction"); return "top" end
 function ShirsInventory_ShowSettings() table.insert(calls, "settings") end

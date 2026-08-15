@@ -13,9 +13,11 @@ local pendingStateSignature
 local pendingExpectedSignature
 local pendingMoveCount = 0
 local pendingUnexpectedSince
+local rejectedRetryAt
 local deadline
 local elapsed = 0
 local running = false
+local burstNumber = 0
 local diagnostics = { reason = "idle", moves = 0, mismatches = 0, failedMoves = 0, history = {} }
 
 local function Message(text)
@@ -196,13 +198,18 @@ function ShirsInventory_GetEdgeAnchorRank(itemID, itemName, itemType, itemSubTyp
   if itemID == 6948 then return 1 end
   local carriedItem = container == nil or
     (type(container) == "number" and container >= 0 and container <= 4)
-  if carriedItem and type(ShirsInventory_GetHearthstoneItemIndex) == "function" then
-    local selectedIndex = ShirsInventory_GetHearthstoneItemIndex(itemID)
-    if selectedIndex then return 1 + (selectedIndex / 1000) end
-  end
-  if carriedItem and type(ShirsInventory_GetAutomaticHearthstoneItems) == "function" and
-    not ShirsInventory_GetAutomaticHearthstoneItems() then
-    return nil
+  if carriedItem then
+    local automaticItems = type(ShirsInventory_GetAutomaticHearthstoneItems) ~= "function" or
+      ShirsInventory_GetAutomaticHearthstoneItems()
+    if not automaticItems then
+      local lockSelected = type(ShirsInventory_GetLockSelectedItemSlots) == "function" and
+        ShirsInventory_GetLockSelectedItemSlots()
+      if not lockSelected and type(ShirsInventory_GetHearthstoneItemIndex) == "function" then
+        local selectedIndex = ShirsInventory_GetHearthstoneItemIndex(itemID)
+        if selectedIndex then return 1 + (selectedIndex / 1000) end
+      end
+      return nil
+    end
   end
   if itemID == 15138 then return 1.5 end -- Onyxia Scale Cloak
   if middleEdgeItemIDs[itemID] then return 2 end
@@ -295,8 +302,11 @@ local function ReadItem(container, position, count)
     mergeKey = table.concat({itemID, 0, 0, charges, soulbound and 1 or 0}, ":")
   end
 
-  local ignoreSort = ShirsInventory_GetIgnoreJunkSorting() and
+  local ignoreJunk = ShirsInventory_GetIgnoreJunkSorting() and
     ShirsInventory_IsJunk(itemID, quality, ShirsInventoryDB and ShirsInventoryDB.junkItems)
+  local ignoreSelectedSlot = type(ShirsInventory_IsSelectedItemSlotLocked) == "function" and
+    ShirsInventory_IsSelectedItemSlotLocked(itemID, container)
+  local ignoreSort = ignoreJunk or ignoreSelectedSlot
 
   return {
     key = mergeKey,
@@ -370,6 +380,7 @@ local function Stop(reason, message)
   pendingExpectedSignature = nil
   pendingMoveCount = 0
   pendingUnexpectedSince = nil
+  rejectedRetryAt = nil
   runner:Hide()
   diagnostics.reason = reason
   if message then Message(message) end
@@ -391,6 +402,8 @@ local function Start(containers)
   pendingExpectedSignature = nil
   pendingMoveCount = 0
   pendingUnexpectedSince = nil
+  rejectedRetryAt = nil
+  burstNumber = 0
   deadline = GetTime() + ShirsInventory_GetSortTimeout()
   elapsed = ShirsInventory_GetSortDelay()
   running = true
@@ -426,6 +439,10 @@ function ShirsInventory_GetBagSortContainers()
 end
 
 function ShirsInventory_SortBags()
+  if ShirsInventory_GetCategoryMode and ShirsInventory_GetCategoryMode() then
+    Message("Bag sorting is unavailable in category view.")
+    return false, "category-mode"
+  end
   if ShirsInventory_IsFeatureEnabled and not ShirsInventory_IsFeatureEnabled("sorter") then
     Message("Bag Sorter is disabled in settings.")
     return false, "disabled"
@@ -473,6 +490,41 @@ local function RecordMove(source, destination)
   if table.getn(diagnostics.history) > 8 then table.remove(diagnostics.history, 1) end
 end
 
+local function ConfirmPendingState(stateSignature)
+  if not pendingStateSignature then return true end
+  if stateSignature == pendingStateSignature then return false end
+  if stateSignature ~= pendingExpectedSignature then
+    if not pendingUnexpectedSince then pendingUnexpectedSince = GetTime() end
+    if GetTime() - pendingUnexpectedSince >= 2 then
+      Stop("desync", "Sorting stopped because the bag state did not match the submitted move.")
+    end
+    return false
+  end
+
+  diagnostics.moves = diagnostics.moves + pendingMoveCount
+  pendingStateSignature = nil
+  pendingExpectedSignature = nil
+  pendingMoveCount = 0
+  pendingUnexpectedSince = nil
+  deadline = GetTime() + ShirsInventory_GetSortTimeout()
+  return true
+end
+
+local function PhysicalSlotKey(slot)
+  return slot.container .. ":" .. slot.position
+end
+
+local function ConfirmCandidateSlot(slot)
+  local texture, count, locked = GetContainerItemInfo(slot.container, slot.position)
+  if locked then return false end
+  if not texture then return slot.item == nil end
+  if not slot.item then return false end
+  count = tonumber(count) or 1
+  if count < 1 then count = 1 end
+  local item = ReadItem(slot.container, slot.position, count)
+  return item and item.key == slot.item.key and item.count == slot.item.count
+end
+
 local function ProcessSortBurst()
   if GetTime() > deadline then
     Stop("timeout", "Sorting stopped after the safety timeout (" .. diagnostics.moves .. " moves, " .. diagnostics.mismatches .. " slots left).")
@@ -507,64 +559,83 @@ local function ProcessSortBurst()
 
   -- Cursor-empty does not prove that Vanilla exposed the submitted move yet.
   -- Wait for the exact predicted state before planning another transaction.
-  if pendingStateSignature then
-    if stateSignature == pendingStateSignature then return end
-    if stateSignature ~= pendingExpectedSignature then
-      if not pendingUnexpectedSince then pendingUnexpectedSince = GetTime() end
-      if GetTime() - pendingUnexpectedSince >= 2 then
-        Stop("desync", "Sorting stopped because the bag state did not match the submitted move.")
-      end
+  if not ConfirmPendingState(stateSignature) then return end
+  if rejectedRetryAt then
+    local remaining = rejectedRetryAt - GetTime()
+    if remaining > 0 then
+      elapsed = ShirsInventory_GetSortDelay() - remaining
+      if elapsed < 0 then elapsed = 0 end
       return
     end
-    diagnostics.moves = diagnostics.moves + pendingMoveCount
-    pendingStateSignature = nil
-    pendingExpectedSignature = nil
-    pendingMoveCount = 0
-    pendingUnexpectedSince = nil
-    deadline = GetTime() + ShirsInventory_GetSortTimeout()
+    rejectedRetryAt = nil
   end
 
-  diagnostics.mismatches = ShirsInventory_SortEngineCountMismatches(slots, targets)
-  if not diagnostics.bestMismatches or diagnostics.mismatches < diagnostics.bestMismatches then
-    diagnostics.bestMismatches = diagnostics.mismatches
-  end
-  if IsComplete(slots, targets) then
-    Stop("complete", nil)
-    return
-  end
-  if diagnostics.seenStates[stateSignature] then
-    Stop("cycle", "Sorting stopped because the same inventory state repeated.")
-    return
-  end
-  diagnostics.seenStates[stateSignature] = true
+  local submitted = 0
+  local nextBurstNumber = burstNumber + 1
+  local moveLimit = ShirsInventory_GetSortBurstLimit(nextBurstNumber)
+  local touchedSlots = {}
+  local burstStateSignature = stateSignature
+  while submitted < moveLimit do
+    diagnostics.mismatches = ShirsInventory_SortEngineCountMismatches(slots, targets)
+    if not diagnostics.bestMismatches or diagnostics.mismatches < diagnostics.bestMismatches then
+      diagnostics.bestMismatches = diagnostics.mismatches
+    end
+    if IsComplete(slots, targets) then
+      if submitted > 0 then return end
+      Stop("complete", nil)
+      return
+    end
+    if diagnostics.seenStates[stateSignature] then
+      Stop("cycle", "Sorting stopped because the same inventory state repeated.")
+      return
+    end
 
-  local move = ShirsInventory_SortEngineChooseMove(slots, targets)
-  if not move then
-    Stop("deadlock", "Sorting stopped because no safe move was available.")
-    return
-  end
+    local move = ShirsInventory_SortEngineChooseMove(slots, targets)
+    if not move then
+      Stop("deadlock", "Sorting stopped because no safe move was available.")
+      return
+    end
 
-  local source = slots[move.source]
-  local destination = slots[move.destination]
-  RecordMove(source, destination)
-  if not ShirsInventory_MoveCursorItem(source.container, source.position, destination.container, destination.position) then
-    diagnostics.failedMoves = diagnostics.failedMoves + 1
-    return
+    local source = slots[move.source]
+    local destination = slots[move.destination]
+    local sourcePhysicalKey = PhysicalSlotKey(source)
+    local destinationPhysicalKey = PhysicalSlotKey(destination)
+    if touchedSlots[sourcePhysicalKey] or touchedSlots[destinationPhysicalKey] then
+      return
+    end
+    if submitted > 0 and
+      (not ConfirmCandidateSlot(source) or not ConfirmCandidateSlot(destination)) then
+      return
+    end
+    RecordMove(source, destination)
+    if not ShirsInventory_MoveCursorItem(source.container, source.position, destination.container, destination.position) then
+      diagnostics.failedMoves = diagnostics.failedMoves + 1
+      rejectedRetryAt = GetTime() + ShirsInventory_GetSortDelay()
+      return
+    end
+    if not ShirsInventory_SortEngineApplyMove(slots, move) then
+      Stop("model", "Sorting stopped because its private move model could not be updated.")
+      return
+    end
+    diagnostics.seenStates[stateSignature] = true
+    if submitted == 0 then
+      pendingStateSignature = burstStateSignature
+      burstNumber = nextBurstNumber
+    end
+    pendingExpectedSignature = StateSignature(slots)
+    pendingMoveCount = pendingMoveCount + 1
+    touchedSlots[sourcePhysicalKey] = true
+    touchedSlots[destinationPhysicalKey] = true
+    submitted = submitted + 1
+    stateSignature = pendingExpectedSignature
   end
-  if not ShirsInventory_SortEngineApplyMove(slots, move) then
-    Stop("model", "Sorting stopped because its private move model could not be updated.")
-    return
-  end
-  pendingStateSignature = stateSignature
-  pendingExpectedSignature = StateSignature(slots)
-  pendingMoveCount = 1
 end
 
 runner:SetScript("OnUpdate", function()
   if not running then return end
   elapsed = elapsed + arg1
   local delay = ShirsInventory_GetSortDelay()
-  if pendingStateSignature then delay = 0.05 end
+  if pendingStateSignature then delay = ShirsInventory_GetSortAcknowledgementDelay() end
   if elapsed < delay then return end
   elapsed = 0
   ProcessSortBurst()

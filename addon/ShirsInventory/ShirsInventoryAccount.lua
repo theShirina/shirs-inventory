@@ -1,14 +1,14 @@
--- Shir's Inventory - account-wide gold and item tracking.
+-- Shir's Inventory - account-wide gold, item tracking, and category settings snapshots.
 --
 -- Original clean-room implementation for Vanilla WoW 1.12.1 (Lua 5.0.3).
 -- The per-character saved variable ShirsInventoryDB cannot hold account
--- data, so this module persists every character's copper and item totals on
--- this account+server in the separate account-wide saved variable
--- ShirsInventoryAccountDB, keyed by realm name and then character name.
+-- data, so this module persists every character's copper, item totals, and
+-- validated category settings snapshots in the separate account-wide saved
+-- variable ShirsInventoryAccountDB, keyed by realm and character.
 --
 -- Saved variable shape:
 --   ShirsInventoryAccountDB = {
---     version = 2,
+--     version = 3,
 --     realms = {
 --       ["RealmName"] = {
 --         ["CharacterName"] = 1234567, -- copper
@@ -24,6 +24,11 @@
 --         },
 --       },
 --     },
+--     categorySettings = {
+--       ["RealmName"] = {
+--         ["CharacterName"] = { version = 1, customCategories = {}, categoryAssignments = {} },
+--       },
+--     },
 --   }
 --
 -- Gold refreshes on PLAYER_LOGIN and PLAYER_MONEY. Carried-item snapshots
@@ -35,14 +40,17 @@ function ShirsInventory_AccountEnsureDB()
   if type(ShirsInventoryAccountDB) ~= "table" then
     ShirsInventoryAccountDB = {}
   end
-  if type(ShirsInventoryAccountDB.version) ~= "number" or ShirsInventoryAccountDB.version < 2 then
-    ShirsInventoryAccountDB.version = 2
+  if type(ShirsInventoryAccountDB.version) ~= "number" or ShirsInventoryAccountDB.version < 3 then
+    ShirsInventoryAccountDB.version = 3
   end
   if type(ShirsInventoryAccountDB.realms) ~= "table" then
     ShirsInventoryAccountDB.realms = {}
   end
   if type(ShirsInventoryAccountDB.items) ~= "table" then
     ShirsInventoryAccountDB.items = {}
+  end
+  if type(ShirsInventoryAccountDB.categorySettings) ~= "table" then
+    ShirsInventoryAccountDB.categorySettings = {}
   end
   return ShirsInventoryAccountDB
 end
@@ -76,6 +84,66 @@ function ShirsInventory_AccountGetCurrentCharacter()
     return nil
   end
   return character
+end
+
+function ShirsInventory_AccountGetCategorySettings(realm, character)
+  local db = ShirsInventory_AccountEnsureDB()
+  if type(realm) ~= "string" or realm == "" or
+    type(character) ~= "string" or character == "" or
+    type(db.categorySettings[realm]) ~= "table" or
+    not ShirsInventory_ValidateCategorySettingsSnapshot then
+    return nil
+  end
+  return ShirsInventory_ValidateCategorySettingsSnapshot(db.categorySettings[realm][character])
+end
+
+function ShirsInventory_AccountSaveCurrentCategorySettings()
+  if not ShirsInventory_GetCategorySettingsSnapshot then return false end
+  local realm = ShirsInventory_AccountGetCurrentRealm()
+  local character = ShirsInventory_AccountGetCurrentCharacter()
+  if not realm or not character then return false end
+  local snapshot = ShirsInventory_GetCategorySettingsSnapshot()
+  if not snapshot then return false end
+  local db = ShirsInventory_AccountEnsureDB()
+  if type(db.categorySettings[realm]) ~= "table" then db.categorySettings[realm] = {} end
+  db.categorySettings[realm][character] = snapshot
+  return true
+end
+
+function ShirsInventory_AccountGetCategoryImportSources(currentRealm, currentCharacter)
+  local sources = {}
+  local db = ShirsInventory_AccountEnsureDB()
+  local realm, characters
+  for realm, characters in pairs(db.categorySettings) do
+    if type(realm) == "string" and type(characters) == "table" then
+      local character
+      for character in pairs(characters) do
+        if type(character) == "string" and
+          not (realm == currentRealm and character == currentCharacter) and
+          ShirsInventory_AccountGetCategorySettings(realm, character) then
+          table.insert(sources, {
+            realm = realm,
+            character = character,
+            label = character .. " - " .. realm,
+          })
+        end
+      end
+    end
+  end
+  table.sort(sources, function(left, right)
+    local leftKey = string.lower(left.realm .. "\001" .. left.character)
+    local rightKey = string.lower(right.realm .. "\001" .. right.character)
+    return leftKey < rightKey
+  end)
+  return sources
+end
+
+function ShirsInventory_AccountImportCategorySettings(realm, character)
+  if not ShirsInventory_ApplyCategorySettingsSnapshot then return false end
+  local snapshot = ShirsInventory_AccountGetCategorySettings(realm, character)
+  if not snapshot or not ShirsInventory_ApplyCategorySettingsSnapshot(snapshot) then return false end
+  ShirsInventory_AccountSaveCurrentCategorySettings()
+  return true
 end
 
 local function ShirsInventory_AccountNow()
@@ -526,6 +594,7 @@ if CreateFrame then
     elseif event == "PLAYER_LOGIN" then
       ShirsInventory_AccountRecordCurrentGold()
       ShirsInventory_AccountScanBags()
+      ShirsInventory_AccountSaveCurrentCategorySettings()
       ShirsInventory_AccountAttachDisplay(ShirsInventoryFrame)
       ShirsInventory_AccountUpdateDisplay()
     elseif event == "PLAYER_MONEY" then

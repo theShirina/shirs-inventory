@@ -2,7 +2,7 @@
 
 ## Bagshui
 
-Shir's Inventory adapts Bagshui's general OneBag header/footer arrangement. No Bagshui source module or artwork is bundled.
+Shir's Inventory adapts Bagshui's general OneBag header/footer arrangement and virtual category-edit interaction. Its category renderer, custom-category storage, and item-ID overrides are independently implemented; no Bagshui source module, category data, rules, profiles, or artwork is bundled.
 
 MIT License
 

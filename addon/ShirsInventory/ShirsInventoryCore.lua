@@ -38,7 +38,47 @@ local professionCategories = {
   engineering = "Engineering",
 }
 
-local SHIRS_INVENTORY_MAX_HEARTHSTONE_ITEMS = 20
+local SHIRS_INVENTORY_MAX_HEARTHSTONE_ITEMS = 30
+local SHIRS_INVENTORY_MAX_CUSTOM_CATEGORIES = 12
+local SHIRS_INVENTORY_MAX_CUSTOM_CATEGORY_NAME = 28
+local SHIRS_INVENTORY_MAX_CUSTOM_CATEGORY_ID = 999999
+
+local function ShirsInventory_NormalizeCustomCategoryName(value)
+  if type(value) ~= "string" then return nil end
+  if string.find(value, "[%c|]") then return nil end
+  local name = string.gsub(string.gsub(value, "^%s+", ""), "%s+$", "")
+  if string.len(name) == 0 or string.len(name) > SHIRS_INVENTORY_MAX_CUSTOM_CATEGORY_NAME then return nil end
+  return name
+end
+
+local function ShirsInventory_NormalizeCustomCategories(values)
+  local normalized, seenKeys, seenNames, highestID = {}, {}, {}, 0
+  if type(values) ~= "table" then return normalized, highestID end
+  local index
+  for index = 1, table.getn(values) do
+    local entry = values[index]
+    local key = type(entry) == "table" and entry.key or nil
+    local label = type(entry) == "table" and ShirsInventory_NormalizeCustomCategoryName(entry.label) or nil
+    local idText
+    if type(key) == "string" then
+      local _, _, foundID = string.find(key, "^custom:(%d+)$")
+      idText = foundID
+    end
+    local id = tonumber(idText)
+    local nameKey = label and string.lower(label) or nil
+    if id and id >= 1 and id <= SHIRS_INVENTORY_MAX_CUSTOM_CATEGORY_ID and
+      id == math.floor(id) and label and not seenNames[nameKey] and
+      table.getn(normalized) < SHIRS_INVENTORY_MAX_CUSTOM_CATEGORIES then
+      key = "custom:" .. id
+      if not seenKeys[key] then
+        seenKeys[key], seenNames[nameKey] = true, true
+        table.insert(normalized, { key = key, label = label })
+        if id > highestID then highestID = id end
+      end
+    end
+  end
+  return normalized, highestID
+end
 
 local function ShirsInventory_NormalizeHearthstoneItems(values)
   local normalized = {}
@@ -79,6 +119,33 @@ local function ShirsInventory_EnsureDB()
   if type(ShirsInventoryDB.automaticHearthstoneItems) ~= "boolean" then
     ShirsInventoryDB.automaticHearthstoneItems = true
   end
+  if type(ShirsInventoryDB.lockSelectedItemSlots) ~= "boolean" then
+    ShirsInventoryDB.lockSelectedItemSlots = false
+  end
+  if type(ShirsInventoryDB.categoryMode) ~= "boolean" then
+    ShirsInventoryDB.categoryMode = false
+  end
+  if type(ShirsInventoryDB.collapseEmptySlots) ~= "boolean" then
+    ShirsInventoryDB.collapseEmptySlots = false
+  end
+  if type(ShirsInventoryDB.categoryAssignments) ~= "table" then
+    ShirsInventoryDB.categoryAssignments = {}
+  end
+  local customCategories, highestCustomCategoryID = ShirsInventory_NormalizeCustomCategories(
+    ShirsInventoryDB.customCategories
+  )
+  ShirsInventoryDB.customCategories = customCategories
+  local nextCustomCategoryID = ShirsInventoryDB.nextCustomCategoryID
+  local validNextCustomCategoryID = type(nextCustomCategoryID) == "number" and
+    nextCustomCategoryID >= 1 and nextCustomCategoryID <= SHIRS_INVENTORY_MAX_CUSTOM_CATEGORY_ID
+  if validNextCustomCategoryID then
+    validNextCustomCategoryID = nextCustomCategoryID == math.floor(nextCustomCategoryID)
+  end
+  if not validNextCustomCategoryID or nextCustomCategoryID <= highestCustomCategoryID then
+    nextCustomCategoryID = highestCustomCategoryID + 1
+  end
+  if nextCustomCategoryID > SHIRS_INVENTORY_MAX_CUSTOM_CATEGORY_ID then nextCustomCategoryID = 1 end
+  ShirsInventoryDB.nextCustomCategoryID = nextCustomCategoryID
   if type(ShirsInventoryDB.junkItems) ~= "table" then
     ShirsInventoryDB.junkItems = {}
   end
@@ -145,6 +212,255 @@ function ShirsInventory_SetFeatureEnabled(feature, enabled)
   end
   ShirsInventory_EnsureDB()
   return enabled and true or false
+end
+
+function ShirsInventory_GetCategoryMode()
+  return ShirsInventory_EnsureDB().categoryMode and true or false
+end
+
+function ShirsInventory_SetCategoryMode(enabled)
+  ShirsInventory_EnsureDB().categoryMode = enabled and true or false
+  return ShirsInventoryDB.categoryMode
+end
+
+function ShirsInventory_GetCollapseEmptySlots()
+  return ShirsInventory_EnsureDB().collapseEmptySlots and true or false
+end
+
+function ShirsInventory_SetCollapseEmptySlots(enabled)
+  ShirsInventory_EnsureDB().collapseEmptySlots = enabled and true or false
+  if ShirsInventory_AccountSaveCurrentCategorySettings then
+    ShirsInventory_AccountSaveCurrentCategorySettings()
+  end
+  return ShirsInventoryDB.collapseEmptySlots
+end
+
+local function ShirsInventory_IsValidCategorySettingsCoordinate(value)
+  return type(value) == "number" and value >= -1000000 and value <= 1000000
+end
+
+function ShirsInventory_GetCategorySettingsPosition()
+  local position = ShirsInventory_EnsureDB().categorySettingsPosition
+  if type(position) ~= "table" or position.point ~= "TOPLEFT" or
+    position.relativePoint ~= "BOTTOMLEFT" or
+    not ShirsInventory_IsValidCategorySettingsCoordinate(position.x) or
+    not ShirsInventory_IsValidCategorySettingsCoordinate(position.y) then
+    ShirsInventoryDB.categorySettingsPosition = nil
+    return nil
+  end
+  return position
+end
+
+function ShirsInventory_SaveCategorySettingsFrameCoordinates(point, relativePoint, x, y)
+  if point ~= "TOPLEFT" or relativePoint ~= "BOTTOMLEFT" or
+    not ShirsInventory_IsValidCategorySettingsCoordinate(x) or
+    not ShirsInventory_IsValidCategorySettingsCoordinate(y) then
+    return false
+  end
+  ShirsInventory_EnsureDB().categorySettingsPosition = {
+    point = point,
+    relativePoint = relativePoint,
+    x = x,
+    y = y,
+  }
+  return true
+end
+
+function ShirsInventory_SaveCategorySettingsFramePosition(frame)
+  if not frame then return false end
+  local left = type(frame.GetLeft) == "function" and frame:GetLeft() or nil
+  local top = type(frame.GetTop) == "function" and frame:GetTop() or nil
+  if type(left) == "number" and type(top) == "number" then
+    return ShirsInventory_SaveCategorySettingsFrameCoordinates(
+      "TOPLEFT", "BOTTOMLEFT", left, top
+    )
+  end
+  if type(frame.GetPoint) ~= "function" then return false end
+  local point, _, relativePoint, x, y = frame:GetPoint(1)
+  return ShirsInventory_SaveCategorySettingsFrameCoordinates(point, relativePoint, x, y)
+end
+
+local SHIRS_INVENTORY_ASSIGNABLE_CATEGORIES = {
+  quest = true,
+  keys = true,
+  mountsCompanions = true,
+  armor = true,
+  weapons = true,
+  equipment = true,
+  bags = true,
+  ammo = true,
+  recipes = true,
+  foodDrink = true,
+  potions = true,
+  elixirs = true,
+  bandages = true,
+  scrolls = true,
+  weaponBuffs = true,
+  consumables = true,
+  explosives = true,
+  tradeGoods = true,
+  junk = true,
+  miscellaneous = true,
+}
+
+function ShirsInventory_GetCustomCategories()
+  local source = ShirsInventory_EnsureDB().customCategories
+  local copy = {}
+  local index
+  for index = 1, table.getn(source) do
+    table.insert(copy, { key = source[index].key, label = source[index].label })
+  end
+  return copy
+end
+
+function ShirsInventory_GetCustomCategoryLabel(key)
+  local categories = ShirsInventory_EnsureDB().customCategories
+  local index
+  for index = 1, table.getn(categories) do
+    if categories[index].key == key then return categories[index].label end
+  end
+  return nil
+end
+
+function ShirsInventory_IsAssignableCategory(category)
+  return SHIRS_INVENTORY_ASSIGNABLE_CATEGORIES[category] == true or
+    ShirsInventory_GetCustomCategoryLabel(category) ~= nil
+end
+
+function ShirsInventory_ValidateCategorySettingsSnapshot(snapshot)
+  if type(snapshot) ~= "table" or snapshot.version ~= 1 or
+    type(snapshot.customCategories) ~= "table" or
+    type(snapshot.categoryAssignments) ~= "table" or
+    type(snapshot.collapseEmptySlots) ~= "boolean" then
+    return nil
+  end
+  local categories, highestID = ShirsInventory_NormalizeCustomCategories(snapshot.customCategories)
+  local allowed = {}
+  local category
+  for category in pairs(SHIRS_INVENTORY_ASSIGNABLE_CATEGORIES) do allowed[category] = true end
+  local index
+  for index = 1, table.getn(categories) do allowed[categories[index].key] = true end
+  local assignments = {}
+  local itemID, assignedCategory
+  for itemID, assignedCategory in pairs(snapshot.categoryAssignments) do
+    if type(itemID) == "number" and itemID >= 1 and itemID <= 2147483647 and
+      itemID == math.floor(itemID) and allowed[assignedCategory] then
+      assignments[itemID] = assignedCategory
+    end
+  end
+  local nextID = highestID + 1
+  if nextID > SHIRS_INVENTORY_MAX_CUSTOM_CATEGORY_ID then nextID = 1 end
+  return {
+    version = 1,
+    customCategories = categories,
+    nextCustomCategoryID = nextID,
+    categoryAssignments = assignments,
+    collapseEmptySlots = snapshot.collapseEmptySlots,
+  }
+end
+
+function ShirsInventory_GetCategorySettingsSnapshot()
+  local db = ShirsInventory_EnsureDB()
+  return ShirsInventory_ValidateCategorySettingsSnapshot({
+    version = 1,
+    customCategories = db.customCategories,
+    categoryAssignments = db.categoryAssignments,
+    collapseEmptySlots = db.collapseEmptySlots,
+  })
+end
+
+function ShirsInventory_ApplyCategorySettingsSnapshot(snapshot)
+  local normalized = ShirsInventory_ValidateCategorySettingsSnapshot(snapshot)
+  if not normalized then return false end
+  local db = ShirsInventory_EnsureDB()
+  db.customCategories = normalized.customCategories
+  db.nextCustomCategoryID = normalized.nextCustomCategoryID
+  db.categoryAssignments = normalized.categoryAssignments
+  db.collapseEmptySlots = normalized.collapseEmptySlots
+  return true
+end
+
+function ShirsInventory_CreateCustomCategory(value)
+  local name = ShirsInventory_NormalizeCustomCategoryName(value)
+  if not name then return false, "invalid" end
+  local db = ShirsInventory_EnsureDB()
+  if table.getn(db.customCategories) >= SHIRS_INVENTORY_MAX_CUSTOM_CATEGORIES then return false, "full" end
+  local nameKey = string.lower(name)
+  local index
+  for index = 1, table.getn(db.customCategories) do
+    if string.lower(db.customCategories[index].label) == nameKey then return false, "duplicate" end
+  end
+  local usedIDs = {}
+  for index = 1, table.getn(db.customCategories) do
+    local _, _, idText = string.find(db.customCategories[index].key, "^custom:(%d+)$")
+    local usedID = tonumber(idText)
+    if usedID then usedIDs[usedID] = true end
+  end
+  local id = db.nextCustomCategoryID
+  local attempts = 0
+  while usedIDs[id] and attempts <= SHIRS_INVENTORY_MAX_CUSTOM_CATEGORIES do
+    id = id + 1
+    if id > SHIRS_INVENTORY_MAX_CUSTOM_CATEGORY_ID then id = 1 end
+    attempts = attempts + 1
+  end
+  if usedIDs[id] then return false, "full" end
+  local key = "custom:" .. id
+  db.nextCustomCategoryID = id + 1
+  if db.nextCustomCategoryID > SHIRS_INVENTORY_MAX_CUSTOM_CATEGORY_ID then db.nextCustomCategoryID = 1 end
+  table.insert(db.customCategories, { key = key, label = name })
+  if ShirsInventory_AccountSaveCurrentCategorySettings then
+    ShirsInventory_AccountSaveCurrentCategorySettings()
+  end
+  return key
+end
+
+function ShirsInventory_DeleteCustomCategory(key)
+  local db = ShirsInventory_EnsureDB()
+  local deleteIndex
+  local index
+  for index = 1, table.getn(db.customCategories) do
+    if db.customCategories[index].key == key then deleteIndex = index break end
+  end
+  if not deleteIndex then return false end
+  table.remove(db.customCategories, deleteIndex)
+  for itemID, category in pairs(db.categoryAssignments) do
+    if category == key then db.categoryAssignments[itemID] = nil end
+  end
+  if ShirsInventory_AccountSaveCurrentCategorySettings then
+    ShirsInventory_AccountSaveCurrentCategorySettings()
+  end
+  return true
+end
+
+function ShirsInventory_GetCategoryAssignment(value)
+  local itemID = ShirsInventory_ParseItemID and ShirsInventory_ParseItemID(value) or tonumber(value)
+  if not itemID then return nil end
+  local category = ShirsInventory_EnsureDB().categoryAssignments[itemID]
+  if not ShirsInventory_IsAssignableCategory(category) then
+    ShirsInventoryDB.categoryAssignments[itemID] = nil
+    return nil
+  end
+  return category
+end
+
+function ShirsInventory_SetCategoryAssignment(value, category)
+  local itemID = ShirsInventory_ParseItemID and ShirsInventory_ParseItemID(value) or tonumber(value)
+  if not itemID or not ShirsInventory_IsAssignableCategory(category) then return false end
+  ShirsInventory_EnsureDB().categoryAssignments[itemID] = category
+  if ShirsInventory_AccountSaveCurrentCategorySettings then
+    ShirsInventory_AccountSaveCurrentCategorySettings()
+  end
+  return category
+end
+
+function ShirsInventory_ClearCategoryAssignment(value)
+  local itemID = ShirsInventory_ParseItemID and ShirsInventory_ParseItemID(value) or tonumber(value)
+  if not itemID or not ShirsInventory_GetCategoryAssignment(itemID) then return false end
+  ShirsInventoryDB.categoryAssignments[itemID] = nil
+  if ShirsInventory_AccountSaveCurrentCategorySettings then
+    ShirsInventory_AccountSaveCurrentCategorySettings()
+  end
+  return true
 end
 
 function ShirsInventory_GetAutoSellJunk()
@@ -246,6 +562,21 @@ function ShirsInventory_SetAutomaticHearthstoneItems(enabled)
   return ShirsInventory_GetAutomaticHearthstoneItems()
 end
 
+function ShirsInventory_GetLockSelectedItemSlots()
+  return ShirsInventory_EnsureDB().lockSelectedItemSlots and true or false
+end
+
+function ShirsInventory_SetLockSelectedItemSlots(enabled)
+  ShirsInventory_EnsureDB().lockSelectedItemSlots = enabled and true or false
+  return ShirsInventory_GetLockSelectedItemSlots()
+end
+
+function ShirsInventory_IsSelectedItemSlotLocked(itemID, container)
+  if not ShirsInventory_GetLockSelectedItemSlots() then return false end
+  if type(container) ~= "number" or container < 0 or container > 4 then return false end
+  return ShirsInventory_GetHearthstoneItemIndex(itemID) ~= nil
+end
+
 function ShirsInventory_GetHearthstoneItems()
   local source = ShirsInventory_EnsureDB().hearthstoneItems
   local copy = {}
@@ -313,6 +644,19 @@ function ShirsInventory_MoveHearthstoneItem(value, offset)
   table.remove(values, index)
   table.insert(values, destination, itemID)
   return true, destination
+end
+
+function ShirsInventory_MoveHearthstoneItemToItem(value, targetValue)
+  local itemID = ShirsInventory_ParseItemID(value)
+  local targetID = ShirsInventory_ParseItemID(targetValue)
+  local index = ShirsInventory_GetHearthstoneItemIndex(itemID)
+  local targetIndex = ShirsInventory_GetHearthstoneItemIndex(targetID)
+  if not itemID or not targetID or not index or not targetIndex then return false, index end
+  if index == targetIndex then return true, index end
+  local values = ShirsInventory_EnsureDB().hearthstoneItems
+  table.remove(values, index)
+  table.insert(values, targetIndex, itemID)
+  return true, targetIndex
 end
 
 function ShirsInventory_ClearHearthstoneItems()
@@ -623,9 +967,21 @@ function ShirsInventory_GetSortDelay()
   return 0.29
 end
 
+function ShirsInventory_GetSortAcknowledgementDelay()
+  -- Poll quickly when the last move is not yet visible through the bag APIs.
+  return 0.01
+end
+
 function ShirsInventory_GetSortMovesPerUpdate()
-  -- Never submit another cursor transaction until the prior move is visible.
-  return 1
+  -- Hard ceiling for pairwise-disjoint cursor transactions in one callback.
+  return 4
+end
+
+function ShirsInventory_GetSortBurstLimit(burstNumber)
+  burstNumber = math.floor(tonumber(burstNumber) or 1)
+  if burstNumber < 1 then burstNumber = 1 end
+  if math.mod(burstNumber, 4) == 0 then return 3 end
+  return ShirsInventory_GetSortMovesPerUpdate()
 end
 
 function ShirsInventory_GetSortTimeout()
