@@ -1232,12 +1232,23 @@ assert(builtCategoryManager and builtCategoryManager.width == 440 and builtCateg
   builtCategoryManager.importSourceText.text == "Altsmith - AlphaRealm" and
   builtCategoryManager.importPrevious and builtCategoryManager.importNext and builtCategoryManager.importButton and
   builtCategoryManager.nameInput.maxLetters == 28 and table.getn(builtCategoryManager.rows) == 12 and
-  builtCategoryManager.collapseEmptySlots and
-  builtCategoryManager.collapseEmptySlots.label.text == "Collapse Empty Slots to one slot" and
+  not builtCategoryManager.collapseEmptySlots and
   builtCategoryManager.categoryGapSlider and
   builtCategoryManager.categoryGapLabel and
-  string.find(builtCategoryManager.categoryGapLabel.text or "", "Category gap", 1, true),
-  "custom category manager did not build its Empty Slots and category-gap layout")
+  string.find(builtCategoryManager.categoryGapLabel.text or "", "Category gap", 1, true) and
+  builtCategoryManager.displayHeading.point.y == -505 and
+  builtCategoryManager.categoryGapLabel.point.y == -531 and
+  builtCategoryManager.categoryGapSlider.point.y == -548 and
+  builtCategoryManager.importHeading.point.y == -575 and
+  builtCategoryManager.importPrevious.point.y == -603 and
+  builtCategoryManager.importStatus.point.point == "BOTTOMLEFT" and
+  builtCategoryManager.importStatus.point.y == 16 and
+  builtCategoryManager.importStatus.width == 280 and
+  builtCategoryManager.close.point.point == "BOTTOMRIGHT" and
+  builtCategoryManager.close.point.y == 16 and
+  24 + builtCategoryManager.importStatus.width + 8 + builtCategoryManager.close.width + 24 <=
+    builtCategoryManager.width,
+  "custom category manager must drop Collapse Empty Slots and keep Import above Close")
 assert(builtCategoryManager.point.point == "TOPLEFT" and builtCategoryManager.point.x == 275 and
   builtCategoryManager.point.y == 725,
   "Category Settings constructor ignored its saved position")
@@ -1253,15 +1264,6 @@ assert(builtCategoryManager.point.point == "TOPLEFT" and builtCategoryManager.po
   builtCategoryManager.point.y == 688,
   "Category Settings snapped back after reopening")
 local categoryManagerThis = this
-this = builtCategoryManager.collapseEmptySlots
-this:SetChecked(1)
-this.scripts.OnClick()
-assert(ShirsInventory_GetCollapseEmptySlots(),
-  "category manager did not enable one-slot Empty Slots display")
-this:SetChecked(nil)
-this.scripts.OnClick()
-assert(not ShirsInventory_GetCollapseEmptySlots(),
-  "category manager did not restore all Empty Slots")
 this = builtCategoryManager.importNext
 this.scripts.OnClick()
 assert(builtCategoryManager.importSourceText.text == "Banktoon - BetaRealm" and
