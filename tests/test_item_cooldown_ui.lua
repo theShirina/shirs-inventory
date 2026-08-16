@@ -13,6 +13,14 @@ assert(ShirsInventory_FormatCooldownRemaining(9.1) == "10",
 assert(ShirsInventory_FormatCooldownRemaining(0) == nil,
   "expired cooldown should have no label")
 
+assert(type(ShirsInventory_GetCooldownTextLayout) == "function",
+  "cooldown text layout helper is missing")
+local cooldownText = ShirsInventory_GetCooldownTextLayout()
+assert(cooldownText.font == "GameFontNormal",
+  "item cooldown numbers must use one stock font step above GameFontNormalSmall")
+assert(cooldownText.r == 1 and cooldownText.g == 0.82 and cooldownText.b == 0,
+  "cooldown numbers must keep the gold remaining-time color")
+
 local timerCalls = {}
 CooldownFrame_SetTimer = function(frame, start, duration, enable)
   table.insert(timerCalls, {frame = frame, start = start, duration = duration, enable = enable})

@@ -2,7 +2,11 @@
 
 A standalone bag addon made and tested for Microbot's WoW 1.12.1 client.
 
-Current release: **0.7.5**.
+Current release: **0.7.6**.
+
+## What's new in 0.7.6
+
+- Item cooldown numbers use `GameFontNormal` instead of `GameFontNormalSmall`, one stock font step larger.
 
 ## What's new in 0.7.5
 

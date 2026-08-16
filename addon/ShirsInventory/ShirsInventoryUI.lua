@@ -2048,6 +2048,15 @@ function ShirsInventory_PrepareInventoryFrameForShow(frame, playerName)
   return true
 end
 
+function ShirsInventory_GetCooldownTextLayout()
+  return {
+    font = "GameFontNormal",
+    r = 1,
+    g = 0.82,
+    b = 0,
+  }
+end
+
 function ShirsInventory_FormatCooldownRemaining(remaining)
   if type(remaining) ~= "number" or remaining <= 0 then return nil end
   if remaining >= 86400 then return math.ceil(remaining / 86400) .. "d" end
@@ -2254,9 +2263,10 @@ local function ShirsInventory_CreateItemButton(index, ownerFrame, namePrefix, co
   if button.cooldown.SetFrameLevel and button.GetFrameLevel then
     button.cooldown:SetFrameLevel(button:GetFrameLevel() + 1)
   end
-  button.cooldownText = button.cooldown:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+  local cooldownText = ShirsInventory_GetCooldownTextLayout()
+  button.cooldownText = button.cooldown:CreateFontString(nil, "OVERLAY", cooldownText.font)
   button.cooldownText:SetPoint("CENTER", button.cooldown, "CENTER", 0, 0)
-  button.cooldownText:SetTextColor(1, 0.82, 0)
+  button.cooldownText:SetTextColor(cooldownText.r, cooldownText.g, cooldownText.b)
   if button.cooldownText.SetShadowColor then button.cooldownText:SetShadowColor(0, 0, 0, 1) end
   if button.cooldownText.SetShadowOffset then button.cooldownText:SetShadowOffset(1, -1) end
   button.cooldownText:Hide()
