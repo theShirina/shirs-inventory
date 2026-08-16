@@ -248,7 +248,8 @@ local categoryItems = {
   { bag = 2, slot = 4, hasItem = true, itemType = "Consumable", name = "Mysterious Tonic" },
   { bag = 2, slot = 5, hasItem = true, itemType = "Trade Goods", itemSubType = "Explosives",
     name = "Thorium Grenade" },
-  { bag = 2, slot = 6, hasItem = true, itemType = "Trade Goods", name = "Copper Ore" },
+  { bag = 2, slot = 6, hasItem = true, itemType = "Trade Goods",
+    itemSubType = "Metal & Stone", materialCategory = "Mining", name = "Copper Ore" },
   { bag = 3, slot = 1, hasItem = true, quality = 0, itemType = "Miscellaneous", name = "Broken Buckle" },
   { bag = 3, slot = 2, hasItem = true, itemType = "Miscellaneous", name = "Odd Rock" },
   { bag = 3, slot = 3, hasItem = false },
@@ -311,8 +312,8 @@ assert(ShirsInventory_GetCategoryHeaderDisplayText(narrowOtherLayout.groups[1]) 
 local twoColumnOtherLayout = ShirsInventory_BuildCategoryLayout({
   { key = "consumables", label = "Other Consumables", items = { {}, {} } },
 }, 10)
-assert(ShirsInventory_GetCategoryHeaderDisplayText(twoColumnOtherLayout.groups[1]) == "Other (2)",
-  "two-column Other Consumables heading did not retain its count when the compact form fits")
+assert(ShirsInventory_GetCategoryHeaderDisplayText(twoColumnOtherLayout.groups[1]) == "Other Consumables (2)",
+  "two-or-more item headings must keep the full category name")
 local wideOtherLayout = ShirsInventory_BuildCategoryLayout({
   { key = "consumables", label = "Other Consumables", items = { {}, {}, {}, {}, {}, {}, {} } },
 }, 10)
@@ -321,18 +322,23 @@ assert(ShirsInventory_GetCategoryHeaderDisplayText(wideOtherLayout.groups[1]) ==
 local narrowCustomLayout = ShirsInventory_BuildCategoryLayout({
   { key = "custom:123", label = "Very Long Custom Category", custom = true, items = { {} } },
 }, 10)
-assert(ShirsInventory_GetCategoryHeaderDisplayText(narrowCustomLayout.groups[1]) == "C3F" and
+assert(ShirsInventory_GetCategoryHeaderDisplayText(narrowCustomLayout.groups[1]) == "Very" and
   ShirsInventory_GetCategoryHeaderTooltipText(narrowCustomLayout.groups[1]) == "Very Long Custom Category (1)",
-  "one-column custom category did not receive a stable compact ID and full tooltip")
-local largeCustomLayout = ShirsInventory_BuildCategoryLayout({
-  { key = "custom:99999", label = "Large Custom A", custom = true, items = { {} } },
-  { key = "custom:999999", label = "Large Custom B", custom = true, items = { {} } },
+  "one-item custom category must show the first word of its name, not a C-code")
+local twoItemCustomLayout = ShirsInventory_BuildCategoryLayout({
+  { key = "custom:123", label = "Very Long Custom Category", custom = true, items = { {}, {} } },
 }, 10)
-assert(ShirsInventory_GetCategoryHeaderDisplayText(largeCustomLayout.groups[1]) == "C255R" and
-  ShirsInventory_GetCategoryHeaderDisplayText(largeCustomLayout.groups[2]) == "CLFLR" and
+assert(ShirsInventory_GetCategoryHeaderDisplayText(twoItemCustomLayout.groups[1]) == "Very Long Custom Category (2)",
+  "custom categories with two or more items must keep their full name")
+local largeCustomLayout = ShirsInventory_BuildCategoryLayout({
+  { key = "custom:99999", label = "Alpha Custom A", custom = true, items = { {} } },
+  { key = "custom:999999", label = "Beta Custom B", custom = true, items = { {} } },
+}, 10)
+assert(ShirsInventory_GetCategoryHeaderDisplayText(largeCustomLayout.groups[1]) == "Alpha" and
+  ShirsInventory_GetCategoryHeaderDisplayText(largeCustomLayout.groups[2]) == "Beta" and
   ShirsInventory_GetCategoryHeaderDisplayText(largeCustomLayout.groups[1]) ~=
     ShirsInventory_GetCategoryHeaderDisplayText(largeCustomLayout.groups[2]),
-  "large valid custom category IDs collapsed to the same one-column heading")
+  "one-item custom categories must keep distinct first-word headings")
 local rightAlignedEmptyLayout = ShirsInventory_BuildCategoryLayout({
   { key = "junk", label = "Junk", items = { {}, {} } },
   collapsedEmptyGroup,
@@ -431,10 +437,29 @@ assert(ShirsInventory_IsQuestItemType("Aufgabe") and
 ITEM_CLASS_QUEST = nil
 assert(ShirsInventory_ClassifyCategoryItem({ hasItem = true, itemType = nil, quality = nil }) == "miscellaneous",
   "unavailable item metadata must fail safely into Miscellaneous")
+assert(ShirsInventory_ClassifyCategoryItem({
+  hasItem = true, itemType = "Trade Goods", itemSubType = "Metal & Stone",
+  materialCategory = "Mining", name = "Copper Ore"
+}) == "mining", "mining materials must leave the generic Trade Goods group")
+assert(ShirsInventory_ClassifyCategoryItem({
+  hasItem = true, itemType = "Trade Goods", itemSubType = "Enchanting",
+  materialCategory = "Enchanting", name = "Strange Dust"
+}) == "enchanting", "enchanting materials must leave the generic Trade Goods group")
+assert(ShirsInventory_ClassifyCategoryItem({
+  hasItem = true, itemType = "Trade Goods", itemSubType = "Herb",
+  materialCategory = "Herbs", name = "Peacebloom"
+}) == "herbs", "herbs must leave the generic Trade Goods group")
+assert(ShirsInventory_ClassifyCategoryItem({
+  hasItem = true, itemType = "Trade Goods", itemSubType = "Cloth",
+  materialCategory = "Cloth", name = "Linen Cloth"
+}) == "cloth", "cloth must leave the generic Trade Goods group")
+assert(ShirsInventory_ClassifyCategoryItem({
+  hasItem = true, itemType = "Trade Goods", name = "Odd Trade Good"
+}) == "tradeGoods", "unclassified trade goods must stay in Trade Goods")
 local expectedKeys = {
   "quest", "keys", "mountsCompanions", "armor", "weapons", "equipment", "bags", "ammo",
   "recipes", "foodDrink", "potions", "elixirs", "bandages", "scrolls", "weaponBuffs",
-  "consumables", "explosives", "tradeGoods", "junk", "miscellaneous", "empty",
+  "consumables", "explosives", "mining", "junk", "miscellaneous", "empty",
 }
 assert(table.getn(categoryGroups) == table.getn(expectedKeys),
   "broader category view must expose each non-empty fixed group exactly once")

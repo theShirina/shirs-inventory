@@ -256,6 +256,14 @@ local SHIRS_INVENTORY_CATEGORY_DEFINITIONS = {
   { key = "weaponBuffs", label = "Weapon Buffs" },
   { key = "consumables", label = "Other Consumables" },
   { key = "explosives", label = "Explosives" },
+  { key = "mining", label = "Mining" },
+  { key = "herbs", label = "Herbs" },
+  { key = "cloth", label = "Cloth" },
+  { key = "leather", label = "Leather" },
+  { key = "enchanting", label = "Enchanting" },
+  { key = "elemental", label = "Elemental" },
+  { key = "engineering", label = "Engineering" },
+  { key = "gems", label = "Gems" },
   { key = "tradeGoods", label = "Trade Goods & Materials" },
   { key = "junk", label = "Junk" },
   { key = "miscellaneous", label = "Miscellaneous" },
@@ -280,6 +288,14 @@ local SHIRS_INVENTORY_CATEGORY_EDIT_TARGETS = {
   weaponBuffs = true,
   consumables = true,
   explosives = true,
+  mining = true,
+  herbs = true,
+  cloth = true,
+  leather = true,
+  enchanting = true,
+  elemental = true,
+  engineering = true,
+  gems = true,
   tradeGoods = true,
   junk = true,
   miscellaneous = true,
@@ -501,10 +517,26 @@ function ShirsInventory_ClassifyCategoryItem(item)
   if item.itemType == "Projectile" or item.itemType == classes.projectile then return "ammo" end
   if item.itemSubType == "Explosives" then return "explosives" end
   if item.itemType == "Consumable" or item.itemType == classes.consumable then return "consumables" end
-  if item.itemType == "Trade Goods" or item.itemType == classes.tradeGoods or
-    item.materialCategory then return "tradeGoods" end
+  local materialGroup = ShirsInventory_GetCategoryMaterialGroup(item.materialCategory, item.itemSubType)
+  if materialGroup then return materialGroup end
+  if item.itemType == "Trade Goods" or item.itemType == classes.tradeGoods then return "tradeGoods" end
   if tonumber(item.quality) == 0 then return "junk" end
   return "miscellaneous"
+end
+
+function ShirsInventory_GetCategoryMaterialGroup(materialCategory, itemSubType)
+  local source = materialCategory or itemSubType
+  if type(source) ~= "string" or source == "" then return nil end
+  local lowered = string.lower(source)
+  if lowered == "mining" or lowered == "metal & stone" or lowered == "ore" then return "mining" end
+  if lowered == "herbs" or lowered == "herb" then return "herbs" end
+  if lowered == "cloth" then return "cloth" end
+  if lowered == "leather" then return "leather" end
+  if lowered == "enchanting" or lowered == "enchanting materials" or lowered == "enchant" then return "enchanting" end
+  if lowered == "elemental" then return "elemental" end
+  if lowered == "engineering" or lowered == "parts" or lowered == "devices" then return "engineering" end
+  if lowered == "gems" or lowered == "gem" then return "gems" end
+  return nil
 end
 
 function ShirsInventory_BuildCategoryGroups(items)
@@ -600,6 +632,14 @@ local SHIRS_INVENTORY_COMPACT_CATEGORY_LABELS = {
   weaponBuffs = "W.Buff",
   consumables = "Other",
   explosives = "Bombs",
+  mining = "Mining",
+  herbs = "Herbs",
+  cloth = "Cloth",
+  leather = "Leather",
+  enchanting = "Ench.",
+  elemental = "Elem.",
+  engineering = "Eng.",
+  gems = "Gems",
   tradeGoods = "Mats",
   junk = "Junk",
   miscellaneous = "Misc",
@@ -627,16 +667,23 @@ local function ShirsInventory_EncodeCompactCategoryID(value)
   return encoded
 end
 
+function ShirsInventory_GetCustomCategoryFirstWord(label)
+  if type(label) ~= "string" then return "Group" end
+  local _, _, word = string.find(label, "^(%S+)")
+  if type(word) == "string" and word ~= "" then return word end
+  return "Group"
+end
+
 function ShirsInventory_GetCategoryHeaderDisplayText(group)
   if not group then return "" end
   local fullText = ShirsInventory_GetCategoryHeaderText(group)
+  local itemCount = table.getn(group.items or {})
+  if itemCount >= 2 then return fullText end
   local maximumCharacters = math.max(1, tonumber(group.columns) or 1) * 6
   if string.len(fullText) <= maximumCharacters then return fullText end
   local compact = SHIRS_INVENTORY_COMPACT_CATEGORY_LABELS[group.key]
-  if not compact and type(group.key) == "string" then
-    local _, _, customID = string.find(group.key, "^custom:(%d+)$")
-    local encodedID = customID and ShirsInventory_EncodeCompactCategoryID(customID) or nil
-    if encodedID then compact = "C" .. encodedID end
+  if not compact and type(group.key) == "string" and string.find(group.key, "^custom:") then
+    compact = ShirsInventory_GetCustomCategoryFirstWord(group.label)
   end
   compact = compact or "Group"
   local compactWithCount = compact
