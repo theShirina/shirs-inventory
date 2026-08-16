@@ -345,6 +345,49 @@ ShirsInventory_SetCollapseEmptySlots(false)
 assert(ShirsInventory_ClassifyCategoryItem({
   hasItem = true, itemType = "Consumable", quality = 1, manualCategory = "equipment"
 }) == "equipment", "manual category assignment did not override automatic metadata")
+ShirsInventoryDB.junkItems = { [4242] = true }
+assert(ShirsInventory_ClassifyCategoryItem({
+  hasItem = true, itemID = 4242, itemType = "Weapon", quality = 3
+}) == "junk", "manually junk-marked items must classify as junk")
+assert(ShirsInventory_ClassifyCategoryItem({
+  hasItem = true, itemID = 4242, itemType = "Consumable", quality = 2,
+  name = "Major Healing Potion", tooltipText = "Must remain seated while drinking."
+}) == "junk", "junk mark must win over semantic food-and-drink signals")
+assert(ShirsInventory_ClassifyCategoryItem({
+  hasItem = true, itemID = 4242, itemType = "Quest", quest = true
+}) == "junk", "junk mark must win over quest identity")
+assert(ShirsInventory_ClassifyCategoryItem({
+  hasItem = true, itemID = 4242, itemType = "Weapon", quality = 3,
+  manualCategory = "equipment"
+}) == "equipment", "explicit manual category must still win over a junk mark")
+assert(ShirsInventory_ClassifyCategoryItem({
+  hasItem = true, itemID = 4243, itemType = "Weapon", quality = 3
+}) == "weapons", "unmarked items must keep their normal category")
+ShirsInventoryDB.junkItems = nil
+assert(ShirsInventory_ClassifyCategoryItem({
+  hasItem = true, itemID = 4242, itemType = "Weapon", quality = 3
+}) == "weapons", "clearing junk marks must restore normal classification")
+local junkMarkedGroups = ShirsInventory_BuildCategoryGroups({
+  { bag = 0, slot = 1, hasItem = true, itemID = 4242, itemType = "Weapon", quality = 3 },
+  { bag = 0, slot = 2, hasItem = true, itemID = 4243, itemType = "Weapon", quality = 3 },
+})
+ShirsInventoryDB.junkItems = { [4242] = true }
+junkMarkedGroups = ShirsInventory_BuildCategoryGroups({
+  { bag = 0, slot = 1, hasItem = true, itemID = 4242, itemType = "Weapon", quality = 3 },
+  { bag = 0, slot = 2, hasItem = true, itemID = 4243, itemType = "Weapon", quality = 3 },
+})
+local junkMarkedGroupIndex
+for junkMarkedGroupIndex = 1, table.getn(junkMarkedGroups) do
+  local group = junkMarkedGroups[junkMarkedGroupIndex]
+  if group.key == "junk" then
+    assert(table.getn(group.items) == 1 and group.items[1].itemID == 4242,
+      "junk group must contain only the manually marked item")
+  elseif group.key == "weapons" then
+    assert(table.getn(group.items) == 1 and group.items[1].itemID == 4243,
+      "weapons group must contain only the unmarked weapon")
+  end
+end
+ShirsInventoryDB.junkItems = nil
 assert(ShirsInventory_ClassifyCategoryItem({ hasItem = true, itemType = "Quest", quality = 0 }) == "quest",
   "quest identity must win over poor quality so quest items never appear as junk")
 assert(ShirsInventory_ClassifyCategoryItem({
@@ -1601,6 +1644,45 @@ end
 assert(runtimeWheelUp and runtimeWheelDown,
   "scrollbar wheel handler must scroll both directions")
 ShirsInventory_ScrollCategoryBy = runtimeWheelBackup
+-- Item buttons and category headers must forward wheel events to the same
+-- category scroll path, because wheel over a child button does not reach the
+-- parent frame handler in every client.
+local runtimeButtonWheelCount = 0
+local runtimeButtonWheelHandler
+local runtimeHeaderWheelCount = 0
+local runtimeHeaderWheelHandler
+for constructedIndex = 1, table.getn(constructedFrames) do
+  local candidate = constructedFrames[constructedIndex]
+  if candidate and candidate.frameType == "Button" and candidate.parent == runtimeFrame and
+    candidate.scripts and candidate.scripts.OnMouseWheel then
+    if candidate.text then
+      runtimeHeaderWheelCount = runtimeHeaderWheelCount + 1
+      runtimeHeaderWheelHandler = runtimeHeaderWheelHandler or candidate
+    else
+      runtimeButtonWheelCount = runtimeButtonWheelCount + 1
+      runtimeButtonWheelHandler = runtimeButtonWheelHandler or candidate
+    end
+  end
+end
+assert(runtimeButtonWheelCount > 0,
+  "category item buttons must expose a wheel handler")
+assert(runtimeHeaderWheelCount > 0,
+  "category headers must expose a wheel handler")
+arg1 = 1
+runtimeButtonWheelHandler.scripts.OnMouseWheel()
+assert(ShirsInventory_GetCategoryScrollOffset() == 0,
+  "wheel up on a category item button must scroll toward the top")
+arg1 = -1
+runtimeButtonWheelHandler.scripts.OnMouseWheel()
+assert(ShirsInventory_GetCategoryScrollOffset() > 0,
+  "wheel down on a category item button must scroll down")
+arg1 = 1
+runtimeHeaderWheelHandler.scripts.OnMouseWheel()
+assert(ShirsInventory_GetCategoryScrollOffset() == 0,
+  "wheel up on a category header must scroll toward the top")
+arg1 = nil
+assert(ShirsInventory_GetCategoryScrollOffset() == 0,
+  "wheel handler must not move the offset for a missing delta")
 ShirsInventoryDB.collapseEmptySlots = true
 local runtimeCollapsed = ShirsInventory_RebuildCategoryGrid()
 local runtimeCollapsedMax = ShirsInventory_GetCategoryScrollMax()

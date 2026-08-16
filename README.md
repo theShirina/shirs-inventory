@@ -2,7 +2,12 @@
 
 A standalone bag addon made and tested for Microbot's WoW 1.12.1 client.
 
-Current release: **0.7.1**.
+Current release: **0.7.2**.
+
+## What's new in 0.7.2
+
+- Mouse-wheel scrolling now works anywhere over the Category View, not just on the thin scrollbar strip: item slots and category headings forward the wheel to the same scroll path.
+- Items you mark as junk with the junk function now land in the **Junk** category instead of their item type; clearing the mark restores the normal category.
 
 ## What's new in 0.7.1
 

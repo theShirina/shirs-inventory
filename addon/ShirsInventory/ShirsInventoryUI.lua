@@ -484,6 +484,8 @@ end
 function ShirsInventory_ClassifyCategoryItem(item)
   if not item or not item.hasItem then return "empty" end
   if item.manualCategory then return item.manualCategory end
+  local junkMarks = (ShirsInventoryDB and ShirsInventoryDB.junkItems) or nil
+  if item.itemID and junkMarks and junkMarks[item.itemID] then return "junk" end
   local classes = ShirsInventory_GetCategoryClasses()
   if item.itemType == "Recipe" or item.itemType == classes.recipe then return "recipes" end
   if item.itemType == "Quest" or item.quest or
@@ -2156,6 +2158,7 @@ local function ShirsInventory_CreateItemButton(index, ownerFrame, namePrefix, co
     ShirsInventory_UpdateCooldownDisplay(this, arg1)
     if GameTooltip:IsOwned(this) then ShirsInventory_OnItemEnter(this) end
   end)
+  button:SetScript("OnMouseWheel", ShirsInventory_CategoryWheelHandler)
   buttons[index] = button
   return button
 end
@@ -2763,6 +2766,7 @@ local function ShirsInventory_GetCategoryHeader(index)
       ShirsInventory_FinishCategoryEditDrag()
     end
   end)
+  header:SetScript("OnMouseWheel", ShirsInventory_CategoryWheelHandler)
   categoryHeaders[index] = header
   return header
 end
@@ -2910,6 +2914,20 @@ function ShirsInventory_GetCategoryScrollable()
   return categoryScrollMax > 0 and ShirsInventory_GetCategoryMode() and true or false
 end
 
+-- Shared category wheel handler. Attached to the frame, scrollbar, item
+-- buttons, and headers because wheel events over child buttons do not reach
+-- the parent frame in every client. The parent guard keeps bank buttons
+-- (parented to the bank frame) from scrolling the carried category view.
+function ShirsInventory_CategoryWheelHandler()
+  if not (ShirsInventory_GetCategoryMode and ShirsInventory_GetCategoryMode()) then return end
+  if categoryScrollMax <= 0 then return end
+  local owner = this and this.GetParent and this:GetParent() or nil
+  if this ~= ShirsInventoryFrame and owner and owner ~= ShirsInventoryFrame then return end
+  local delta = tonumber(arg1) or 0
+  if delta == 0 then return end
+  ShirsInventory_ScrollCategoryBy(-delta * 40)
+end
+
 function ShirsInventory_UpdateCategoryScrollbar()
   local frame = ShirsInventoryFrame
   if not frame then return end
@@ -2940,11 +2958,7 @@ function ShirsInventory_UpdateCategoryScrollbar()
         categoryScrollOffset = value
         ShirsInventory_ApplyCategoryScroll()
       end)
-      categoryScrollBar:SetScript("OnMouseWheel", function()
-        local delta = tonumber(arg1) or 0
-        if delta == 0 then return end
-        ShirsInventory_ScrollCategoryBy(-delta * 40)
-      end)
+      categoryScrollBar:SetScript("OnMouseWheel", ShirsInventory_CategoryWheelHandler)
     end
     categoryScrollBarUpdating = true
     categoryScrollBar:SetMinMaxValues(0, categoryScrollMax)
@@ -3556,13 +3570,7 @@ local function ShirsInventory_CreateMainFrame()
   frame:RegisterEvent("UPDATE_INVENTORY_ALERTS")
   frame:RegisterEvent("MERCHANT_SHOW")
   frame:RegisterEvent("MERCHANT_CLOSED")
-  frame:SetScript("OnMouseWheel", function()
-    if not (ShirsInventory_GetCategoryMode and ShirsInventory_GetCategoryMode()) then return end
-    if categoryScrollMax <= 0 then return end
-    local delta = tonumber(arg1) or 0
-    if delta == 0 then return end
-    ShirsInventory_ScrollCategoryBy(-delta * 40)
-  end)
+  frame:SetScript("OnMouseWheel", ShirsInventory_CategoryWheelHandler)
   frame:Hide()
 
   table.insert(UISpecialFrames, "ShirsInventoryFrame")
