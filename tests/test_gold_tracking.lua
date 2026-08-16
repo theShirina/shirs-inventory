@@ -384,4 +384,25 @@ assert(coinShown and coinGoldText == "777" and coinSilverText == "0" and coinCop
 assert(displayWidth == ShirsInventory_GetCoinWidgetModel(7770000).width,
   "coin widget width did not match its three-texture model")
 
+assert(type(ShirsInventory_AccountRememberKnownRecipe) == "function" and
+  type(ShirsInventory_AccountKnowsRecipe) == "function",
+  "account recipe memory API is missing")
+assert(not ShirsInventory_AccountKnowsRecipe(6452),
+  "known recipes must start empty")
+assert(ShirsInventory_AccountRememberKnownRecipe(6452),
+  "a valid recipe item ID must be stored on the account")
+assert(ShirsInventory_AccountKnowsRecipe(6452),
+  "the same account must still know that recipe after a later character logs in")
+assert(not ShirsInventory_AccountRememberKnownRecipe(nil) and
+  not ShirsInventory_AccountRememberKnownRecipe("6452") and
+  not ShirsInventory_AccountRememberKnownRecipe(0) and
+  not ShirsInventory_AccountRememberKnownRecipe(-3),
+  "recipe memory must reject missing, string, zero, and negative IDs")
+assert(ShirsInventoryAccountDB.knownRecipes[6452] == true,
+  "known recipes must persist in the account SavedVariable")
+currentRealm = "OtherRealm"
+currentCharacter = "AltAlchemist"
+assert(ShirsInventory_AccountKnowsRecipe(6452),
+  "recipe knowledge must be account-wide, not per character or realm")
+
 print("GOLD_TRACKING_TEST=PASS")

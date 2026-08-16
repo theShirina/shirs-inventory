@@ -104,4 +104,33 @@ assert(learnable and learnable.kind == "rarity" and not learnable.fillA,
 assert(not ShirsInventory_GetItemVisualModel("item", 1, "Miscellaneous", true, "already_known"),
   "non-recipe items must ignore a leftover recipe status")
 
+assert(type(ShirsInventory_ResolveRecipeLearnStatus) == "function",
+  "account-aware recipe resolver is missing")
+assert(ShirsInventory_ResolveRecipeLearnStatus("already_known", 6452) == "already_known",
+  "a locally known recipe must stay known")
+assert(ShirsInventory_ResolveRecipeLearnStatus("skill_too_low", 6452) == "skill_too_low",
+  "skill-too-low must stay orange even if another character already knows the recipe")
+assert(ShirsInventory_ResolveRecipeLearnStatus(nil, 6452) == nil,
+  "a learnable recipe with no account memory must stay unmarked")
+
+local remembered = {}
+function ShirsInventory_AccountRememberKnownRecipe(itemId)
+  if type(itemId) ~= "number" or itemId <= 0 then return false end
+  remembered[itemId] = true
+  return true
+end
+function ShirsInventory_AccountKnowsRecipe(itemId)
+  return remembered[itemId] and true or false
+end
+assert(ShirsInventory_ResolveRecipeLearnStatus("already_known", 6452) == "already_known" and remembered[6452],
+  "seeing Already known must record the recipe on the account")
+assert(ShirsInventory_ResolveRecipeLearnStatus(nil, 6452) == "already_known",
+  "another character with the skill must inherit the account-known recipe")
+assert(ShirsInventory_ResolveRecipeLearnStatus("skill_too_low", 6452) == "skill_too_low",
+  "a character below the recipe skill must keep the orange mark")
+assert(ShirsInventory_ResolveRecipeLearnStatus(nil, 929) == nil,
+  "an unknown recipe ID must stay unmarked")
+assert(ShirsInventory_ResolveRecipeLearnStatus("already_known", nil) == "already_known",
+  "a known recipe without an item ID must still show as known")
+
 print("RECIPE_LEARN_STATUS_TEST=PASS")

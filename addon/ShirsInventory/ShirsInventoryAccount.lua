@@ -29,6 +29,9 @@
 --         ["CharacterName"] = { version = 1, customCategories = {}, categoryAssignments = {} },
 --       },
 --     },
+--     knownRecipes = {
+--       [6452] = true, -- recipe item IDs already learned on this account
+--     },
 --   }
 --
 -- Gold refreshes on PLAYER_LOGIN and PLAYER_MONEY. Carried-item snapshots
@@ -52,7 +55,25 @@ function ShirsInventory_AccountEnsureDB()
   if type(ShirsInventoryAccountDB.categorySettings) ~= "table" then
     ShirsInventoryAccountDB.categorySettings = {}
   end
+  if type(ShirsInventoryAccountDB.knownRecipes) ~= "table" then
+    ShirsInventoryAccountDB.knownRecipes = {}
+  end
   return ShirsInventoryAccountDB
+end
+
+function ShirsInventory_AccountRememberKnownRecipe(itemId)
+  if type(itemId) ~= "number" or itemId <= 0 or itemId ~= math.floor(itemId) then
+    return false
+  end
+  local db = ShirsInventory_AccountEnsureDB()
+  db.knownRecipes[itemId] = true
+  return true
+end
+
+function ShirsInventory_AccountKnowsRecipe(itemId)
+  if type(itemId) ~= "number" or itemId <= 0 then return false end
+  local db = ShirsInventory_AccountEnsureDB()
+  return db.knownRecipes[itemId] == true
 end
 
 -- The whole feature is gated on the full-suite bag UI option. Missing

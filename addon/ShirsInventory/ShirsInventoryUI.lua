@@ -998,9 +998,29 @@ function ShirsInventory_CollectTooltipLines(bag, slot)
   return lines
 end
 
+function ShirsInventory_ResolveRecipeLearnStatus(localStatus, itemId)
+  if localStatus == "already_known" then
+    if type(itemId) == "number" and type(ShirsInventory_AccountRememberKnownRecipe) == "function" then
+      ShirsInventory_AccountRememberKnownRecipe(itemId)
+    end
+    return "already_known"
+  end
+  if localStatus == "skill_too_low" then
+    return "skill_too_low"
+  end
+  if type(ShirsInventory_AccountKnowsRecipe) == "function" and
+    ShirsInventory_AccountKnowsRecipe(itemId) then
+    return "already_known"
+  end
+  return localStatus
+end
+
 function ShirsInventory_GetRecipeLearnStatusForSlot(bag, slot, itemType)
   if not ShirsInventory_IsRecipeItemType(itemType) then return nil end
-  return ShirsInventory_GetRecipeLearnStatusFromLines(ShirsInventory_CollectTooltipLines(bag, slot))
+  local link = type(GetContainerItemLink) == "function" and GetContainerItemLink(bag, slot) or nil
+  local itemId = type(ShirsInventory_GetItemId) == "function" and ShirsInventory_GetItemId(link) or nil
+  local localStatus = ShirsInventory_GetRecipeLearnStatusFromLines(ShirsInventory_CollectTooltipLines(bag, slot))
+  return ShirsInventory_ResolveRecipeLearnStatus(localStatus, itemId)
 end
 
 function ShirsInventory_GetClampedTopLeft(left, top, width, height, screenWidth, screenHeight,
@@ -2050,7 +2070,7 @@ end
 
 function ShirsInventory_GetCooldownTextLayout()
   return {
-    font = "GameFontNormal",
+    font = "GameFontNormalLarge",
     r = 1,
     g = 0.82,
     b = 0,

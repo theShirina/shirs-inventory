@@ -2,7 +2,12 @@
 
 A standalone bag addon made and tested for Microbot's WoW 1.12.1 client.
 
-Current release: **0.7.6**.
+Current release: **0.7.7**.
+
+## What's new in 0.7.7
+
+- Item cooldown numbers use `GameFontNormalLarge`, one more stock font step than 0.7.6.
+- Recipes marked **Already known** on any character are remembered on the account. Another character with the skill sees the same blue known mark; a character below the skill still gets the orange **skill too low** mark. Live testing still needs a `/reload` on the Keybind Display Test client after learning a recipe on one character and opening bags on another.
 
 ## What's new in 0.7.6
 
