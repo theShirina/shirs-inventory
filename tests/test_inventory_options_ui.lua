@@ -966,6 +966,34 @@ local function NewRegion()
     child.parent = self
     return child
   end
+  function region:SetID(value) self.id = value end
+  function region:GetID() return self.id end
+  function region:GetName() return self.name or self.frameType or "mockregion" end
+  function region:RegisterForClicks(...) self.clicks = arg end
+  function region:RegisterForDrag(...) self.dragButtons = arg end
+  function region:SetScale(value) self.scale = value end
+  function region:GetScale() return self.scale or 1 end
+  function region:GetEffectiveScale() return self.scale or 1 end
+  function region:SetAlpha(value) self.alpha = value end
+  function region:GetAlpha() return self.alpha or 1 end
+  function region:GetWidth() return self.width or 0 end
+  function region:GetHeight() return self.height or 0 end
+  function region:GetLeft() return self.left or 0 end
+  function region:SetLeft(value) self.left = value end
+  function region:GetTop() return self.top or 0 end
+  function region:SetTop(value) self.top = value end
+  function region:GetRight() return (self.left or 0) + (self.width or 0) end
+  function region:GetBottom() return (self.top or 0) - (self.height or 0) end
+  function region:GetNormalTexture() return nil end
+  function region:SetNormalTexture() end
+  function region:SetHighlightTexture() end
+  function region:SetPushedTexture() end
+  function region:SetOrientation(value) self.orientation = value end
+  function region:SetThumbTexture(value) self.thumbTexture = value end
+  function region:SetBlendMode(value) self.blendMode = value end
+  function region:SetShadowColor() end
+  function region:SetShadowOffset() end
+  function region:SetTextInsets() end
   return region
 end
 
@@ -1374,5 +1402,220 @@ for specialIndex = 1, table.getn(UISpecialFrames) do
 end
 assert(settingsSpecialCount == 1 and managerSpecialCount == 1,
   "settings frames were not registered exactly once for Escape handling")
+
+-- Category View scaling regression: the same window-scale percentage must not
+-- render smaller in category mode just because the packed layout is tall.
+-- The viewport fitter must not shrink the frame; the scroll model instead caps
+-- the frame height and reports a scroll range.
+assert(type(ShirsInventory_GetCategoryScrollModel) == "function",
+  "category scroll model API is missing")
+local scrollFit = ShirsInventory_GetCategoryScrollModel(300, 1.0, 1080, 50)
+assert(scrollFit.frameHeight == 300 and scrollFit.maxScroll == 0 and not scrollFit.scrollable,
+  "short category content must keep its full height without scrolling")
+local scrollTall = ShirsInventory_GetCategoryScrollModel(900, 1.0, 1080, 50)
+assert(scrollTall.frameHeight == 900 and scrollTall.maxScroll == 0 and not scrollTall.scrollable,
+  "tall category content within the viewport must not scroll")
+local scrollOverflow = ShirsInventory_GetCategoryScrollModel(1500, 1.0, 1080, 50)
+assert(scrollOverflow.frameHeight == 1022 and scrollOverflow.maxScroll == 478 and scrollOverflow.scrollable,
+  "tall category content past the viewport must cap the frame and report the scroll range")
+local scrollScaled = ShirsInventory_GetCategoryScrollModel(1500, 0.8, 1080, 50)
+assert(scrollScaled.frameHeight == 1277.5 and scrollScaled.maxScroll == 222.5 and scrollScaled.scrollable,
+  "a lower window scale must widen the visible height budget")
+local scrollInvalid = ShirsInventory_GetCategoryScrollModel(nil, 1.0, 1080, 50)
+assert(scrollInvalid.frameHeight == 0 and scrollInvalid.maxScroll == 0 and not scrollInvalid.scrollable,
+  "missing category content height must fail closed without scrolling")
+local scrollZeroScreen = ShirsInventory_GetCategoryScrollModel(500, 1.0, 0, 50)
+assert(scrollZeroScreen.frameHeight == 500 and scrollZeroScreen.maxScroll == 0 and
+  not scrollZeroScreen.scrollable,
+  "missing screen height must fail closed without scrolling")
+local scrollBadScale = ShirsInventory_GetCategoryScrollModel(500, 0, 1080, 50)
+assert(scrollBadScale.frameHeight == 500 and scrollBadScale.maxScroll == 0 and
+  not scrollBadScale.scrollable,
+  "invalid window scale must fail closed without scrolling")
+assert(type(ShirsInventory_GetCategoryScrollY) == "function" and
+  type(ShirsInventory_IsCategoryScrollElementVisible) == "function",
+  "category scroll geometry APIs are missing")
+assert(ShirsInventory_GetCategoryScrollY(-64, 0) == -64 and
+  ShirsInventory_GetCategoryScrollY(-64, 478) == 414 and
+  ShirsInventory_GetCategoryScrollY(nil, 10) == 10,
+  "category scroll offset did not shift content upward")
+assert(ShirsInventory_IsCategoryScrollElementVisible(-64, 40, 600) and
+  ShirsInventory_IsCategoryScrollElementVisible(-560, 40, 600) and
+  not ShirsInventory_IsCategoryScrollElementVisible(-580, 40, 600) and
+  not ShirsInventory_IsCategoryScrollElementVisible(20, 40, 600) and
+  ShirsInventory_IsCategoryScrollElementVisible(-64, 18, 600),
+  "category scroll visibility did not respect the capped frame height")
+assert(ShirsInventory_IsCategoryScrollElementVisible(-64, 40, 600, -64) and
+  not ShirsInventory_IsCategoryScrollElementVisible(-60, 40, 600, -64) and
+  not ShirsInventory_IsCategoryScrollElementVisible(-600, 40, 600, -64) and
+  ShirsInventory_IsCategoryScrollElementVisible(-560, 40, 600, -64),
+  "category scroll visibility must not climb above the bag-bar grid top")
+assert(ShirsInventory_IsCategoryScrollElementVisible(-64, 40, 600, nil) and
+  ShirsInventory_IsCategoryScrollElementVisible(-60, 40, 600, nil) and
+  ShirsInventory_IsCategoryScrollElementVisible(-64, 40, 600, -64) and
+  not ShirsInventory_IsCategoryScrollElementVisible(-60, 40, 600, -64),
+  "default and explicit grid tops must agree on the strict top bound")
+
+-- The user's exact report: at the same percentage, category mode used to be
+-- smaller than normal mode because the auto-fit shrank the whole frame. With
+-- the scroll model the frame keeps the requested scale and gains a scrollbar
+-- instead, and expanding Empty Slots changes the scroll range, not the scale.
+local scrollNumSlotsBackup = GetContainerNumSlots
+local scrollItemInfoBackup = GetContainerItemInfo
+local scrollItemLinkBackup = GetContainerItemLink
+GetContainerNumSlots = function(bag)
+  if bag == 0 then return 16 end
+  if bag >= 1 and bag <= 4 then return 16 end
+  return 0
+end
+local scrollItemTypes = { "Quest", "Key", "Miscellaneous", "Armor", "Weapon", "Container",
+  "Projectile", "Recipe", "Consumable", "Consumable", "Trade Goods", "Miscellaneous" }
+GetContainerItemInfo = function(bag, slot)
+  local index = math.mod((bag * 16) + slot, table.getn(scrollItemTypes)) + 1
+  return "texture", 1, nil, 1, scrollItemTypes[index]
+end
+GetContainerItemLink = function() return "|Hitem:12361:0:0:0|h[Blue Sapphire]|h" end
+local scrollSlotCounts = ShirsInventory_GetInventorySlotCounts()
+assert(type(scrollSlotCounts) == "table" and (scrollSlotCounts[1] or 0) > 0,
+  "inventory slot counts are unavailable for the scroll regression")
+local scrollSlots = ShirsInventory_BuildInventorySlots(scrollSlotCounts)
+local scrollItems = ShirsInventory_BuildCategoryInventoryItems(scrollSlots)
+local scrollGroups = ShirsInventory_BuildCategoryGroups(scrollItems)
+local scrollLayout = ShirsInventory_BuildCategoryLayout(scrollGroups, 10)
+local scrollContentHeight = scrollLayout.height + 92 + 32
+local scrollModel = ShirsInventory_GetCategoryScrollModel(scrollContentHeight, 1.0, 768, 110)
+assert(scrollModel.scrollable == (scrollModel.maxScroll > 0) and
+  (not scrollModel.scrollable or scrollModel.frameHeight < scrollContentHeight),
+  "category scroll model must only cap the frame when content exceeds the viewport")
+ShirsInventoryDB.collapseEmptySlots = true
+local scrollCollapsedGroups = ShirsInventory_BuildCategoryGroups(scrollItems)
+local scrollCollapsedLayout = ShirsInventory_BuildCategoryLayout(scrollCollapsedGroups, 10)
+local scrollCollapsedModel = ShirsInventory_GetCategoryScrollModel(
+  scrollCollapsedLayout.height + 92 + 32, 1.0, 768, 110
+)
+ShirsInventoryDB.collapseEmptySlots = false
+GetContainerNumSlots = scrollNumSlotsBackup
+GetContainerItemInfo = scrollItemInfoBackup
+GetContainerItemLink = scrollItemLinkBackup
+assert(scrollLayout.height >= scrollCollapsedLayout.height and
+  scrollModel.maxScroll >= scrollCollapsedModel.maxScroll,
+  "expanded Empty Slots must not produce a shorter layout or a smaller scroll range")
+assert(type(ShirsInventory_ScrollCategoryBy) == "function" and
+  type(ShirsInventory_GetCategoryScrollOffset) == "function" and
+  type(ShirsInventory_GetCategoryScrollMax) == "function" and
+  type(ShirsInventory_GetCategoryScrollable) == "function",
+  "category scroll interaction APIs are missing")
+ShirsInventory_GetCategoryMode = function() return true end
+assert(ShirsInventory_ScrollCategoryBy(40) == false or
+  ShirsInventory_GetCategoryScrollOffset() >= 0,
+  "category scroll step must stay inside its bounds")
+ShirsInventory_GetCategoryMode = function() return false end
+
+-- Runtime probe: drive the real category rebuild under the mock UI and prove
+-- the user-visible bug is fixed. With the same percentage, category mode must
+-- keep the requested scale and scroll, not shrink like normal mode's fitter.
+local runtimeModeBackup = ShirsInventory_GetCategoryMode
+local runtimeScaleBackup = ShirsInventory_GetWindowScale
+local runtimeNumSlotsBackup = GetContainerNumSlots
+local runtimeItemInfoBackup = GetContainerItemInfo
+local runtimeItemLinkBackup = GetContainerItemLink
+local runtimeBottomBar = NewRegion()
+runtimeBottomBar:SetTop(104)
+local runtimeBottomBackup = MainMenuBarBackpackButton
+MainMenuBarBackpackButton = runtimeBottomBar
+ShirsInventory_GetCategoryMode = function() return true end
+ShirsInventory_GetWindowScale = function() return 1 end
+ShirsInventoryDB.itemsPerRow = 10
+GetContainerNumSlots = function(bag)
+  if bag >= 0 and bag <= 4 then return 16 end
+  return 0
+end
+GetContainerItemInfo = function(bag, slot)
+  local index = math.mod((bag * 16) + slot, table.getn(scrollItemTypes)) + 1
+  return "texture", 1, nil, 1, scrollItemTypes[index]
+end
+GetContainerItemLink = function() return "|Hitem:12361:0:0:0|h[Blue Sapphire]|h" end
+function SetItemButtonTexture() end
+function SetItemButtonCount() end
+function SetItemButtonDesaturated() end
+function GetContainerItemCooldown() return 0, 0, 0 end
+ShirsInventory_GetJunkItems = function() return {} end
+local runtimeFrame = CreateFrame("Frame", "ShirsInventoryRuntimeFrame", UIParent)
+runtimeFrame.freeText = runtimeFrame:CreateFontString()
+runtimeFrame.searchQuery = ""
+UIParent.width = 1024
+UIParent.height = 400
+ShirsInventoryFrame = runtimeFrame
+local runtimeBuilt = ShirsInventory_RebuildCategoryGrid()
+local runtimeScale = runtimeFrame.scale
+local runtimeHeight = runtimeFrame.height
+local runtimeScrollbar = nil
+local constructedIndex
+for constructedIndex = 1, table.getn(constructedFrames) do
+  local candidate = constructedFrames[constructedIndex]
+  if candidate and candidate.frameType == "Slider" and candidate.parent == runtimeFrame then
+    runtimeScrollbar = candidate
+  end
+end
+assert(runtimeBuilt == true, "category rebuild did not run under the mock UI")
+assert(runtimeScale == 1, "category mode must keep the requested scale instead of shrinking")
+assert(runtimeScrollbar and runtimeScrollbar.visible == true,
+  "category mode must show the scrollbar when content overflows the viewport")
+assert(runtimeHeight and runtimeHeight > 0 and runtimeHeight < 900,
+  "category frame height must be capped by the scroll model, not left at full layout height")
+local runtimeMax = ShirsInventory_GetCategoryScrollMax()
+assert(runtimeMax > 0, "overflowing category content must report a positive scroll range")
+assert(runtimeScrollbar.low == 0 and runtimeScrollbar.high == runtimeMax,
+  "scrollbar min/max must match the category scroll model")
+assert(ShirsInventory_ScrollCategoryBy(40) == true,
+  "scroll step inside the range must move the category offset")
+assert(ShirsInventory_GetCategoryScrollOffset() == 40,
+  "scroll step must move the offset by exactly its delta")
+ShirsInventory_ScrollCategoryBy(-10000)
+assert(ShirsInventory_GetCategoryScrollOffset() == 0,
+  "negative overflow must clamp the category offset to zero")
+ShirsInventory_ScrollCategoryBy(10000)
+assert(ShirsInventory_GetCategoryScrollOffset() == runtimeMax,
+  "positive overflow must clamp the category offset to the scroll max")
+local runtimeOffsetBeforeRebuild = ShirsInventory_GetCategoryScrollOffset()
+local runtimeRebuiltAgain = ShirsInventory_RebuildCategoryGrid()
+assert(runtimeRebuiltAgain == true and
+  ShirsInventory_GetCategoryScrollOffset() == runtimeOffsetBeforeRebuild,
+  "category rebuild must preserve the scroll offset when it stays in range")
+assert(ShirsInventory_ScrollCategoryBy(-runtimeMax) == true, "scroll home must move the offset back")
+local runtimeWheelBar = runtimeScrollbar
+local runtimeWheelUp = false
+local runtimeWheelDown = false
+local runtimeWheelBackup = ShirsInventory_ScrollCategoryBy
+ShirsInventory_ScrollCategoryBy = function(delta)
+  if delta < 0 then runtimeWheelUp = true end
+  if delta > 0 then runtimeWheelDown = true end
+  return runtimeWheelBackup(delta)
+end
+if runtimeWheelBar and runtimeWheelBar.scripts and runtimeWheelBar.scripts.OnMouseWheel then
+  arg1 = 1
+  runtimeWheelBar.scripts.OnMouseWheel()
+  arg1 = -1
+  runtimeWheelBar.scripts.OnMouseWheel()
+end
+assert(runtimeWheelUp and runtimeWheelDown,
+  "scrollbar wheel handler must scroll both directions")
+ShirsInventory_ScrollCategoryBy = runtimeWheelBackup
+ShirsInventoryDB.collapseEmptySlots = true
+local runtimeCollapsed = ShirsInventory_RebuildCategoryGrid()
+local runtimeCollapsedMax = ShirsInventory_GetCategoryScrollMax()
+local runtimeCollapsedScale = runtimeFrame.scale
+ShirsInventoryDB.collapseEmptySlots = false
+local runtimeExpandedMax = runtimeMax
+assert(runtimeCollapsed == true,
+  "category rebuild must succeed with collapsed Empty Slots")
+assert(runtimeCollapsedScale == 1 and runtimeCollapsedMax <= runtimeExpandedMax,
+  "collapsing Empty Slots must keep the scale and only shrink the scroll range")
+ShirsInventory_GetCategoryMode = runtimeModeBackup
+ShirsInventory_GetWindowScale = runtimeScaleBackup
+GetContainerNumSlots = runtimeNumSlotsBackup
+GetContainerItemInfo = runtimeItemInfoBackup
+GetContainerItemLink = runtimeItemLinkBackup
+MainMenuBarBackpackButton = runtimeBottomBackup
 
 print("INVENTORY_OPTIONS_UI_TEST=PASS")

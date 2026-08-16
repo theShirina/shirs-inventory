@@ -288,6 +288,13 @@ local shirsInventoryCategoryEditMode
 local shirsInventoryCategoryEditItemID
 local shirsInventoryCategoryEditHover
 local categoryHeaders = {}
+local categoryScrollOffset = 0
+local categoryScrollMax = 0
+local CATEGORY_SCROLLBAR_WIDTH = 16
+local categoryLayoutCache
+local categoryBagBarLayoutCache
+local categoryScrollBar
+local categoryScrollBarUpdating
 
 function ShirsInventory_GetCategoryDefinitions()
   local definitions = {}
@@ -861,6 +868,51 @@ function ShirsInventory_GetFittedWindowScale(width, height, requestedScale, scre
   if heightScale < fitted then fitted = heightScale end
   if fitted < 0.1 then fitted = 0.1 end
   return fitted
+end
+
+-- Category View keeps the user's chosen window scale; when the packed layout is
+-- taller than the screen it scrolls instead of shrinking. This pure function
+-- returns the frame height to use and the maximum scroll offset in pixels.
+function ShirsInventory_GetCategoryScrollModel(contentHeight, requestedScale, screenHeight,
+  bottomMargin)
+  contentHeight = tonumber(contentHeight) or 0
+  requestedScale = tonumber(requestedScale) or 1
+  screenHeight = tonumber(screenHeight) or 0
+  bottomMargin = tonumber(bottomMargin) or 8
+  if contentHeight <= 0 or requestedScale <= 0 or screenHeight <= 0 then
+    return { frameHeight = contentHeight, maxScroll = 0, scrollable = false }
+  end
+  local availableHeight = (screenHeight - 8 - bottomMargin) / requestedScale
+  if availableHeight <= 0 or contentHeight <= availableHeight then
+    return { frameHeight = contentHeight, maxScroll = 0, scrollable = false }
+  end
+  return {
+    frameHeight = availableHeight,
+    maxScroll = contentHeight - availableHeight,
+    scrollable = true,
+  }
+end
+
+-- Pure geometry for a scrolled Category View element. offset is the current
+-- scroll offset in pixels; positive offset moves content up (reveals lower
+-- shelves). Returns the TOPLEFT y offset relative to the frame.
+function ShirsInventory_GetCategoryScrollY(baseY, offset)
+  baseY = tonumber(baseY) or 0
+  offset = tonumber(offset) or 0
+  return baseY + offset
+end
+
+-- An element (header or item button) is visible when it sits entirely inside
+-- the scrollable band: below the content-area top edge (gridTop, default the
+-- frame top) and above the frame's bottom edge. Strict bounds avoid drawing
+-- over the bag bar or below the frame.
+function ShirsInventory_IsCategoryScrollElementVisible(displayY, height, frameHeight, gridTop)
+  displayY = tonumber(displayY) or 0
+  height = tonumber(height) or 0
+  frameHeight = tonumber(frameHeight) or 0
+  gridTop = gridTop == nil and 0 or (tonumber(gridTop) or 0)
+  if frameHeight <= 0 then return true end
+  return displayY <= gridTop and displayY >= -frameHeight + height
 end
 
 function ShirsInventory_BuildBagBarModel()
@@ -2456,7 +2508,41 @@ end
 function ShirsInventory_RecoverInventoryViewport(frame)
   frame = frame or ShirsInventoryFrame
   if not frame then return false end
+  if ShirsInventory_GetCategoryMode and ShirsInventory_GetCategoryMode() then
+    return ShirsInventory_RecoverCategoryViewport(frame)
+  end
   ShirsInventory_ApplyViewportScale(frame, ShirsInventory_GetInventoryBottomMargin())
+  return ShirsInventory_ClampInventoryFrame(frame, false)
+end
+
+-- Category View keeps the user's chosen window scale; the frame height is
+-- capped by the scroll model, so this only re-applies the scale, recomputes
+-- the scroll bounds from the cached layout, and keeps the frame on screen.
+function ShirsInventory_RecoverCategoryViewport(frame)
+  frame = frame or ShirsInventoryFrame
+  if not frame then return false end
+  local requested = ShirsInventory_GetWindowScale and ShirsInventory_GetWindowScale() or 1
+  if frame.SetScale then frame:SetScale(requested) end
+  local layout = categoryLayoutCache
+  local bagBarLayout = categoryBagBarLayoutCache
+  if layout and bagBarLayout and frame.SetHeight then
+    local contentHeight = layout.height + 92 + bagBarLayout.heightExtra
+    local viewportWidth, viewportHeight = ShirsInventory_GetInventoryViewportSize()
+    local scrollModel = ShirsInventory_GetCategoryScrollModel(
+      contentHeight, requested, viewportHeight or 0, ShirsInventory_GetInventoryBottomMargin()
+    )
+    categoryScrollMax = scrollModel.maxScroll
+    if scrollModel.scrollable then
+      if categoryScrollOffset > categoryScrollMax then categoryScrollOffset = categoryScrollMax end
+      if categoryScrollOffset < 0 then categoryScrollOffset = 0 end
+    else
+      categoryScrollOffset = 0
+    end
+    frame:SetWidth(layout.width + (scrollModel.scrollable and CATEGORY_SCROLLBAR_WIDTH or 0))
+    frame:SetHeight(scrollModel.frameHeight)
+    ShirsInventory_ApplyCategoryScroll()
+  end
+  ShirsInventory_UpdateCategoryScrollbar()
   return ShirsInventory_ClampInventoryFrame(frame, false)
 end
 
@@ -2508,6 +2594,11 @@ end
 
 function ShirsInventory_RebuildStandardGrid()
   ShirsInventory_HideCategoryHeaders()
+  categoryScrollOffset = 0
+  categoryScrollMax = 0
+  categoryLayoutCache = nil
+  categoryBagBarLayoutCache = nil
+  ShirsInventory_UpdateCategoryScrollbar()
   local counts = ShirsInventory_GetInventorySlotCounts()
   local freeStates = {}
   local slots = ShirsInventory_BuildInventorySlots(counts)
@@ -2575,7 +2666,7 @@ local function ShirsInventory_ShouldScanCategoryTooltip(itemType, quality)
   return itemType == "Consumable" or itemType == "Miscellaneous" or tonumber(quality) == 0
 end
 
-local function ShirsInventory_BuildCategoryInventoryItems(slots)
+function ShirsInventory_BuildCategoryInventoryItems(slots)
   local items = {}
   local index
   for index = 1, table.getn(slots) do
@@ -2692,20 +2783,31 @@ function ShirsInventory_RebuildCategoryGrid()
   local buttonIndex = 0
   local groupIndex
 
-  ShirsInventoryFrame:SetWidth(layout.width)
-  ShirsInventoryFrame:SetHeight(layout.height + 92 + bagBarLayout.heightExtra)
-  ShirsInventory_RecoverInventoryViewport(ShirsInventoryFrame)
+  local contentHeight = layout.height + 92 + bagBarLayout.heightExtra
+  local viewportWidth, viewportHeight = ShirsInventory_GetInventoryViewportSize()
+  local requestedScale = ShirsInventory_GetWindowScale() or 1
+  local scrollModel = ShirsInventory_GetCategoryScrollModel(
+    contentHeight, requestedScale, viewportHeight or 0, ShirsInventory_GetInventoryBottomMargin()
+  )
+  categoryScrollMax = scrollModel.maxScroll
+  if scrollModel.scrollable then
+    if categoryScrollOffset > categoryScrollMax then categoryScrollOffset = categoryScrollMax end
+    if categoryScrollOffset < 0 then categoryScrollOffset = 0 end
+  else
+    categoryScrollOffset = 0
+  end
+  ShirsInventoryFrame:SetScale(requestedScale)
+  ShirsInventoryFrame:SetWidth(layout.width + (scrollModel.scrollable and CATEGORY_SCROLLBAR_WIDTH or 0))
+  ShirsInventoryFrame:SetHeight(scrollModel.frameHeight)
+  categoryLayoutCache = layout
+  categoryBagBarLayoutCache = bagBarLayout
+  ShirsInventory_RecoverCategoryViewport(ShirsInventoryFrame)
   ShirsInventory_UpdateBagBar()
 
   for groupIndex = 1, table.getn(layout.groups) do
     local group = layout.groups[groupIndex]
     local header = ShirsInventory_GetCategoryHeader(groupIndex)
-    header:ClearAllPoints()
     header:SetWidth(group.columns * 40)
-    header:SetPoint(
-      "TOPLEFT", ShirsInventoryFrame, "TOPLEFT", 14 + group.columnX * 40,
-      bagBarLayout.gridTopOffset - group.labelY
-    )
     header.categoryKey = group.key
     header.shirsFullCategoryText = ShirsInventory_GetCategoryHeaderTooltipText(group)
     header.text:SetText(ShirsInventory_GetCategoryHeaderDisplayText(group))
@@ -2718,26 +2820,17 @@ function ShirsInventory_RebuildCategoryGrid()
     else
       header.text:SetTextColor(1, 0.78, 0.18)
     end
-    header:Show()
     local itemIndex
     for itemIndex = 1, table.getn(group.items) do
       local item = group.items[itemIndex]
       buttonIndex = buttonIndex + 1
       local button = inventoryButtons[buttonIndex] or ShirsInventory_CreateItemButton(buttonIndex)
+      item.shirsScrollButton = button
       button.shirsInventorySearchEnabled = true
       button.shirsInventorySearchFrame = nil
       button.bag = item.bag
       button.slot = item.slot
       button:SetID(item.slot)
-      button:ClearAllPoints()
-      local column = math.mod(itemIndex - 1, group.columns)
-      local row = math.floor((itemIndex - 1) / group.columns)
-      button:SetPoint(
-        "TOPLEFT", ShirsInventoryFrame, "TOPLEFT",
-        14 + (group.columnX + column) * 40,
-        bagBarLayout.gridTopOffset - group.itemY - row * 40
-      )
-      button:Show()
       ShirsInventory_UpdateItemButton(button)
       if item.collapsedEmptyCount then SetItemButtonCount(button, item.collapsedEmptyCount) end
     end
@@ -2749,7 +2842,134 @@ function ShirsInventory_RebuildCategoryGrid()
   for buttonIndex = buttonIndex + 1, table.getn(inventoryButtons) do
     inventoryButtons[buttonIndex]:Hide()
   end
+  ShirsInventory_ApplyCategoryScroll()
   ShirsInventoryFrame.freeText:SetText(ShirsInventory_CountFreeInventorySlots(freeStates) .. " free")
+  return true
+end
+
+function ShirsInventory_ApplyCategoryScroll()
+  local layout = categoryLayoutCache
+  local bagBarLayout = categoryBagBarLayoutCache
+  if not layout or not bagBarLayout or not ShirsInventoryFrame then return end
+  local frameHeight = ShirsInventoryFrame.GetHeight and ShirsInventoryFrame:GetHeight() or 0
+  local offset = categoryScrollOffset or 0
+  local groupIndex
+  for groupIndex = 1, table.getn(layout.groups) do
+    local group = layout.groups[groupIndex]
+    local header = categoryHeaders[groupIndex]
+    if header then
+      local displayY = ShirsInventory_GetCategoryScrollY(
+        bagBarLayout.gridTopOffset - group.labelY, offset
+      )
+      header:ClearAllPoints()
+      header:SetPoint(
+        "TOPLEFT", ShirsInventoryFrame, "TOPLEFT", 14 + group.columnX * 40, displayY
+      )
+      if ShirsInventory_IsCategoryScrollElementVisible(displayY, 18, frameHeight,
+        bagBarLayout.gridTopOffset) then
+        header:Show()
+      else
+        header:Hide()
+      end
+    end
+    local itemIndex
+    for itemIndex = 1, table.getn(group.items) do
+      local item = group.items[itemIndex]
+      local button = item.shirsScrollButton
+      if button then
+        local column = math.mod(itemIndex - 1, group.columns)
+        local row = math.floor((itemIndex - 1) / group.columns)
+        local displayY = ShirsInventory_GetCategoryScrollY(
+          bagBarLayout.gridTopOffset - group.itemY - row * 40, offset
+        )
+        button:ClearAllPoints()
+        button:SetPoint(
+          "TOPLEFT", ShirsInventoryFrame, "TOPLEFT",
+          14 + (group.columnX + column) * 40, displayY
+        )
+        if ShirsInventory_IsCategoryScrollElementVisible(displayY, 40, frameHeight,
+          bagBarLayout.gridTopOffset) then
+          button:Show()
+        else
+          button:Hide()
+        end
+      end
+    end
+  end
+end
+
+function ShirsInventory_GetCategoryScrollOffset()
+  return categoryScrollOffset or 0
+end
+
+function ShirsInventory_GetCategoryScrollMax()
+  return categoryScrollMax or 0
+end
+
+function ShirsInventory_GetCategoryScrollable()
+  return categoryScrollMax > 0 and ShirsInventory_GetCategoryMode() and true or false
+end
+
+function ShirsInventory_UpdateCategoryScrollbar()
+  local frame = ShirsInventoryFrame
+  if not frame then return end
+  if categoryScrollMax > 0 and ShirsInventory_GetCategoryMode() then
+    if not categoryScrollBar then
+      if type(CreateFrame) ~= "function" then return end
+      categoryScrollBar = CreateFrame("Slider", nil, frame)
+      categoryScrollBar:SetOrientation("VERTICAL")
+      categoryScrollBar:SetValueStep(40)
+      categoryScrollBar:SetWidth(CATEGORY_SCROLLBAR_WIDTH)
+      categoryScrollBar:SetThumbTexture("Interface\\Buttons\\UI-ScrollBar-Knob")
+      categoryScrollBar:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8X8",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        tile = true,
+        tileSize = 8,
+        edgeSize = 8,
+      })
+      categoryScrollBar:SetBackdropColor(0.1, 0.12, 0.18, 0.6)
+      categoryScrollBar:SetBackdropBorderColor(0.35, 0.45, 0.6, 0.8)
+      categoryScrollBar:SetPoint("TOPLEFT", frame, "TOPRIGHT", -CATEGORY_SCROLLBAR_WIDTH - 4, -34)
+      categoryScrollBar:SetPoint("BOTTOMLEFT", frame, "BOTTOMRIGHT", -CATEGORY_SCROLLBAR_WIDTH - 4, 34)
+      categoryScrollBar:SetScript("OnValueChanged", function()
+        if categoryScrollBarUpdating then return end
+        local value = tonumber(this:GetValue()) or 0
+        if value < 0 then value = 0 end
+        if value > categoryScrollMax then value = categoryScrollMax end
+        categoryScrollOffset = value
+        ShirsInventory_ApplyCategoryScroll()
+      end)
+      categoryScrollBar:SetScript("OnMouseWheel", function()
+        local delta = tonumber(arg1) or 0
+        if delta == 0 then return end
+        ShirsInventory_ScrollCategoryBy(-delta * 40)
+      end)
+    end
+    categoryScrollBarUpdating = true
+    categoryScrollBar:SetMinMaxValues(0, categoryScrollMax)
+    categoryScrollBar:SetValue(categoryScrollOffset)
+    categoryScrollBarUpdating = false
+    categoryScrollBar:Show()
+  elseif categoryScrollBar then
+    categoryScrollBar:Hide()
+  end
+end
+
+function ShirsInventory_ScrollCategoryBy(delta)
+  delta = tonumber(delta) or 0
+  if delta == 0 or categoryScrollMax <= 0 then return false end
+  local value = categoryScrollOffset + delta
+  if value < 0 then value = 0 end
+  if value > categoryScrollMax then value = categoryScrollMax end
+  if value == categoryScrollOffset then return false end
+  categoryScrollOffset = value
+  ShirsInventory_ApplyCategoryScroll()
+  if categoryScrollBar and categoryScrollBar.SetValue then
+    categoryScrollBarUpdating = true
+    categoryScrollBar:SetValue(value)
+    categoryScrollBarUpdating = false
+  end
   return true
 end
 
@@ -3336,6 +3556,13 @@ local function ShirsInventory_CreateMainFrame()
   frame:RegisterEvent("UPDATE_INVENTORY_ALERTS")
   frame:RegisterEvent("MERCHANT_SHOW")
   frame:RegisterEvent("MERCHANT_CLOSED")
+  frame:SetScript("OnMouseWheel", function()
+    if not (ShirsInventory_GetCategoryMode and ShirsInventory_GetCategoryMode()) then return end
+    if categoryScrollMax <= 0 then return end
+    local delta = tonumber(arg1) or 0
+    if delta == 0 then return end
+    ShirsInventory_ScrollCategoryBy(-delta * 40)
+  end)
   frame:Hide()
 
   table.insert(UISpecialFrames, "ShirsInventoryFrame")
