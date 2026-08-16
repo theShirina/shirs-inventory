@@ -2,7 +2,12 @@
 
 A standalone bag addon made and tested for Microbot's WoW 1.12.1 client.
 
-Current release: **0.7.2**.
+Current release: **0.7.3**.
+
+## What's new in 0.7.3
+
+- Category View now turns mouse-wheel events on for the window, scrollbar, item slots, headings, bag bar, search box, and footer buttons. Vanilla ignores the wheel unless that flag is set, which is why scrolling still felt dead after the last pass.
+- Junk-marked items now show a gold coin in the top-left of the slot instead of a small red **J**.
 
 ## What's new in 0.7.2
 

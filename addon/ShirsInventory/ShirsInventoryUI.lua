@@ -2126,10 +2126,19 @@ local function ShirsInventory_CreateItemButton(index, ownerFrame, namePrefix, co
   for edgeIndex = 1, table.getn(button.rarityEdges) do
     button.rarityEdges[edgeIndex]:Hide()
   end
-  button.junkBadge = button:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-  button.junkBadge:SetPoint("TOPLEFT", button, "TOPLEFT", 2, -2)
-  button.junkBadge:SetText("J")
-  button.junkBadge:SetTextColor(1, 0.15, 0.15)
+  button.junkBadgeBack = button:CreateTexture(nil, "OVERLAY")
+  button.junkBadgeBack:SetWidth(16)
+  button.junkBadgeBack:SetHeight(16)
+  button.junkBadgeBack:SetPoint("TOPLEFT", button, "TOPLEFT", 0, 0)
+  button.junkBadgeBack:SetTexture("Interface\\Buttons\\WHITE8X8")
+  button.junkBadgeBack:SetVertexColor(0, 0, 0, 0.7)
+  button.junkBadgeBack:Hide()
+  button.junkBadge = button:CreateTexture(nil, "OVERLAY")
+  button.junkBadge:SetWidth(14)
+  button.junkBadge:SetHeight(14)
+  button.junkBadge:SetPoint("CENTER", button.junkBadgeBack, "CENTER", 0, 0)
+  button.junkBadge:SetTexture("Interface\\Icons\\INV_Misc_Coin_01")
+  button.junkBadge:SetTexCoord(0.08, 0.92, 0.08, 0.92)
   button.junkBadge:Hide()
 
   button:SetScript("OnClick", function() ShirsInventory_HandleItemClick(this, arg1) end)
@@ -2158,7 +2167,7 @@ local function ShirsInventory_CreateItemButton(index, ownerFrame, namePrefix, co
     ShirsInventory_UpdateCooldownDisplay(this, arg1)
     if GameTooltip:IsOwned(this) then ShirsInventory_OnItemEnter(this) end
   end)
-  button:SetScript("OnMouseWheel", ShirsInventory_CategoryWheelHandler)
+  ShirsInventory_EnableCategoryWheel(button)
   buttons[index] = button
   return button
 end
@@ -2201,12 +2210,15 @@ local function ShirsInventory_UpdateItemButton(button)
     ShirsInventory_UpdateCooldown(button)
     local itemId = ShirsInventory_GetItemId(GetContainerItemLink(button.bag, button.slot))
     if ShirsInventory_ShouldShowJunkBadge(button, itemId, quality) then
+      if button.junkBadgeBack then button.junkBadgeBack:Show() end
       button.junkBadge:Show()
     else
+      if button.junkBadgeBack then button.junkBadgeBack:Hide() end
       button.junkBadge:Hide()
     end
   else
     button.cooldown:Hide()
+    if button.junkBadgeBack then button.junkBadgeBack:Hide() end
     button.junkBadge:Hide()
   end
   local query = ShirsInventory_GetSearchQueryForButton(button)
@@ -2248,6 +2260,7 @@ function ShirsInventory_CreateSearchBox(frame)
     this:ClearFocus()
     if this.placeholder then this.placeholder:Show() end
   end)
+  ShirsInventory_EnableCategoryWheel(frame.searchBox)
   return frame.searchBox
 end
 
@@ -2372,6 +2385,7 @@ local function ShirsInventory_CreateBagBar(frame)
     button:SetScript("OnClick", function() ShirsInventory_HandleBagBarClick(this, arg1) end)
     button:SetScript("OnDragStart", function() ShirsInventory_HandleBagBarDragStart(this) end)
     button:SetScript("OnReceiveDrag", function() ShirsInventory_HandleBagBarReceiveDrag(this) end)
+    ShirsInventory_EnableCategoryWheel(button)
     bagBarButtons[index] = button
   end
   frame.bagBarButtons = bagBarButtons
@@ -2766,7 +2780,7 @@ local function ShirsInventory_GetCategoryHeader(index)
       ShirsInventory_FinishCategoryEditDrag()
     end
   end)
-  header:SetScript("OnMouseWheel", ShirsInventory_CategoryWheelHandler)
+  ShirsInventory_EnableCategoryWheel(header)
   categoryHeaders[index] = header
   return header
 end
@@ -2928,6 +2942,16 @@ function ShirsInventory_CategoryWheelHandler()
   ShirsInventory_ScrollCategoryBy(-delta * 40)
 end
 
+-- Vanilla ignores OnMouseWheel unless EnableMouseWheel(true) is set on that
+-- exact frame. Child buttons also swallow the event, so every interactive
+-- surface over the category window must enable the wheel itself.
+function ShirsInventory_EnableCategoryWheel(frame)
+  if not frame then return false end
+  if frame.EnableMouseWheel then frame:EnableMouseWheel(true) end
+  if frame.SetScript then frame:SetScript("OnMouseWheel", ShirsInventory_CategoryWheelHandler) end
+  return true
+end
+
 function ShirsInventory_UpdateCategoryScrollbar()
   local frame = ShirsInventoryFrame
   if not frame then return end
@@ -2958,7 +2982,7 @@ function ShirsInventory_UpdateCategoryScrollbar()
         categoryScrollOffset = value
         ShirsInventory_ApplyCategoryScroll()
       end)
-      categoryScrollBar:SetScript("OnMouseWheel", ShirsInventory_CategoryWheelHandler)
+      ShirsInventory_EnableCategoryWheel(categoryScrollBar)
     end
     categoryScrollBarUpdating = true
     categoryScrollBar:SetMinMaxValues(0, categoryScrollMax)
@@ -3492,6 +3516,7 @@ local function ShirsInventory_CreateMainFrame()
   frame.dragHandle:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -150, -5)
   frame.dragHandle:SetHeight(25)
   ShirsInventory_BindInventoryDragHandle(frame, frame.dragHandle)
+  ShirsInventory_EnableCategoryWheel(frame.dragHandle)
 
   frame.closeButton = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
   frame.closeButton:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 2, 2)
@@ -3504,12 +3529,14 @@ local function ShirsInventory_CreateMainFrame()
   frame.sortButton:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 14, 13)
   frame.sortButton:SetText("Sort")
   frame.sortButton:SetScript("OnClick", function() ShirsInventory_OnSortButtonClick(false) end)
+  ShirsInventory_EnableCategoryWheel(frame.sortButton)
 
   frame.modeButton = CreateFrame("Button", nil, frame)
   frame.modeButton:SetWidth(80)
   frame.modeButton:SetHeight(22)
   frame.modeButton:SetPoint("LEFT", frame.sortButton, "RIGHT", 4, 0)
   frame.modeButton:SetScript("OnClick", function() ShirsInventory_OnModeButtonClick(false) end)
+  ShirsInventory_EnableCategoryWheel(frame.modeButton)
 
   frame.directionButton = CreateFrame("Button", nil, frame)
   frame.directionButton:SetWidth(64)
@@ -3519,6 +3546,7 @@ local function ShirsInventory_CreateMainFrame()
     if ShirsInventory_ToggleDirection then ShirsInventory_ToggleDirection() end
     ShirsInventory_UpdateControlLabels()
   end)
+  ShirsInventory_EnableCategoryWheel(frame.directionButton)
 
   frame.settingsButton = CreateFrame("Button", nil, frame)
   frame.settingsButton:SetWidth(72)
@@ -3526,6 +3554,7 @@ local function ShirsInventory_CreateMainFrame()
   frame.settingsButton:SetPoint("LEFT", frame.directionButton, "RIGHT", 4, 0)
   frame.settingsButton:SetText("Settings")
   frame.settingsButton:SetScript("OnClick", function() ShirsInventory_ShowSettings() end)
+  ShirsInventory_EnableCategoryWheel(frame.settingsButton)
 
   ShirsInventory_CreateSearchBox(frame)
 
@@ -3570,7 +3599,7 @@ local function ShirsInventory_CreateMainFrame()
   frame:RegisterEvent("UPDATE_INVENTORY_ALERTS")
   frame:RegisterEvent("MERCHANT_SHOW")
   frame:RegisterEvent("MERCHANT_CLOSED")
-  frame:SetScript("OnMouseWheel", ShirsInventory_CategoryWheelHandler)
+  ShirsInventory_EnableCategoryWheel(frame)
   frame:Hide()
 
   table.insert(UISpecialFrames, "ShirsInventoryFrame")

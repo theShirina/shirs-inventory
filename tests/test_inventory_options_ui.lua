@@ -978,6 +978,7 @@ local function NewRegion()
   function region:GetFrameLevel() return self.frameLevel or 1 end
   function region:SetToplevel(value) self.toplevel = value end
   function region:EnableMouse(value) self.mouseEnabled = value end
+  function region:EnableMouseWheel(value) self.mouseWheelEnabled = value and true or false end
   function region:SetMovable(value) self.movable = value end
   function region:SetClampedToScreen(value) self.clamped = value end
   function region:RegisterForDrag(...) self.dragButtons = arg end
@@ -1589,6 +1590,8 @@ runtimeFrame.searchQuery = ""
 UIParent.width = 1024
 UIParent.height = 400
 ShirsInventoryFrame = runtimeFrame
+assert(ShirsInventory_EnableCategoryWheel(runtimeFrame) == true,
+  "runtime probe must enable the category wheel on the mock frame")
 local runtimeBuilt = ShirsInventory_RebuildCategoryGrid()
 local runtimeScale = runtimeFrame.scale
 local runtimeHeight = runtimeFrame.height
@@ -1644,13 +1647,19 @@ end
 assert(runtimeWheelUp and runtimeWheelDown,
   "scrollbar wheel handler must scroll both directions")
 ShirsInventory_ScrollCategoryBy = runtimeWheelBackup
+assert(runtimeFrame.mouseWheelEnabled == true,
+  "category frame must enable mouse-wheel events or Vanilla never fires OnMouseWheel")
+assert(runtimeScrollbar.mouseWheelEnabled == true,
+  "category scrollbar must enable mouse-wheel events")
 -- Item buttons and category headers must forward wheel events to the same
 -- category scroll path, because wheel over a child button does not reach the
--- parent frame handler in every client.
+-- parent frame handler in every client. Vanilla also ignores OnMouseWheel
+-- unless EnableMouseWheel(true) is set on that exact child.
 local runtimeButtonWheelCount = 0
 local runtimeButtonWheelHandler
 local runtimeHeaderWheelCount = 0
 local runtimeHeaderWheelHandler
+local runtimeItemWheelHandler
 for constructedIndex = 1, table.getn(constructedFrames) do
   local candidate = constructedFrames[constructedIndex]
   if candidate and candidate.frameType == "Button" and candidate.parent == runtimeFrame and
@@ -1661,6 +1670,9 @@ for constructedIndex = 1, table.getn(constructedFrames) do
     else
       runtimeButtonWheelCount = runtimeButtonWheelCount + 1
       runtimeButtonWheelHandler = runtimeButtonWheelHandler or candidate
+      if candidate.junkBadge then
+        runtimeItemWheelHandler = runtimeItemWheelHandler or candidate
+      end
     end
   end
 end
@@ -1668,12 +1680,20 @@ assert(runtimeButtonWheelCount > 0,
   "category item buttons must expose a wheel handler")
 assert(runtimeHeaderWheelCount > 0,
   "category headers must expose a wheel handler")
+assert(runtimeButtonWheelHandler.mouseWheelEnabled == true,
+  "category item buttons must EnableMouseWheel or Vanilla never fires their handler")
+assert(runtimeHeaderWheelHandler.mouseWheelEnabled == true,
+  "category headers must EnableMouseWheel or Vanilla never fires their handler")
+assert(runtimeItemWheelHandler and runtimeItemWheelHandler.junkBadge and
+  runtimeItemWheelHandler.junkBadge.texture == "Interface\\Icons\\INV_Misc_Coin_01" and
+  runtimeItemWheelHandler.junkBadgeBack,
+  "junk-marked items must show a gold coin badge instead of a red J")
 arg1 = 1
-runtimeButtonWheelHandler.scripts.OnMouseWheel()
+runtimeItemWheelHandler.scripts.OnMouseWheel()
 assert(ShirsInventory_GetCategoryScrollOffset() == 0,
   "wheel up on a category item button must scroll toward the top")
 arg1 = -1
-runtimeButtonWheelHandler.scripts.OnMouseWheel()
+runtimeItemWheelHandler.scripts.OnMouseWheel()
 assert(ShirsInventory_GetCategoryScrollOffset() > 0,
   "wheel down on a category item button must scroll down")
 arg1 = 1
