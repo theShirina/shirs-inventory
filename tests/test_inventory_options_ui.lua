@@ -30,6 +30,18 @@ assert(not ShirsInventory_SetCollapseEmptySlots(false) and not ShirsInventory_Ge
 ShirsInventoryDB.collapseEmptySlots = "invalid"
 assert(not ShirsInventory_GetCollapseEmptySlots() and ShirsInventoryDB.collapseEmptySlots == false,
   "invalid collapsed Empty Slots values must repair to off")
+assert(type(ShirsInventory_GetCategoryGapSlots) == "function" and
+  type(ShirsInventory_SetCategoryGapSlots) == "function",
+  "category gap setting API is missing")
+assert(ShirsInventory_GetCategoryGapSlots() == 1,
+  "category gap must default to one empty slot")
+assert(ShirsInventory_SetCategoryGapSlots(0) == 0 and ShirsInventory_GetCategoryGapSlots() == 0,
+  "category gap must persist a zero-slot tight pack")
+assert(ShirsInventory_SetCategoryGapSlots(2) == 1 and ShirsInventory_GetCategoryGapSlots() == 1,
+  "category gap must clamp above one empty slot")
+ShirsInventoryDB.categoryGapSlots = "invalid"
+assert(ShirsInventory_GetCategoryGapSlots() == 1 and ShirsInventoryDB.categoryGapSlots == 1,
+  "invalid category gap values must repair to one empty slot")
 assert(type(ShirsInventory_GetCategorySettingsPosition) == "function" and
   type(ShirsInventory_SaveCategorySettingsFrameCoordinates) == "function" and
   type(ShirsInventory_SaveCategorySettingsFramePosition) == "function",
@@ -306,9 +318,9 @@ assert(type(ShirsInventory_GetCategoryHeaderDisplayText) == "function" and
 local narrowOtherLayout = ShirsInventory_BuildCategoryLayout({
   { key = "consumables", label = "Other Consumables", items = { {} } },
 }, 10)
-assert(ShirsInventory_GetCategoryHeaderDisplayText(narrowOtherLayout.groups[1]) == "Other" and
+assert(ShirsInventory_GetCategoryHeaderDisplayText(narrowOtherLayout.groups[1]) == "Other C" and
   ShirsInventory_GetCategoryHeaderTooltipText(narrowOtherLayout.groups[1]) == "Other Consumables (1)",
-  "one-column Other Consumables heading was not shortened without losing its full tooltip")
+  "one-item Other Consumables heading must keep seven letters")
 local twoColumnOtherLayout = ShirsInventory_BuildCategoryLayout({
   { key = "consumables", label = "Other Consumables", items = { {}, {} } },
 }, 10)
@@ -322,9 +334,9 @@ assert(ShirsInventory_GetCategoryHeaderDisplayText(wideOtherLayout.groups[1]) ==
 local narrowCustomLayout = ShirsInventory_BuildCategoryLayout({
   { key = "custom:123", label = "Very Long Custom Category", custom = true, items = { {} } },
 }, 10)
-assert(ShirsInventory_GetCategoryHeaderDisplayText(narrowCustomLayout.groups[1]) == "Very" and
+assert(ShirsInventory_GetCategoryHeaderDisplayText(narrowCustomLayout.groups[1]) == "Very Lo" and
   ShirsInventory_GetCategoryHeaderTooltipText(narrowCustomLayout.groups[1]) == "Very Long Custom Category (1)",
-  "one-item custom category must show the first word of its name, not a C-code")
+  "one-item custom category must show the first seven letters, not a C-code")
 local twoItemCustomLayout = ShirsInventory_BuildCategoryLayout({
   { key = "custom:123", label = "Very Long Custom Category", custom = true, items = { {}, {} } },
 }, 10)
@@ -334,11 +346,11 @@ local largeCustomLayout = ShirsInventory_BuildCategoryLayout({
   { key = "custom:99999", label = "Alpha Custom A", custom = true, items = { {} } },
   { key = "custom:999999", label = "Beta Custom B", custom = true, items = { {} } },
 }, 10)
-assert(ShirsInventory_GetCategoryHeaderDisplayText(largeCustomLayout.groups[1]) == "Alpha" and
-  ShirsInventory_GetCategoryHeaderDisplayText(largeCustomLayout.groups[2]) == "Beta" and
+assert(ShirsInventory_GetCategoryHeaderDisplayText(largeCustomLayout.groups[1]) == "Alpha C" and
+  ShirsInventory_GetCategoryHeaderDisplayText(largeCustomLayout.groups[2]) == "Beta Cu" and
   ShirsInventory_GetCategoryHeaderDisplayText(largeCustomLayout.groups[1]) ~=
     ShirsInventory_GetCategoryHeaderDisplayText(largeCustomLayout.groups[2]),
-  "one-item custom categories must keep distinct first-word headings")
+  "one-item custom categories must keep distinct seven-letter headings")
 local rightAlignedEmptyLayout = ShirsInventory_BuildCategoryLayout({
   { key = "junk", label = "Junk", items = { {}, {} } },
   collapsedEmptyGroup,
@@ -534,6 +546,14 @@ assert(packedCategoryLayout.groups[4].columns == 10 and packedCategoryLayout.gro
   "a large category did not span the available width and wrap within its own group")
 assert(packedCategoryLayout.height == 238,
   "packed category shelf height did not use the tallest group in each shelf exactly once")
+ShirsInventory_SetCategoryGapSlots(0)
+local tightCategoryLayout = ShirsInventory_BuildCategoryLayout({
+  { key = "potions", label = "Potions", items = { {}, {} } },
+  { key = "elixirs", label = "Elixirs & Buffs", items = { {}, {} } },
+}, 10)
+assert(tightCategoryLayout.groups[1].columnX == 0 and tightCategoryLayout.groups[2].columnX == 2,
+  "zero category gap must pack neighboring groups with no blank slot between them")
+ShirsInventory_SetCategoryGapSlots(1)
 ShirsInventory_SetCategoryMode(true)
 assert(ShirsInventory_ShouldShowInventoryAction("sort", false) and
   ShirsInventory_ShouldShowInventoryAction("mode", false) and
@@ -909,13 +929,13 @@ assert(selectedPage == 1 and selectedPages == 1 and selectedTotal == 2 and
   table.getn(selectedRows) == 2,
   "Hearthstone item manager returned the wrong page model")
 assert(selectedRows[1].itemID == 15138 and selectedRows[1].name == "Onyxia Scale Cloak" and
-  selectedRows[1].texture == "cloak-texture" and not selectedRows[1].canMoveUp and
-  selectedRows[1].canMoveDown,
-  "first Hearthstone manager row has the wrong item data or movement state")
+  selectedRows[1].texture == "cloak-texture" and not selectedRows[1].canMoveTop and
+  selectedRows[1].canMoveBottom,
+  "first selected-list row has the wrong item data or Top/Bottom state")
 assert(selectedRows[2].itemID == 12361 and selectedRows[2].name == "Blue Sapphire" and
-  selectedRows[2].texture == "gem-texture" and selectedRows[2].canMoveUp and
-  not selectedRows[2].canMoveDown,
-  "second Hearthstone manager row has the wrong item data or movement state")
+  selectedRows[2].texture == "gem-texture" and selectedRows[2].canMoveTop and
+  not selectedRows[2].canMoveBottom,
+  "second selected-list row has the wrong item data or Top/Bottom state")
 ShirsInventory_ClearHearthstoneItems()
 
 assert(not string.find(settings, "Use icons for inventory header + action buttons", 1, true),
@@ -942,10 +962,12 @@ assert(string.find(settings, "Use category view (reloads UI; bag sorting is disa
   "settings must expose the reload-gated category view")
 assert(string.find(settings, "Manage selected item list", 1, true) and
   string.find(settings, "ShirsInventory_ShowHearthstoneItems", 1, true) and
-  string.find(settings, 'SetText("Up")', 1, true) and
-  string.find(settings, 'SetText("Down")', 1, true) and
-  string.find(settings, 'SetText("Remove")', 1, true),
-  "settings are missing the selected-item manager and its ordering controls")
+  string.find(settings, 'SetText("Top")', 1, true) and
+  string.find(settings, 'SetText("Bottom")', 1, true) and
+  string.find(settings, 'SetText("Remove")', 1, true) and
+  not string.find(settings, 'SetText("Up")', 1, true) and
+  not string.find(settings, 'SetText("Down")', 1, true),
+  "settings are missing the selected-item manager and its Top/Bottom controls")
 assert(not string.find(settings, ":SetShown", 1, true),
   "selected-item manager uses SetShown, which is not part of the Interface 11200 API floor")
 assert(string.find(settings, 'ShirsInventory_CreatePanel("ShirsInventorySettingsFrame", 440, 610, "DIALOG")', 1, true) and
@@ -1211,8 +1233,11 @@ assert(builtCategoryManager and builtCategoryManager.width == 440 and builtCateg
   builtCategoryManager.importPrevious and builtCategoryManager.importNext and builtCategoryManager.importButton and
   builtCategoryManager.nameInput.maxLetters == 28 and table.getn(builtCategoryManager.rows) == 12 and
   builtCategoryManager.collapseEmptySlots and
-  builtCategoryManager.collapseEmptySlots.label.text == "Collapse Empty Slots to one slot",
-  "custom category manager did not build its bounded create/delete and Empty Slots layout")
+  builtCategoryManager.collapseEmptySlots.label.text == "Collapse Empty Slots to one slot" and
+  builtCategoryManager.categoryGapSlider and
+  builtCategoryManager.categoryGapLabel and
+  string.find(builtCategoryManager.categoryGapLabel.text or "", "Category gap", 1, true),
+  "custom category manager did not build its Empty Slots and category-gap layout")
 assert(builtCategoryManager.point.point == "TOPLEFT" and builtCategoryManager.point.x == 275 and
   builtCategoryManager.point.y == 725,
   "Category Settings constructor ignored its saved position")
@@ -1379,10 +1404,11 @@ for constructedRowIndex = 1, table.getn(builtManager.rows) do
     row.dragArea.scripts.OnDragStart and row.dragArea.scripts.OnDragStop and
     row.dragArea.scripts.OnEnter and row.dragArea.scripts.OnLeave and
     row.dragHighlight and not row.dragHighlight.visible and
-    row.up.width == 38 and row.up.point.x == 230 and
-    row.down.width == 48 and row.down.point.x == 272 and
-    row.remove.width == 68 and row.remove.point.x == 324,
-    "selected-item row content or drag target exceeds its identity or action column")
+    row.top and row.top.width == 48 and row.top.point.x == 230 and
+    row.bottom and row.bottom.width == 58 and row.bottom.point.x == 282 and
+    row.remove.width == 68 and row.remove.point.x == 344 and
+    not row.up and not row.down,
+    "selected-item row must use Top/Bottom instead of Up/Down")
 end
 assert(builtManager.pageText.width == 90 and builtManager.pageText.height == 14 and
   builtManager.previous.width == 46 and builtManager.next.width == 46 and
@@ -1393,19 +1419,25 @@ ShirsInventory_ClearHearthstoneItems()
 assert(ShirsInventory_SetHearthstoneItem(15138, true) and
   ShirsInventory_SetHearthstoneItem(12361, true))
 ShirsInventory_RefreshHearthstoneItemsFrame()
-assert(builtManager.rows[1].itemID == 15138 and not builtManager.rows[1].up.enabled and
-  builtManager.rows[1].down.enabled,
-  "manager refresh did not preserve first-row movement state")
+assert(builtManager.rows[1].itemID == 15138 and not builtManager.rows[1].top.enabled and
+  builtManager.rows[1].bottom.enabled,
+  "manager refresh did not preserve first-row Top/Bottom state")
 local constructorThis = this
-this = builtManager.rows[1].down
+this = builtManager.rows[1].bottom
 this.scripts.OnClick()
 local reorderedItems = ShirsInventory_GetHearthstoneItems()
 assert(reorderedItems[1] == 12361 and reorderedItems[2] == 15138 and
   builtManager.rows[1].itemID == 12361,
-  "manager Down action did not reorder and refresh immediately")
+  "manager Bottom action did not send the item to the end and refresh immediately")
+this = builtManager.rows[2].top
+this.scripts.OnClick()
+reorderedItems = ShirsInventory_GetHearthstoneItems()
+assert(reorderedItems[1] == 15138 and reorderedItems[2] == 12361 and
+  builtManager.rows[1].itemID == 15138,
+  "manager Top action did not send the item to the start and refresh immediately")
 this = builtManager.rows[1].remove
 this.scripts.OnClick()
-assert(ShirsInventory_GetHearthstoneItemCount() == 1 and builtManager.rows[1].itemID == 15138,
+assert(ShirsInventory_GetHearthstoneItemCount() == 1 and builtManager.rows[1].itemID == 12361,
   "manager Remove action did not update and refresh immediately")
 this = builtManager.clear
 this.scripts.OnClick()

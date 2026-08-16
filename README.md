@@ -2,7 +2,13 @@
 
 A standalone bag addon made and tested for Microbot's WoW 1.12.1 client.
 
-Current release: **0.7.9**.
+Current release: **0.8.0**.
+
+## What's new in 0.8.0
+
+- One-item Category View headings now keep seven letters, such as **Other C** or **Very Lo**. Groups with two or more items still keep the full name.
+- The selected-item list uses **Top** and **Bottom** instead of Up/Down. Drag still reorders.
+- Category Settings has a **Category gap** slider: 1 empty slot between groups, or 0 to pack them tighter.
 
 ## What's new in 0.7.9
 

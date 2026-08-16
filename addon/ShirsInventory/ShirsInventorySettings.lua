@@ -55,8 +55,8 @@ function ShirsInventory_GetHearthstoneItemDisplayRows(page, pageSize)
       name = name or ("Item " .. itemID),
       texture = tenth or ninth or "Interface\\Icons\\INV_Misc_QuestionMark",
       index = listIndex,
-      canMoveUp = listIndex > 1,
-      canMoveDown = listIndex < total,
+      canMoveTop = listIndex > 1,
+      canMoveBottom = listIndex < total,
     })
   end
   return rows, page, pageCount, total
@@ -189,6 +189,13 @@ function ShirsInventory_RefreshCategoryManager()
     categoryManagerFrame.collapseEmptySlots:SetChecked(
       ShirsInventory_GetCollapseEmptySlots and ShirsInventory_GetCollapseEmptySlots()
     )
+  end
+  if categoryManagerFrame.categoryGapSlider and ShirsInventory_GetCategoryGapSlots then
+    local gap = ShirsInventory_GetCategoryGapSlots()
+    categoryManagerFrame.categoryGapSlider:SetValue(gap)
+    if categoryManagerFrame.categoryGapLabel then
+      categoryManagerFrame.categoryGapLabel:SetText("Category gap: " .. gap .. " empty slot")
+    end
   end
   local rowIndex
   for rowIndex = 1, table.getn(categoryManagerFrame.rows) do
@@ -336,12 +343,35 @@ local function ShirsInventory_CreateCategoryManager()
     if ShirsInventory_Update then ShirsInventory_Update() end
   end)
 
+  frame.categoryGapLabel = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+  frame.categoryGapLabel:SetPoint("TOPLEFT", frame, "TOPLEFT", 24, -555)
+  frame.categoryGapLabel:SetWidth(392)
+  frame.categoryGapLabel:SetHeight(16)
+  frame.categoryGapLabel:SetJustifyH("LEFT")
+  frame.categoryGapSlider = CreateFrame("Slider", "ShirsInventoryCategoryGapSlider", frame, "OptionsSliderTemplate")
+  frame.categoryGapSlider:SetWidth(240)
+  frame.categoryGapSlider:SetHeight(16)
+  frame.categoryGapSlider:SetPoint("TOPLEFT", frame, "TOPLEFT", 24, -572)
+  frame.categoryGapSlider:SetMinMaxValues(0, 1)
+  frame.categoryGapSlider:SetValueStep(1)
+  local categoryGapLow = getglobal and getglobal("ShirsInventoryCategoryGapSliderLow") or nil
+  local categoryGapHigh = getglobal and getglobal("ShirsInventoryCategoryGapSliderHigh") or nil
+  if categoryGapLow and categoryGapLow.SetText then categoryGapLow:SetText("0") end
+  if categoryGapHigh and categoryGapHigh.SetText then categoryGapHigh:SetText("1") end
+  frame.categoryGapSlider:SetScript("OnValueChanged", function()
+    local applied = ShirsInventory_SetCategoryGapSlots(this:GetValue())
+    if frame.categoryGapLabel then
+      frame.categoryGapLabel:SetText("Category gap: " .. applied .. " empty slot")
+    end
+    if ShirsInventory_Update then ShirsInventory_Update() end
+  end)
+
   frame.importHeading, frame.importRule =
-    ShirsInventory_CreateSectionHeading(frame, "IMPORT FROM CHARACTER", -570)
+    ShirsInventory_CreateSectionHeading(frame, "IMPORT FROM CHARACTER", -600)
   frame.importPrevious = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
   frame.importPrevious:SetWidth(28)
   frame.importPrevious:SetHeight(24)
-  frame.importPrevious:SetPoint("TOPLEFT", frame, "TOPLEFT", 24, -598)
+  frame.importPrevious:SetPoint("TOPLEFT", frame, "TOPLEFT", 24, -628)
   frame.importPrevious:SetText("<")
   frame.importSourceText = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
   frame.importSourceText:SetPoint("LEFT", frame.importPrevious, "RIGHT", 8, 0)
@@ -359,7 +389,7 @@ local function ShirsInventory_CreateCategoryManager()
   frame.importButton:SetPoint("LEFT", frame.importNext, "RIGHT", 8, 0)
   frame.importButton:SetText("Import")
   frame.importStatus = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-  frame.importStatus:SetPoint("TOPLEFT", frame, "TOPLEFT", 24, -627)
+  frame.importStatus:SetPoint("TOPLEFT", frame, "TOPLEFT", 24, -657)
   frame.importStatus:SetWidth(300)
   frame.importStatus:SetHeight(24)
   frame.importStatus:SetJustifyH("LEFT")
@@ -483,8 +513,8 @@ function ShirsInventory_RefreshHearthstoneItemsFrame()
       row.itemID = data.itemID
       row.icon:SetTexture(data.texture)
       row.name:SetText(data.name .. "  |cff777777#" .. data.itemID .. "|r")
-      if data.canMoveUp then row.up:Enable() else row.up:Disable() end
-      if data.canMoveDown then row.down:Enable() else row.down:Disable() end
+      if data.canMoveTop then row.top:Enable() else row.top:Disable() end
+      if data.canMoveBottom then row.bottom:Enable() else row.bottom:Disable() end
       row:Show()
     else
       row.itemID = nil
@@ -510,7 +540,7 @@ local function ShirsInventory_CreateHearthstoneItemsFrame()
   frame.help:SetJustifyH("LEFT")
   frame.help:SetJustifyV("TOP")
   frame.help:SetTextColor(0.68, 0.74, 0.84)
-  frame.help:SetText("Ctrl-right-click a carried item to add or remove it.\nDrag by the :: grip; drop onto another row to reorder.")
+  frame.help:SetText("Ctrl-right-click a carried item to add or remove it.\nDrag by the :: grip, or use Top/Bottom.")
 
   frame.selectedItemHeading = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
   frame.selectedItemHeading:SetPoint("TOPLEFT", frame, "TOPLEFT", 24, -81)
@@ -595,32 +625,32 @@ local function ShirsInventory_CreateHearthstoneItemsFrame()
     row.name:SetJustifyH("LEFT")
     row.name:SetJustifyV("MIDDLE")
 
-    row.up = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
-    row.up:SetWidth(38)
-    row.up:SetHeight(24)
-    row.up:SetPoint("LEFT", row, "LEFT", 230, 0)
-    row.up:SetText("Up")
-    row.up.row = row
-    row.up:SetScript("OnClick", function()
-      if this.row.itemID then ShirsInventory_MoveHearthstoneItem(this.row.itemID, -1) end
+    row.top = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
+    row.top:SetWidth(48)
+    row.top:SetHeight(24)
+    row.top:SetPoint("LEFT", row, "LEFT", 230, 0)
+    row.top:SetText("Top")
+    row.top.row = row
+    row.top:SetScript("OnClick", function()
+      if this.row.itemID then ShirsInventory_MoveHearthstoneItemToEdge(this.row.itemID, "top") end
       ShirsInventory_RefreshHearthstoneItemsFrame()
     end)
 
-    row.down = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
-    row.down:SetWidth(48)
-    row.down:SetHeight(24)
-    row.down:SetPoint("LEFT", row, "LEFT", 272, 0)
-    row.down:SetText("Down")
-    row.down.row = row
-    row.down:SetScript("OnClick", function()
-      if this.row.itemID then ShirsInventory_MoveHearthstoneItem(this.row.itemID, 1) end
+    row.bottom = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
+    row.bottom:SetWidth(58)
+    row.bottom:SetHeight(24)
+    row.bottom:SetPoint("LEFT", row, "LEFT", 282, 0)
+    row.bottom:SetText("Bottom")
+    row.bottom.row = row
+    row.bottom:SetScript("OnClick", function()
+      if this.row.itemID then ShirsInventory_MoveHearthstoneItemToEdge(this.row.itemID, "bottom") end
       ShirsInventory_RefreshHearthstoneItemsFrame()
     end)
 
     row.remove = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
     row.remove:SetWidth(68)
     row.remove:SetHeight(24)
-    row.remove:SetPoint("LEFT", row, "LEFT", 324, 0)
+    row.remove:SetPoint("LEFT", row, "LEFT", 344, 0)
     row.remove:SetText("Remove")
     row.remove.row = row
     row.remove:SetScript("OnClick", function()

@@ -128,6 +128,12 @@ local function ShirsInventory_EnsureDB()
   if type(ShirsInventoryDB.collapseEmptySlots) ~= "boolean" then
     ShirsInventoryDB.collapseEmptySlots = false
   end
+  local categoryGapSlots = tonumber(ShirsInventoryDB.categoryGapSlots)
+  if categoryGapSlots ~= 0 and categoryGapSlots ~= 1 then
+    ShirsInventoryDB.categoryGapSlots = 1
+  else
+    ShirsInventoryDB.categoryGapSlots = categoryGapSlots
+  end
   if type(ShirsInventoryDB.categoryAssignments) ~= "table" then
     ShirsInventoryDB.categoryAssignments = {}
   end
@@ -233,6 +239,19 @@ function ShirsInventory_SetCollapseEmptySlots(enabled)
     ShirsInventory_AccountSaveCurrentCategorySettings()
   end
   return ShirsInventoryDB.collapseEmptySlots
+end
+
+function ShirsInventory_GetCategoryGapSlots()
+  local value = ShirsInventory_EnsureDB().categoryGapSlots
+  if value == 0 then return 0 end
+  return 1
+end
+
+function ShirsInventory_SetCategoryGapSlots(value)
+  value = tonumber(value)
+  if value ~= 0 then value = 1 end
+  ShirsInventory_EnsureDB().categoryGapSlots = value
+  return value
 end
 
 local function ShirsInventory_IsValidCategorySettingsCoordinate(value)
@@ -638,6 +657,20 @@ function ShirsInventory_ToggleHearthstoneItem(value)
   return ShirsInventory_SetHearthstoneItem(
     value, ShirsInventory_GetHearthstoneItemIndex(value) == nil
   )
+end
+
+function ShirsInventory_MoveHearthstoneItemToEdge(value, edge)
+  local itemID = ShirsInventory_ParseItemID(value)
+  local index = ShirsInventory_GetHearthstoneItemIndex(itemID)
+  if not itemID or not index or (edge ~= "top" and edge ~= "bottom") then
+    return false, index
+  end
+  local values = ShirsInventory_EnsureDB().hearthstoneItems
+  local destination = edge == "top" and 1 or table.getn(values)
+  if destination == index then return true, index end
+  table.remove(values, index)
+  table.insert(values, destination, itemID)
+  return true, destination
 end
 
 function ShirsInventory_MoveHearthstoneItem(value, offset)

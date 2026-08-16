@@ -716,11 +716,10 @@ local function ShirsInventory_EncodeCompactCategoryID(value)
   return encoded
 end
 
-function ShirsInventory_GetCustomCategoryFirstWord(label)
-  if type(label) ~= "string" then return "Group" end
-  local _, _, word = string.find(label, "^(%S+)")
-  if type(word) == "string" and word ~= "" then return word end
-  return "Group"
+function ShirsInventory_GetCustomCategoryCompactLabel(label)
+  if type(label) ~= "string" or label == "" then return "Group" end
+  if string.len(label) <= 7 then return label end
+  return string.sub(label, 1, 7)
 end
 
 function ShirsInventory_GetCategoryHeaderDisplayText(group)
@@ -728,20 +727,19 @@ function ShirsInventory_GetCategoryHeaderDisplayText(group)
   local fullText = ShirsInventory_GetCategoryHeaderText(group)
   local itemCount = table.getn(group.items or {})
   if itemCount >= 2 then return fullText end
-  local maximumCharacters = math.max(1, tonumber(group.columns) or 1) * 6
+  local maximumCharacters = 7
   if string.len(fullText) <= maximumCharacters then return fullText end
   local compact = SHIRS_INVENTORY_COMPACT_CATEGORY_LABELS[group.key]
   if not compact and type(group.key) == "string" and string.find(group.key, "^custom:") then
-    compact = ShirsInventory_GetCustomCategoryFirstWord(group.label)
+    compact = ShirsInventory_GetCustomCategoryCompactLabel(group.label)
+  elseif compact and string.len(compact) < 7 then
+    compact = string.sub(group.label or compact, 1, 7)
   end
   compact = compact or "Group"
-  local compactWithCount = compact
-  if not group.hideHeaderCount then
-    compactWithCount = compact .. " (" .. ShirsInventory_GetCategoryGroupCount(group) .. ")"
+  if string.len(compact) > maximumCharacters then
+    compact = string.sub(compact, 1, maximumCharacters)
   end
-  if string.len(compactWithCount) <= maximumCharacters then return compactWithCount end
-  if string.len(compact) <= maximumCharacters then return compact end
-  return string.sub(compact, 1, maximumCharacters)
+  return compact
 end
 
 function ShirsInventory_BuildCategoryFreeStates(items)
@@ -788,7 +786,10 @@ function ShirsInventory_BuildCategoryLayout(groups, columns)
     local groupColumns = math.min(columns, math.max(1, itemCount))
     local collapsedEmpty = source.key == "empty" and itemCount == 1 and
       source.items[1] and source.items[1].collapsedEmptyCount
-    local separatorColumns = shelfColumns > 0 and 1 or 0
+    local separatorColumns = 0
+    if shelfColumns > 0 then
+      separatorColumns = ShirsInventory_GetCategoryGapSlots and ShirsInventory_GetCategoryGapSlots() or 1
+    end
     local columnX
     if collapsedEmpty then
       columnX = columns - 1

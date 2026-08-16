@@ -66,6 +66,18 @@ if not moved or movedIndex ~= 1 or
   ShirsInventory_GetHearthstoneItemIndex(15138) ~= 2 then
   error("selected Hearthstone item could not move up")
 end
+moved, movedIndex = ShirsInventory_MoveHearthstoneItemToEdge(12361, "bottom")
+if not moved or movedIndex ~= 2 or
+  ShirsInventory_GetHearthstoneItemIndex(15138) ~= 1 or
+  ShirsInventory_GetHearthstoneItemIndex(12361) ~= 2 then
+  error("selected Hearthstone item could not move to the bottom")
+end
+moved, movedIndex = ShirsInventory_MoveHearthstoneItemToEdge(12361, "top")
+if not moved or movedIndex ~= 1 or
+  ShirsInventory_GetHearthstoneItemIndex(12361) ~= 1 or
+  ShirsInventory_GetHearthstoneItemIndex(15138) ~= 2 then
+  error("selected Hearthstone item could not move to the top")
+end
 ok, status = ShirsInventory_SetHearthstoneItem(22222, true)
 if not ok or status ~= "added" then error("drag-order fixture item 22222 was rejected") end
 ok, status = ShirsInventory_SetHearthstoneItem(33333, true)
