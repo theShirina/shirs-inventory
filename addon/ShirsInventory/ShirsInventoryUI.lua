@@ -831,6 +831,141 @@ function ShirsInventory_GetItemBorderModel(texture, quality, itemType, enabled)
   return nil
 end
 
+function ShirsInventory_IsRecipeItemType(itemType)
+  if not itemType then return false end
+  if itemType == "Recipe" then return true end
+  if type(ITEM_CLASS_RECIPE) == "string" and itemType == ITEM_CLASS_RECIPE then return true end
+  return false
+end
+
+function ShirsInventory_IsRequirementUnmetColor(r, g, b)
+  if type(r) ~= "number" or type(g) ~= "number" or type(b) ~= "number" then return false end
+  return r >= 0.85 and g <= 0.35 and b <= 0.35
+end
+
+local function ShirsInventory_TooltipTemplatePrefix(template)
+  if type(template) ~= "string" or template == "" then return nil end
+  local markerStart = string.find(template, "%%s")
+  if not markerStart then markerStart = string.find(template, "%%d") end
+  if not markerStart then return template end
+  return string.sub(template, 1, markerStart - 1)
+end
+
+local function ShirsInventory_TextHasPrefix(text, prefix)
+  if type(text) ~= "string" or type(prefix) ~= "string" or prefix == "" then return false end
+  return string.sub(text, 1, string.len(prefix)) == prefix
+end
+
+local function ShirsInventory_IsProfessionRequirementText(text)
+  if type(text) ~= "string" or text == "" then return false end
+  local levelPrefix = ShirsInventory_TooltipTemplatePrefix(ITEM_MIN_LEVEL)
+  if ShirsInventory_TextHasPrefix(text, levelPrefix or "Requires Level ") then return false end
+  local skillPrefix = ShirsInventory_TooltipTemplatePrefix(ITEM_MIN_SKILL)
+  local reqPrefix = ShirsInventory_TooltipTemplatePrefix(ITEM_REQ_SKILL)
+  if ShirsInventory_TextHasPrefix(text, skillPrefix) then return true end
+  if ShirsInventory_TextHasPrefix(text, reqPrefix) then return true end
+  local lower = string.lower(text)
+  return string.find(lower, "^requires ") ~= nil and string.find(lower, "^requires level ") == nil
+end
+
+function ShirsInventory_GetRecipeLearnStatusFromLines(lines)
+  if type(lines) ~= "table" then return nil end
+  local knownText = type(ITEM_SPELL_KNOWN) == "string" and ITEM_SPELL_KNOWN or "Already known"
+  local alreadyKnown = false
+  local skillTooLow = false
+  local index
+  for index = 1, table.getn(lines) do
+    local line = lines[index]
+    local text = line and line.text or nil
+    if type(text) == "string" and text ~= "" then
+      if text == knownText or string.lower(text) == "already known" then
+        alreadyKnown = true
+      elseif ShirsInventory_IsProfessionRequirementText(text) and
+        ShirsInventory_IsRequirementUnmetColor(line.r, line.g, line.b) then
+        skillTooLow = true
+      end
+    end
+  end
+  if alreadyKnown then return "already_known" end
+  if skillTooLow then return "skill_too_low" end
+  return nil
+end
+
+function ShirsInventory_GetRecipeStatusVisual(status)
+  if status == "already_known" then
+    return {
+      kind = "recipeAlreadyKnown",
+      r = 0.15, g = 0.72, b = 0.62, a = 1,
+      fillR = 0.08, fillG = 0.28, fillB = 0.26, fillA = 0.42,
+    }
+  end
+  if status == "skill_too_low" then
+    return {
+      kind = "recipeSkillTooLow",
+      r = 0.95, g = 0.45, b = 0.08, a = 1,
+      fillR = 0.42, fillG = 0.18, fillB = 0.02, fillA = 0.40,
+    }
+  end
+  return nil
+end
+
+function ShirsInventory_GetItemVisualModel(texture, quality, itemType, enabled, recipeStatus)
+  if not texture then return nil end
+  if ShirsInventory_IsRecipeItemType(itemType) then
+    local visual = ShirsInventory_GetRecipeStatusVisual(recipeStatus)
+    if visual then return visual end
+  end
+  return ShirsInventory_GetItemBorderModel(texture, quality, itemType, enabled)
+end
+
+local recipeStatusTooltip
+
+local function ShirsInventory_EnsureRecipeStatusTooltip()
+  if recipeStatusTooltip or type(CreateFrame) ~= "function" then return recipeStatusTooltip end
+  recipeStatusTooltip = CreateFrame("GameTooltip", "ShirsInventoryRecipeTooltip", nil, "GameTooltipTemplate")
+  return recipeStatusTooltip
+end
+
+local function ShirsInventory_ReadNamedTooltipLine(prefix, line)
+  if type(getglobal) ~= "function" then return nil end
+  local region = getglobal(prefix .. line)
+  if not region or type(region.GetText) ~= "function" then return nil end
+  local text = region:GetText()
+  if type(text) ~= "string" or text == "" then return nil end
+  local r, g, b
+  if type(region.GetTextColor) == "function" then
+    r, g, b = region:GetTextColor()
+  end
+  return { text = text, r = r, g = g, b = b }
+end
+
+function ShirsInventory_CollectTooltipLines(bag, slot)
+  local tooltip = ShirsInventory_EnsureRecipeStatusTooltip()
+  if not tooltip or type(tooltip.SetOwner) ~= "function" then return nil end
+  tooltip:SetOwner(UIParent, "ANCHOR_NONE")
+  if type(tooltip.ClearLines) == "function" then tooltip:ClearLines() end
+  if bag == BANK_CONTAINER and type(tooltip.SetInventoryItem) == "function" then
+    tooltip:SetInventoryItem("player", BankButtonIDToInvSlotID(slot))
+  elseif type(tooltip.SetBagItem) == "function" then
+    tooltip:SetBagItem(bag, slot)
+  else
+    return nil
+  end
+  local lineCount = type(tooltip.NumLines) == "function" and tooltip:NumLines() or 0
+  local lines = {}
+  local line
+  for line = 1, lineCount do
+    local entry = ShirsInventory_ReadNamedTooltipLine("ShirsInventoryRecipeTooltipTextLeft", line)
+    if entry then table.insert(lines, entry) end
+  end
+  return lines
+end
+
+function ShirsInventory_GetRecipeLearnStatusForSlot(bag, slot, itemType)
+  if not ShirsInventory_IsRecipeItemType(itemType) then return nil end
+  return ShirsInventory_GetRecipeLearnStatusFromLines(ShirsInventory_CollectTooltipLines(bag, slot))
+end
+
 function ShirsInventory_GetClampedTopLeft(left, top, width, height, screenWidth, screenHeight,
   margin, bottomMargin, rightMargin, topMargin)
   margin = margin or 8
@@ -2140,6 +2275,11 @@ local function ShirsInventory_CreateItemButton(index, ownerFrame, namePrefix, co
   button.junkBadge:SetTexture("Interface\\Icons\\INV_Misc_Coin_01")
   button.junkBadge:SetTexCoord(0.08, 0.92, 0.08, 0.92)
   button.junkBadge:Hide()
+  button.recipeStatusFill = button:CreateTexture(nil, "BACKGROUND")
+  button.recipeStatusFill:SetPoint("TOPLEFT", button, "TOPLEFT", 2, -2)
+  button.recipeStatusFill:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -2, 2)
+  button.recipeStatusFill:SetTexture("Interface\\Buttons\\WHITE8X8")
+  button.recipeStatusFill:Hide()
 
   button:SetScript("OnClick", function() ShirsInventory_HandleItemClick(this, arg1) end)
   button:SetScript("OnDragStart", function() ShirsInventory_HandleItemClick(this, "LeftButton", true) end)
@@ -2187,21 +2327,33 @@ local function ShirsInventory_UpdateItemButton(button)
   if normal then normal:SetVertexColor(1, 1, 1) end
 
   if button.rarityEdges then
-    local border = ShirsInventory_GetItemBorderModel(
+    local recipeStatus = texture and
+      ShirsInventory_GetRecipeLearnStatusForSlot(button.bag, button.slot, itemInfo.itemType) or nil
+    local visual = ShirsInventory_GetItemVisualModel(
       texture,
       ShirsInventory_ResolveItemQuality(quality, itemInfo.quality),
       itemInfo.itemType,
-      ShirsInventory_GetShowRarityBoxes and ShirsInventory_GetShowRarityBoxes()
+      ShirsInventory_GetShowRarityBoxes and ShirsInventory_GetShowRarityBoxes(),
+      recipeStatus
     )
-    button.shirsBorderKind = border and border.kind or nil
+    button.shirsBorderKind = visual and visual.kind or nil
+    button.shirsRecipeStatus = recipeStatus
     local edgeIndex
     for edgeIndex = 1, table.getn(button.rarityEdges) do
       local edge = button.rarityEdges[edgeIndex]
-      if border then
-        edge:SetVertexColor(border.r, border.g, border.b, border.a)
+      if visual then
+        edge:SetVertexColor(visual.r, visual.g, visual.b, visual.a)
         edge:Show()
       else
         edge:Hide()
+      end
+    end
+    if button.recipeStatusFill then
+      if visual and visual.fillA then
+        button.recipeStatusFill:SetVertexColor(visual.fillR, visual.fillG, visual.fillB, visual.fillA)
+        button.recipeStatusFill:Show()
+      else
+        button.recipeStatusFill:Hide()
       end
     end
   end

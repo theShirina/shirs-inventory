@@ -2,7 +2,12 @@
 
 A standalone bag addon made and tested for Microbot's WoW 1.12.1 client.
 
-Current release: **0.7.3**.
+Current release: **0.7.4**.
+
+## What's new in 0.7.4
+
+- Recipes you cannot learn now stand out in the bags: **Already known** uses a teal wash and teal edges; **skill too low** uses an amber wash and amber edges.
+- Learnable recipes keep their normal rarity or quest border. Live testing still needs a `/reload` on the Keybind Display Test client with one known recipe and one too-high skill recipe in bags.
 
 ## What's new in 0.7.3
 
