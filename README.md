@@ -2,7 +2,11 @@
 
 A standalone bag addon made and tested for Microbot's WoW 1.12.1 client.
 
-Current release: **0.7.4**.
+Current release: **0.7.5**.
+
+## What's new in 0.7.5
+
+- Unlearnable recipe marks are stronger: **Already known** is a thick bright-blue frame with a blue glow over the icon; **skill too low** is a thick orange frame with an orange glow. The old 1-pixel teal/amber look blended into green rarity.
 
 ## What's new in 0.7.4
 

@@ -895,18 +895,55 @@ function ShirsInventory_GetRecipeStatusVisual(status)
   if status == "already_known" then
     return {
       kind = "recipeAlreadyKnown",
-      r = 0.15, g = 0.72, b = 0.62, a = 1,
-      fillR = 0.08, fillG = 0.28, fillB = 0.26, fillA = 0.42,
+      r = 0.05, g = 0.55, b = 1, a = 1,
+      fillR = 0.05, fillG = 0.45, fillB = 1, fillA = 0.55,
+      thickness = 3, inset = 0,
+      layer = "OVERLAY", blend = "ADD",
     }
   end
   if status == "skill_too_low" then
     return {
       kind = "recipeSkillTooLow",
-      r = 0.95, g = 0.45, b = 0.08, a = 1,
-      fillR = 0.42, fillG = 0.18, fillB = 0.02, fillA = 0.40,
+      r = 1, g = 0.28, b = 0, a = 1,
+      fillR = 1, fillG = 0.28, fillB = 0, fillA = 0.52,
+      thickness = 3, inset = 0,
+      layer = "OVERLAY", blend = "ADD",
     }
   end
   return nil
+end
+
+function ShirsInventory_ApplyItemVisualGeometry(button, visual)
+  if not button or not button.rarityEdges then return end
+  local layout = ShirsInventory_GetRarityBorderLayout()
+  local thickness = (visual and visual.thickness) or layout.thickness
+  local inset = layout.inset
+  if visual and visual.inset ~= nil then inset = visual.inset end
+  local edges = button.rarityEdges
+  if edges[1] then
+    edges[1]:SetHeight(thickness)
+    if edges[1].ClearAllPoints then edges[1]:ClearAllPoints() end
+    edges[1]:SetPoint("TOPLEFT", button, "TOPLEFT", inset, -inset)
+    edges[1]:SetPoint("TOPRIGHT", button, "TOPRIGHT", -inset, -inset)
+  end
+  if edges[2] then
+    edges[2]:SetHeight(thickness)
+    if edges[2].ClearAllPoints then edges[2]:ClearAllPoints() end
+    edges[2]:SetPoint("BOTTOMLEFT", button, "BOTTOMLEFT", inset, inset)
+    edges[2]:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -inset, inset)
+  end
+  if edges[3] then
+    edges[3]:SetWidth(thickness)
+    if edges[3].ClearAllPoints then edges[3]:ClearAllPoints() end
+    edges[3]:SetPoint("TOPLEFT", button, "TOPLEFT", inset, -inset)
+    edges[3]:SetPoint("BOTTOMLEFT", button, "BOTTOMLEFT", inset, inset)
+  end
+  if edges[4] then
+    edges[4]:SetWidth(thickness)
+    if edges[4].ClearAllPoints then edges[4]:ClearAllPoints() end
+    edges[4]:SetPoint("TOPRIGHT", button, "TOPRIGHT", -inset, -inset)
+    edges[4]:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -inset, inset)
+  end
 end
 
 function ShirsInventory_GetItemVisualModel(texture, quality, itemType, enabled, recipeStatus)
@@ -2275,10 +2312,11 @@ local function ShirsInventory_CreateItemButton(index, ownerFrame, namePrefix, co
   button.junkBadge:SetTexture("Interface\\Icons\\INV_Misc_Coin_01")
   button.junkBadge:SetTexCoord(0.08, 0.92, 0.08, 0.92)
   button.junkBadge:Hide()
-  button.recipeStatusFill = button:CreateTexture(nil, "BACKGROUND")
-  button.recipeStatusFill:SetPoint("TOPLEFT", button, "TOPLEFT", 2, -2)
-  button.recipeStatusFill:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -2, 2)
+  button.recipeStatusFill = button:CreateTexture(nil, "OVERLAY")
+  button.recipeStatusFill:SetPoint("TOPLEFT", button, "TOPLEFT", 3, -3)
+  button.recipeStatusFill:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -3, 3)
   button.recipeStatusFill:SetTexture("Interface\\Buttons\\WHITE8X8")
+  if button.recipeStatusFill.SetBlendMode then button.recipeStatusFill:SetBlendMode("ADD") end
   button.recipeStatusFill:Hide()
 
   button:SetScript("OnClick", function() ShirsInventory_HandleItemClick(this, arg1) end)
@@ -2338,6 +2376,7 @@ local function ShirsInventory_UpdateItemButton(button)
     )
     button.shirsBorderKind = visual and visual.kind or nil
     button.shirsRecipeStatus = recipeStatus
+    ShirsInventory_ApplyItemVisualGeometry(button, visual)
     local edgeIndex
     for edgeIndex = 1, table.getn(button.rarityEdges) do
       local edge = button.rarityEdges[edgeIndex]
@@ -2372,6 +2411,7 @@ local function ShirsInventory_UpdateItemButton(button)
     button.cooldown:Hide()
     if button.junkBadgeBack then button.junkBadgeBack:Hide() end
     button.junkBadge:Hide()
+    if button.recipeStatusFill then button.recipeStatusFill:Hide() end
   end
   local query = ShirsInventory_GetSearchQueryForButton(button)
   ShirsInventory_ApplySearchToButton(button, query, itemInfo.name, link)

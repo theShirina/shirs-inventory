@@ -56,18 +56,26 @@ assert(ShirsInventory_GetRecipeLearnStatusFromLines({}) == nil,
 local known = ShirsInventory_GetRecipeStatusVisual("already_known")
 assert(known and known.kind == "recipeAlreadyKnown",
   "already-known recipes need their own visual kind")
-assert(known.r == 0.15 and known.g == 0.72 and known.b == 0.62,
-  "already-known edges must be teal")
-assert(known.fillR == 0.08 and known.fillG == 0.28 and known.fillB == 0.26 and known.fillA == 0.42,
-  "already-known slots must use a teal background wash")
+assert(known.r == 0.05 and known.g == 0.55 and known.b == 1,
+  "already-known edges must be bright blue, not teal that blends with uncommon green")
+assert(known.fillR == 0.05 and known.fillG == 0.45 and known.fillB == 1 and known.fillA == 0.55,
+  "already-known slots must tint the icon with a strong blue overlay")
+assert(known.thickness == 3 and known.inset == 0,
+  "blocked-recipe frames must be thicker than the one-pixel rarity edge")
+assert(known.layer == "OVERLAY" and known.blend == "ADD",
+  "the recipe wash must sit on the icon, not behind it")
 
 local low = ShirsInventory_GetRecipeStatusVisual("skill_too_low")
 assert(low and low.kind == "recipeSkillTooLow",
   "skill-too-low recipes need their own visual kind")
-assert(low.r == 0.95 and low.g == 0.45 and low.b == 0.08,
-  "skill-too-low edges must be amber")
-assert(low.fillR == 0.42 and low.fillG == 0.18 and low.fillB == 0.02 and low.fillA == 0.40,
-  "skill-too-low slots must use an amber background wash")
+assert(low.r == 1 and low.g == 0.28 and low.b == 0,
+  "skill-too-low edges must be bright orange")
+assert(low.fillR == 1 and low.fillG == 0.28 and low.fillB == 0 and low.fillA == 0.52,
+  "skill-too-low slots must tint the icon with a strong orange overlay")
+assert(low.thickness == 3 and low.inset == 0,
+  "skill-too-low frames must use the same thick geometry")
+assert(low.layer == "OVERLAY" and low.blend == "ADD",
+  "the skill-too-low wash must also sit on the icon")
 
 assert(known.r ~= low.r or known.g ~= low.g or known.b ~= low.b,
   "the two blocked-recipe reasons must use different edge colors")
@@ -81,13 +89,13 @@ assert(not ShirsInventory_GetRecipeStatusVisual("learnable"),
 ITEM_QUALITY_COLORS = { [2] = { r = 0.12, g = 1, b = 0 } }
 local knownVisual = ShirsInventory_GetItemVisualModel(
   "item", 2, "Recipe", true, "already_known")
-assert(knownVisual and knownVisual.kind == "recipeAlreadyKnown" and knownVisual.fillA == 0.42,
-  "already-known recipes must replace the rarity edge with the teal blocked look")
+assert(knownVisual and knownVisual.kind == "recipeAlreadyKnown" and knownVisual.fillA == 0.55,
+  "already-known recipes must replace the rarity edge with the blue blocked look")
 
 local lowVisual = ShirsInventory_GetItemVisualModel(
   "item", 1, "Recipe", true, "skill_too_low")
-assert(lowVisual and lowVisual.kind == "recipeSkillTooLow" and lowVisual.fillA == 0.40,
-  "skill-too-low recipes must show the amber blocked look")
+assert(lowVisual and lowVisual.kind == "recipeSkillTooLow" and lowVisual.fillA == 0.52,
+  "skill-too-low recipes must show the orange blocked look")
 
 local learnable = ShirsInventory_GetItemVisualModel("item", 2, "Recipe", true, nil)
 assert(learnable and learnable.kind == "rarity" and not learnable.fillA,
