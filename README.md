@@ -2,7 +2,12 @@
 
 A standalone bag addon made and tested for Microbot's WoW 1.12.1 client.
 
-Current release: **0.7.8**.
+Current release: **0.7.9**.
+
+## What's new in 0.7.9
+
+- Category View now splits herbs, cloth, leather, ores, enchanting dusts/essences, gems, and elementals even when the client leaves item subtype blank. Those used to stay in Trade Goods & Materials.
+- Category View has an Empty Slots button on the inventory bar. It collapses or shows every empty slot without opening Category Settings.
 
 ## What's new in 0.7.8
 

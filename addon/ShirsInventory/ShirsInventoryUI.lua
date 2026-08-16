@@ -517,25 +517,74 @@ function ShirsInventory_ClassifyCategoryItem(item)
   if item.itemType == "Projectile" or item.itemType == classes.projectile then return "ammo" end
   if item.itemSubType == "Explosives" then return "explosives" end
   if item.itemType == "Consumable" or item.itemType == classes.consumable then return "consumables" end
-  local materialGroup = ShirsInventory_GetCategoryMaterialGroup(item.materialCategory, item.itemSubType)
+  local materialGroup = ShirsInventory_GetCategoryMaterialGroup(
+    item.materialCategory, item.itemSubType, item.name, item.itemID)
   if materialGroup then return materialGroup end
   if item.itemType == "Trade Goods" or item.itemType == classes.tradeGoods then return "tradeGoods" end
   if tonumber(item.quality) == 0 then return "junk" end
   return "miscellaneous"
 end
 
-function ShirsInventory_GetCategoryMaterialGroup(materialCategory, itemSubType)
-  local source = materialCategory or itemSubType
-  if type(source) ~= "string" or source == "" then return nil end
-  local lowered = string.lower(source)
-  if lowered == "mining" or lowered == "metal & stone" or lowered == "ore" then return "mining" end
-  if lowered == "herbs" or lowered == "herb" then return "herbs" end
-  if lowered == "cloth" then return "cloth" end
-  if lowered == "leather" then return "leather" end
-  if lowered == "enchanting" or lowered == "enchanting materials" or lowered == "enchant" then return "enchanting" end
-  if lowered == "elemental" then return "elemental" end
-  if lowered == "engineering" or lowered == "parts" or lowered == "devices" then return "engineering" end
-  if lowered == "gems" or lowered == "gem" then return "gems" end
+function ShirsInventory_GetCategoryMaterialGroup(materialCategory, itemSubType, itemName, itemID)
+  if type(ShirsInventory_GetStaticSpecialtyItemClass) == "function" then
+    local specialty = ShirsInventory_GetStaticSpecialtyItemClass(itemID)
+    if specialty == "herb" then return "herbs" end
+    if specialty == "enchanting" then return "enchanting" end
+  end
+  local source = string.lower(tostring(materialCategory or itemSubType or ""))
+  if source == "mining" or source == "metal & stone" or source == "ore" then return "mining" end
+  if source == "herbs" or source == "herb" then return "herbs" end
+  if source == "cloth" then return "cloth" end
+  if source == "leather" then return "leather" end
+  if source == "enchanting" or source == "enchanting materials" or source == "enchant" then return "enchanting" end
+  if source == "elemental" then return "elemental" end
+  if source == "engineering" or source == "parts" or source == "devices" then return "engineering" end
+  if source == "gems" or source == "gem" then return "gems" end
+  local name = string.lower(tostring(itemName or ""))
+  if name == "" then return nil end
+  if string.find(name, " ore", 1, true) or string.sub(name, -3) == "ore" or
+    string.find(name, " bar", 1, true) or string.sub(name, -4) == " bar" or
+    string.find(name, "coal", 1, true) or string.find(name, "rough stone", 1, true) or
+    string.find(name, "coarse stone", 1, true) or string.find(name, "heavy stone", 1, true) or
+    string.find(name, "solid stone", 1, true) or string.find(name, "dense stone", 1, true) then
+    return "mining"
+  end
+  if string.find(name, "lotus", 1, true) or string.find(name, "bloom", 1, true) or
+    string.find(name, "weed", 1, true) or string.find(name, "root", 1, true) or
+    string.find(name, "leaf", 1, true) or string.find(name, "herb", 1, true) or
+    string.find(name, "moss", 1, true) or string.find(name, "kelp", 1, true) or
+    string.find(name, "thistle", 1, true) or string.find(name, "mushroom", 1, true) then
+    return "herbs"
+  end
+  if string.find(name, "cloth", 1, true) or string.find(name, "silk", 1, true) or
+    string.find(name, "wool", 1, true) or string.find(name, "linen", 1, true) or
+    string.find(name, "mageweave", 1, true) or string.find(name, "felcloth", 1, true) or
+    string.find(name, "mooncloth", 1, true) then
+    return "cloth"
+  end
+  if string.find(name, "leather", 1, true) or string.find(name, "hide", 1, true) or
+    string.find(name, "scale", 1, true) or string.find(name, "skin", 1, true) then
+    return "leather"
+  end
+  if string.find(name, "dust", 1, true) or string.find(name, "essence", 1, true) or
+    string.find(name, "shard", 1, true) or string.find(name, "nexus crystal", 1, true) then
+    return "enchanting"
+  end
+  if string.find(name, "elemental ", 1, true) or string.find(name, "essence of", 1, true) or
+    string.find(name, "heart of fire", 1, true) or string.find(name, "core of earth", 1, true) or
+    string.find(name, "globe of water", 1, true) or string.find(name, "breath of wind", 1, true) or
+    string.find(name, "ichor of undeath", 1, true) then
+    return "elemental"
+  end
+  if string.find(name, "tigerseye", 1, true) or string.find(name, "malachite", 1, true) or
+    string.find(name, "shadowgem", 1, true) or string.find(name, "moss agate", 1, true) or
+    string.find(name, "lesser moonstone", 1, true) or string.find(name, "jade", 1, true) or
+    string.find(name, "citrine", 1, true) or string.find(name, "aquamarine", 1, true) or
+    string.find(name, "star ruby", 1, true) or string.find(name, "large opal", 1, true) or
+    string.find(name, "azerothian diamond", 1, true) or string.find(name, "blue sapphire", 1, true) or
+    string.find(name, "huge emerald", 1, true) or string.find(name, "arcane crystal", 1, true) then
+    return "gems"
+  end
   return nil
 end
 
@@ -780,7 +829,7 @@ end
 
 function ShirsInventory_ShouldShowInventoryAction(action, bank)
   if bank or not (ShirsInventory_GetCategoryMode and ShirsInventory_GetCategoryMode()) then return true end
-  return action == "sort" or action == "mode" or action == "settings"
+  return action == "sort" or action == "mode" or action == "direction" or action == "settings"
 end
 
 function ShirsInventory_GetRarityBorderLayout()
@@ -1916,6 +1965,18 @@ function ShirsInventory_GetInventoryButtonSpecs(bank)
       tooltipHint = editing and "Click to leave category edit mode." or
         "Click, then drag an item onto a category heading.",
     }
+    local collapsed = ShirsInventory_GetCollapseEmptySlots and ShirsInventory_GetCollapseEmptySlots()
+    specs.direction = {
+      text = collapsed and "Show Empty" or "Hide Empty",
+      icon = "Interface\\Icons\\INV_Misc_Bag_09",
+      iconSize = iconSize,
+      texCoord = {0.08, 0.92, 0.08, 0.92},
+      tooltipTitle = collapsed and "Empty Slots: collapsed" or "Empty Slots: shown",
+      tooltipDescription = collapsed and
+        "Empty Slots are collapsed to one representative slot. Click to show every empty slot." or
+        "Every empty slot is shown. Click to collapse Empty Slots to one representative.",
+      tooltipHint = "Click to toggle Empty Slots.",
+    }
   end
   return specs
 end
@@ -1998,6 +2059,20 @@ function ShirsInventory_OnSortButtonClick(bank)
     return ShirsInventory_SortBags()
   end
   return false
+end
+
+function ShirsInventory_OnDirectionButtonClick(bank)
+  if not bank and ShirsInventory_GetCategoryMode and ShirsInventory_GetCategoryMode() then
+    local collapsed = ShirsInventory_GetCollapseEmptySlots and ShirsInventory_GetCollapseEmptySlots()
+    if ShirsInventory_SetCollapseEmptySlots then
+      ShirsInventory_SetCollapseEmptySlots(not collapsed)
+    end
+    if ShirsInventory_Update then ShirsInventory_Update() end
+    ShirsInventory_UpdateControlLabels()
+    return true
+  end
+  if ShirsInventory_ToggleDirection then return ShirsInventory_ToggleDirection() end
+  return nil
 end
 
 function ShirsInventory_OnModeButtonClick(bank)
@@ -3352,7 +3427,11 @@ function ShirsInventory_CreateBankActionButtons(frame)
   frame.directionButton:SetWidth(64)
   frame.directionButton:SetHeight(22)
   frame.directionButton:SetScript("OnClick", function()
-    if ShirsInventory_ToggleDirection then ShirsInventory_ToggleDirection() end
+    if ShirsInventory_OnDirectionButtonClick then
+      ShirsInventory_OnDirectionButtonClick(true)
+    elseif ShirsInventory_ToggleDirection then
+      ShirsInventory_ToggleDirection()
+    end
     ShirsInventory_UpdateControlLabels()
   end)
 
@@ -3812,7 +3891,11 @@ local function ShirsInventory_CreateMainFrame()
   frame.directionButton:SetHeight(22)
   frame.directionButton:SetPoint("LEFT", frame.modeButton, "RIGHT", 4, 0)
   frame.directionButton:SetScript("OnClick", function()
-    if ShirsInventory_ToggleDirection then ShirsInventory_ToggleDirection() end
+    if ShirsInventory_OnDirectionButtonClick then
+      ShirsInventory_OnDirectionButtonClick(false)
+    elseif ShirsInventory_ToggleDirection then
+      ShirsInventory_ToggleDirection()
+    end
     ShirsInventory_UpdateControlLabels()
   end)
   ShirsInventory_EnableCategoryWheel(frame.directionButton)

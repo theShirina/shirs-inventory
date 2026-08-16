@@ -456,6 +456,30 @@ assert(ShirsInventory_ClassifyCategoryItem({
 assert(ShirsInventory_ClassifyCategoryItem({
   hasItem = true, itemType = "Trade Goods", name = "Odd Trade Good"
 }) == "tradeGoods", "unclassified trade goods must stay in Trade Goods")
+assert(ShirsInventory_ClassifyCategoryItem({
+  hasItem = true, itemType = "Trade Goods", name = "Purple Lotus"
+}) == "herbs", "herb names must split out of Trade Goods when subtype is missing")
+assert(ShirsInventory_ClassifyCategoryItem({
+  hasItem = true, itemType = "Trade Goods", name = "Runecloth"
+}) == "cloth", "cloth names must split out of Trade Goods when subtype is missing")
+assert(ShirsInventory_ClassifyCategoryItem({
+  hasItem = true, itemType = "Trade Goods", name = "Light Leather"
+}) == "leather", "leather names must split out of Trade Goods when subtype is missing")
+assert(ShirsInventory_ClassifyCategoryItem({
+  hasItem = true, itemType = "Trade Goods", name = "Strange Dust"
+}) == "enchanting", "enchanting dust names must split out of Trade Goods when subtype is missing")
+assert(ShirsInventory_ClassifyCategoryItem({
+  hasItem = true, itemType = "Trade Goods", name = "Greater Magic Essence"
+}) == "enchanting", "essence names must split out of Trade Goods when subtype is missing")
+assert(ShirsInventory_ClassifyCategoryItem({
+  hasItem = true, itemType = "Trade Goods", name = "Copper Ore"
+}) == "mining", "ore names must split out of Trade Goods when subtype is missing")
+assert(ShirsInventory_ClassifyCategoryItem({
+  hasItem = true, itemType = "Trade Goods", name = "Tigerseye"
+}) == "gems", "gem names must split out of Trade Goods when subtype is missing")
+assert(ShirsInventory_ClassifyCategoryItem({
+  hasItem = true, itemType = "Trade Goods", name = "Elemental Fire"
+}) == "elemental", "elemental names must split out of Trade Goods when subtype is missing")
 local expectedKeys = {
   "quest", "keys", "mountsCompanions", "armor", "weapons", "equipment", "bags", "ammo",
   "recipes", "foodDrink", "potions", "elixirs", "bandages", "scrolls", "weaponBuffs",
@@ -513,14 +537,33 @@ assert(packedCategoryLayout.height == 238,
 ShirsInventory_SetCategoryMode(true)
 assert(ShirsInventory_ShouldShowInventoryAction("sort", false) and
   ShirsInventory_ShouldShowInventoryAction("mode", false) and
-  not ShirsInventory_ShouldShowInventoryAction("direction", false) and
+  ShirsInventory_ShouldShowInventoryAction("direction", false) and
   ShirsInventory_ShouldShowInventoryAction("settings", false),
-  "category view must replace physical Sort with Categories and keep Edit and Settings")
+  "category view must keep Sort/Manage, Edit, Empty Slots, and Settings")
 local categoryActionSpecs = ShirsInventory_GetInventoryButtonSpecs(false)
 assert(categoryActionSpecs.sort.text == "Manage" and
   categoryActionSpecs.sort.tooltipTitle == "Category settings" and
   string.find(categoryActionSpecs.sort.tooltipDescription or "", "create", 1, true),
   "category view did not present its Categories replacement as a settings manager")
+assert(categoryActionSpecs.direction.text == "Hide Empty" and
+  categoryActionSpecs.direction.tooltipTitle == "Empty Slots: shown",
+  "category view must reuse the unused direction button as Empty Slots")
+ShirsInventory_SetCollapseEmptySlots(true)
+local collapsedEmptySpecs = ShirsInventory_GetInventoryButtonSpecs(false)
+assert(collapsedEmptySpecs.direction.text == "Show Empty" and
+  collapsedEmptySpecs.direction.tooltipTitle == "Empty Slots: collapsed",
+  "the Empty Slots button must show the current collapsed state")
+local emptyToggles = 0
+local savedSetCollapseEmptySlots = ShirsInventory_SetCollapseEmptySlots
+ShirsInventory_SetCollapseEmptySlots = function(enabled)
+  emptyToggles = emptyToggles + 1
+  return savedSetCollapseEmptySlots(enabled)
+end
+assert(ShirsInventory_OnDirectionButtonClick and ShirsInventory_OnDirectionButtonClick(false)
+  and emptyToggles == 1 and not ShirsInventory_GetCollapseEmptySlots(),
+  "category-view Empty Slots button must toggle collapse instead of sort direction")
+ShirsInventory_SetCollapseEmptySlots = savedSetCollapseEmptySlots
+ShirsInventory_SetCollapseEmptySlots(false)
 local categoryManagerOpens, physicalSorts = 0, 0
 local savedToggleCategoryManager = ShirsInventory_ToggleCategoryManager
 local savedSortBags = ShirsInventory_SortBags
