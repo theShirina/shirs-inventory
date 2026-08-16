@@ -18,7 +18,12 @@ local keyringClicks = {}
 function KeyRingItemButton_OnClick(button)
   table.insert(keyringClicks, { button = button, owner = this })
 end
-function GetContainerItemInfo() return "texture", 1, nil, 1 end
+categoryEmptyKeyring = false
+function GetContainerItemInfo(bag, slot)
+  if categoryEmptyKeyring and bag == KEYRING_CONTAINER then return nil, 0, false end
+  if categoryEmptyKeyring and bag == 0 and slot ~= 1 then return nil, 0, false end
+  return "texture", 1, nil, 1
+end
 function GetContainerItemLink() return "|Hitem:12382:0:0:0|h[Key]|h" end
 function KeyRingButtonIDToInvSlotID(slot) return 68 + slot end
 function IsAltKeyDown() return false end
@@ -134,6 +139,17 @@ assert(gridUpdates == 2 and table.getn(ShirsInventory_BuildInventorySlots(counts
   "second Keyring icon click did not restore the integrated slots")
 assert(string.find(ShirsInventory_GetBagBarActionHint(ShirsInventory_BuildBagBarModel()[6]), "hide", 1, true),
   "shown Keyring tooltip must explain that clicking hides the slots")
+
+-- Category View must not turn empty Keyring capacity into an Empty category.
+local categorySlots = {
+  { bag = 0, slot = 1 },
+  { bag = KEYRING_CONTAINER, slot = 1 },
+}
+categoryEmptyKeyring = true
+local categoryItems = ShirsInventory_BuildCategoryInventoryItems(categorySlots)
+categoryEmptyKeyring = false
+assert(table.getn(categoryItems) == 1 and categoryItems[1].bag == 0,
+  "empty Keyring capacity was counted as an Empty category item")
 
 local keyButton = { bag = KEYRING_CONTAINER, slot = 3, hasItem = true }
 this = keyButton

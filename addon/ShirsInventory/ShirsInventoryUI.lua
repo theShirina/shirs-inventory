@@ -499,10 +499,21 @@ end
 
 function ShirsInventory_ClassifyCategoryItem(item)
   if not item or not item.hasItem then return "empty" end
-  if item.manualCategory then return item.manualCategory end
   local junkMarks = (ShirsInventoryDB and ShirsInventoryDB.junkItems) or nil
+  -- A manual junk mark must beat manual category assignments and broad item
+  -- classes. Otherwise a marked weapon/armor can be placed back into its main
+  -- category instead of the Junk folder.
   if item.itemID and junkMarks and junkMarks[item.itemID] then return "junk" end
   local classes = ShirsInventory_GetCategoryClasses()
+  -- Poor-quality equipment is the common gray-junk case. Keep quest and other
+  -- semantic categories ahead of the generic poor-quality fallback below.
+  if tonumber(item.quality) == 0 and
+    (item.itemType == "Armor" or item.itemType == classes.armor or
+      item.itemType == "Weapon" or item.itemType == classes.weapon) then
+    return "junk"
+  end
+  -- Explicit categories still control ordinary items.
+  if item.manualCategory then return item.manualCategory end
   if item.itemType == "Recipe" or item.itemType == classes.recipe then return "recipes" end
   if item.itemType == "Quest" or item.quest or
     (ShirsInventory_CategoryTextSignalsEnabled() and
@@ -3044,7 +3055,11 @@ function ShirsInventory_BuildCategoryInventoryItems(slots)
     if texture and ShirsInventory_ShouldScanCategoryTooltip(info.itemType, resolvedQuality) then
       tooltipText = ShirsInventory_GetCategoryTooltipText(address.bag, address.slot)
     end
-    table.insert(items, {
+    -- Empty Keyring slots are capacity owned by the native keyring, not
+    -- ordinary inventory empties. Do not create category-mode Empty entries
+    -- for them when the Keyring is shown or hidden.
+    if texture or ShirsInventory_ShouldCountFreeInventorySlot(address.bag) then
+      table.insert(items, {
       bag = address.bag,
       slot = address.slot,
       itemID = itemID,
@@ -3062,7 +3077,8 @@ function ShirsInventory_BuildCategoryInventoryItems(slots)
       quest = ShirsInventory_IsQuestItemType(info.itemType),
       name = info.name,
       tooltipText = tooltipText,
-    })
+      })
+    end
   end
   return items
 end

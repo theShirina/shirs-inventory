@@ -377,7 +377,20 @@ assert(ShirsInventory_ClassifyCategoryItem({
 assert(ShirsInventory_ClassifyCategoryItem({
   hasItem = true, itemID = 4242, itemType = "Weapon", quality = 3,
   manualCategory = "equipment"
-}) == "equipment", "explicit manual category must still win over a junk mark")
+}) == "junk", "junk mark must win over an explicit main-category assignment")
+assert(ShirsInventory_ClassifyCategoryItem({
+  hasItem = true, itemID = 4243, itemType = "Weapon", quality = 3,
+  manualCategory = "equipment"
+}) == "equipment", "explicit manual category must still win for unmarked items")
+assert(ShirsInventory_ClassifyCategoryItem({
+  hasItem = true, itemID = 4244, itemType = "Armor", quality = 0
+}) == "junk", "gray armor must classify as junk instead of armor")
+assert(ShirsInventory_ClassifyCategoryItem({
+  hasItem = true, itemID = 4245, itemType = "Weapon", quality = 0
+}) == "junk", "gray weapons must classify as junk instead of weapons")
+assert(ShirsInventory_ClassifyCategoryItem({
+  hasItem = true, itemID = 4246, itemType = "Quest", quality = 0
+}) == "quest", "poor-quality quest items must remain in Quest")
 assert(ShirsInventory_ClassifyCategoryItem({
   hasItem = true, itemID = 4243, itemType = "Weapon", quality = 3
 }) == "weapons", "unmarked items must keep their normal category")

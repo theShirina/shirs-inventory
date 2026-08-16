@@ -2,7 +2,12 @@
 
 A standalone bag addon made and tested for Microbot's WoW 1.12.1 client.
 
-Current release: **0.8.0**.
+Current release: **0.8.1**.
+
+## What's new in 0.8.1
+
+- Fixed gray and marked armor or weapons being placed in their main category instead of Junk.
+- Fixed empty Keyring capacity being counted as Empty Slots in Category View.
 
 ## What's new in 0.8.0
 

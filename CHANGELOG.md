@@ -1,3 +1,8 @@
+## Shir's Inventory 0.8.1
+
+- Fixed gray and marked armor or weapons being placed in their main category instead of Junk.
+- Fixed empty Keyring capacity being counted as Empty Slots in Category View.
+
 ## Shir's Inventory 0.8.0
 
 - Added name-based material grouping for Category View, so herbs, cloth, leather, ores, enchanting materials, elementals, engineering parts, and gems leave the generic Trade Goods group even when item subtype data is missing.
