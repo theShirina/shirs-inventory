@@ -111,7 +111,7 @@ for _, item in ipairs(masteryAndRaidTokens) do
 end
 
 if ShirsInventory_GetSortMaterialCategory("itemType", 12844, "Argent Dawn Valor Token", nil) ~= nil then
-  error("Argent Dawn Valor Token was incorrectly grouped with Microbot raid tokens")
+  error("Argent Dawn Valor Token was incorrectly grouped with WoW raid tokens")
 end
 
 local standardEnchantingRank = ShirsInventory_GetPrimaryCategoryRank(

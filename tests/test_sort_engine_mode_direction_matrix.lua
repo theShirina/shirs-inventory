@@ -76,7 +76,7 @@ function GetItemInfo(itemID)
     return "Hearthstone", "link", 1, 1, "Miscellaneous", "Junk", 1, "", "texture"
   end
   if itemID == 2454 then
-    -- Nine-value Vanilla/Microbot signature: max stack is field 7.
+    -- Nine-value Vanilla/WoW signature: max stack is field 7.
     return "Elixir of Lion's Strength", "link", 1, 1, "Consumable", "Consumable", 5, "", "texture"
   end
   if itemID == 200 then

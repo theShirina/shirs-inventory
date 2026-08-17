@@ -1,6 +1,6 @@
 # Shir's Inventory
 
-A standalone bag addon made and tested for Microbot's WoW 1.12.1 client.
+A standalone bag addon made and tested for WoW 1.12 client.
 
 Current release: **0.8.0**.
 
@@ -23,7 +23,7 @@ Current release: **0.8.0**.
 ## What's new in 0.7.7
 
 - Item cooldown numbers use `GameFontNormalLarge`, one more stock font step than 0.7.6.
-- Recipes marked **Already known** on any character are remembered on the account. Another character with the skill sees the same blue known mark; a character below the skill still gets the orange **skill too low** mark. Live testing still needs a `/reload` on the Keybind Display Test client after learning a recipe on one character and opening bags on another.
+- Recipes marked **Already known** on any character are remembered on the account. Another character with the skill sees the same blue known mark; a character below the skill still gets the orange **skill too low** mark. Live testing still needs a `/reload` on the WoW 1.12 client after learning a recipe on one character and opening bags on another.
 
 ## What's new in 0.7.6
 
@@ -36,7 +36,7 @@ Current release: **0.8.0**.
 ## What's new in 0.7.4
 
 - Recipes you cannot learn now stand out in the bags: **Already known** uses a teal wash and teal edges; **skill too low** uses an amber wash and amber edges.
-- Learnable recipes keep their normal rarity or quest border. Live testing still needs a `/reload` on the Keybind Display Test client with one known recipe and one too-high skill recipe in bags.
+- Learnable recipes keep their normal rarity or quest border. Live testing still needs a `/reload` on the WoW 1.12 client with one known recipe and one too-high skill recipe in bags.
 
 ## What's new in 0.7.3
 
@@ -69,7 +69,7 @@ Current release: **0.8.0**.
 - Gives the bank the same Sort, grouping, direction, and Settings controls as the inventory.
 - Sorts bags and the bank by item type or rarity.
 - Keeps standard enchanting dust, essences, and shards together when sorting by item type.
-- Keeps Token of Mastery and the four Microbot raid tokens together when sorting by item type.
+- Keeps Token of Mastery and the four WoW raid tokens together when sorting by item type.
 - Inserts Shift-clicked item links into the focused WIM whisper.
 - Sorts from the top or bottom and merges partial stacks.
 - Can submit pairwise-disjoint cursor moves in a repeating `4, 4, 4, 3` safety cycle. Each later move needs fresh identity, count, and lock checks on its own untouched endpoints; dependent moves wait for the prior burst's combined exact bag signature with a 0.01-second minimum check interval.
@@ -77,7 +77,7 @@ Current release: **0.8.0**.
 - Always anchors Hearthstone; Automatic mode adds Onyxia Scale Cloak, field services, pets and mounts, and profession tools at the same edge.
 - Lets each character switch to Selected mode and Ctrl-right-click up to 30 carried item types to place them directly beside Hearthstone. The manager has a visible `::` drag grip, source and drop-target feedback, Up/Down controls, remove, clear-all, and paging. Bank sorting stays unchanged.
 - Can instead lock every carried slot occupied by a selected item type. Locked slots and stacks stay fixed while all other slots sort around them; bank sorting stays unchanged.
-- Keeps the four Microbot world-buff scrolls next to each other in either sort mode and direction.
+- Keeps the four WoW world-buff scrolls next to each other in either sort mode and direction.
 - Sorts herbs and enchanting materials into their matching specialty bags while keeping incompatible profession reagents in normal bags.
 - Keeps quiver, ammo-pouch, and soul-bag items in compatible bags.
 - Shows quest and rarity borders, native cooldown sweeps with compact remaining-time labels, stack counts, money, and normal item tooltips.

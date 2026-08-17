@@ -1,7 +1,7 @@
 # Bag-sort speed precedents
 
 Date: 14/08/2026
-Target: World of Warcraft 1.12.1, Interface 11200, Lua 5.0.3, Microbot
+Target: World of Warcraft 1.12.1, Interface 11200, Lua 5.0.3, WoW
 
 ## Scope
 
@@ -13,7 +13,7 @@ This review traced cursor scheduling, private-state updates, event gates, delays
 |---|---|---|---|---|---|
 | SortBags-vanilla | `shirsig/SortBags-vanilla@1b59767ca41749e70d72f2991c27054beebcdfcd`; the installed Interface 11200 `SortBags.lua` matches repository commit `8f7bf57d91a2935600cd5857b29237dcdf9718cf` after line-ending normalisation | Exact Interface 11200 source; installed in the isolated client, but not runtime proof | A throttled `OnUpdate` pass updates a private model and may submit several sort and stack moves in one callback | No `BAG_UPDATE` or `ITEM_LOCK_CHANGED` acknowledgement and no exact final-state gate. Fast, but optimistic. | No licence grant in the pinned tree. Study-only. |
 | Cleanup | `shirsig/Cleanup@349434340ecc2b6ec301d7b302032452be05d086` | Exact Interface 11200 historical state | UI and bag-selection layer over SortBags; it does not add a separate executor | Inherits SortBags scheduling and risks | No licence grant in the exact pin. Study-only. |
-| Clean_Up | `redshadowz/Clean_Up@5609e8cd349baf43a6c0ad6259cc6f134ec9ba51` | Interface 11200 source; no Microbot runtime proof | Builds a private model, runs on `OnUpdate` at 0.25-second intervals, and limits work by passes and attempted submissions | Its README claims timeout protection, but the sorter has no elapsed-time deadline and does not require an exact physical postcondition before later moves | No licence grant in the pinned tree. Study-only. |
+| Clean_Up | `redshadowz/Clean_Up@5609e8cd349baf43a6c0ad6259cc6f134ec9ba51` | Interface 11200 source; no WoW runtime proof | Builds a private model, runs on `OnUpdate` at 0.25-second intervals, and limits work by passes and attempted submissions | Its README claims timeout protection, but the sorter has no elapsed-time deadline and does not require an exact physical postcondition before later moves | No licence grant in the pinned tree. Study-only. |
 | Bag Sort revision 18 | Local archived Interface 11200 source: `Furyswipes_5mmb_Vanilla-main/.../Bag_Sort` | Exact manifest, inactive bundled source only | Attempts the whole swap grid in one callback | No exact acknowledgement, cursor postcondition, or bounded recovery | TOC permits only whole, unaltered redistribution. Study-only. |
 | MrPlow | WowAce changeset `9ac91074021c`, version `a/R.4.7.3` | Canonical Interface 11200 source | Coroutine-style queue. A bag-update gate and a fixed delay must both complete before the next swap | Guards cursor pickup/drop and tries rollback, but has no slot-lock polling, exact source/target postcondition, timeout, or bounded retry | WowAce lists All Rights Reserved. Study-only. |
 | MrPlow Vanilla mirror | `McPewPew/MrPlow@5c94bceb1a75cfc735b69f34bcaeb252f96a06e0` | TOC is labelled 11200, but the payload comes from later source and has weaker provenance | Removes the fixed timer floor and runs attempts from `OnUpdate` | Shows the throughput value of frame scheduling, but still lacks reliable post-drop validation | No permissive grant found. Architectural evidence only. |

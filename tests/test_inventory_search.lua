@@ -198,7 +198,7 @@ created:SetText("Moon")
 assert(frame.searchQuery == "moon" and refreshCalls == 1 and not created.placeholder.shown,
   "typing must normalize the query, refresh item states, and hide the placeholder")
 assert(type(created.HasFocus) == "nil",
-  "search regression must model Microbot's EditBox without HasFocus")
+  "search regression must model WoW's EditBox without HasFocus")
 local oldThis = this
 this = created
 created.focused = true
