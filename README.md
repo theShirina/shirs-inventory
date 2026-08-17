@@ -2,7 +2,14 @@
 
 A standalone bag addon for WoW 1.12 clients.
 
-Current release: **0.8.0**.
+Current release: **0.8.1**.
+
+## What's new in 0.8.1
+
+- Improved junk and Keyring categorization in Category View.
+- Kept junk-marked items in the intended Junk group and handled Keyring items more reliably.
+
+## What's new in 0.8.0
 
 ## What's new in 0.8.0
 
@@ -94,7 +101,7 @@ Current release: **0.8.0**.
 
 ## Download and install
 
-1. Download the ZIP from the [v0.8.0 release page](https://github.com/theShirina/shirs-inventory/releases/tag/v0.8.0).
+1. Download the ZIP from the [v0.8.1 release page](https://github.com/theShirina/shirs-inventory/releases/tag/v0.8.1).
 2. Extract the `ShirsInventory` folder into your client's `Interface/AddOns` folder.
 3. Restart the client.
 
