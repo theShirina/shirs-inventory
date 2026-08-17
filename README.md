@@ -11,7 +11,6 @@ Current release: **0.8.1**.
 
 ## What's new in 0.8.0
 
-## What's new in 0.8.0
 
 - One-item Category View headings now keep seven letters, such as **Other C** or **Very Lo**. Groups with two or more items still keep the full name.
 - The selected-item list uses **Top** and **Bottom** instead of Up/Down. Drag still reorders.
@@ -59,7 +58,7 @@ Current release: **0.8.1**.
 
 - Category View keeps the window at your chosen scale instead of shrinking when the packed shelves are taller than the screen, and gains a vertical scrollbar plus mouse-wheel scrolling for tall layouts.
 - Expanding or collapsing Empty Slots no longer changes the rendered size, only the scroll range.
-- Live testing covered the scrollbar and wheel with the current inventory; the full overflow range could not be exercised with the items on hand. Please report any issues on GitHub or Discord.
+- Live testing covered the scrollbar and wheel with the current inventory; the full overflow range could not be exercised with the items on hand. Please report any issues on GitHub.
 
 ## What it does
 
@@ -101,7 +100,7 @@ Current release: **0.8.1**.
 
 ## Download and install
 
-1. Download the ZIP from the [v0.8.1 release page](https://github.com/theShirina/shirs-inventory/releases/tag/v0.8.1).
+1. Download the ZIP from the [v0.8.1 release page](https://github.com/theShirina/shirs-inventory/tree/v0.8.1).
 2. Extract the `ShirsInventory` folder into your client's `Interface/AddOns` folder.
 3. Restart the client.
 
