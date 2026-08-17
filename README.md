@@ -1,6 +1,6 @@
 # Shir's Inventory
 
-A standalone bag addon made and tested for WoW 1.12 client.
+A standalone bag addon for WoW 1.12 clients.
 
 Current release: **0.8.0**.
 
