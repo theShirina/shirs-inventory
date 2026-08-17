@@ -6,15 +6,29 @@ Current release: **0.8.1**.
 
 ## What's new in 0.8.1
 
-- Improved junk and Keyring categorization in Category View.
-- Kept junk-marked items in the intended Junk group and handled Keyring items more reliably.
+### Fixed
+
+- Gray armor and weapons marked as junk now go to **Junk** instead of staying in their main category.
+- Empty Keyring capacity is no longer counted as **Empty Slots** in Category View.
+
+[Download v0.8.1](https://github.com/theShirina/shirs-inventory/tree/v0.8.1)
 
 ## What's new in 0.8.0
 
+### Added
 
-- One-item Category View headings now keep seven letters, such as **Other C** or **Very Lo**. Groups with two or more items still keep the full name.
-- The selected-item list uses **Top** and **Bottom** instead of Up/Down. Drag still reorders.
-- Category Settings has a **Category gap** slider: 1 empty slot between groups, or 0 to pack them tighter.
+- Category View now separates herbs, cloth, leather, ores, enchanting materials, elementals, engineering parts, and gems even when item subtype data is missing.
+- Added an **Empty Slots** button and a **Category gap** setting for tighter shelf packing.
+- One-item category headings now keep seven letters, while groups with two or more items keep their full names.
+- Added **Top** and **Bottom** controls to the selected-item list; drag-and-drop reordering remains available.
+- Recipe items now show clear blue **Already known** and orange **Skill too low** status marks.
+- Added experimental account-wide recipe tracking. A recipe learned by one character can show as known on another character when the available data supports it.
+- Recipe cooldown numbers are larger and easier to read.
+
+### Fixed
+
+- Category View mouse-wheel scrolling now works across the window, including item slots, headings, the scrollbar, and footer controls.
+- Junk-marked items now appear in the **Junk** category instead of their normal item category.
 
 ## What's new in 0.7.9
 
