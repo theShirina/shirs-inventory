@@ -170,6 +170,26 @@ local function ShirsInventory_EnsureDB()
   if ShirsInventoryDB.showRarityBoxes == nil then
     ShirsInventoryDB.showRarityBoxes = true
   end
+  if ShirsInventoryDB.showRecipeGlow == nil then
+    ShirsInventoryDB.showRecipeGlow = true
+  end
+  local backgroundAlpha = tonumber(ShirsInventoryDB.backgroundAlpha)
+  if not backgroundAlpha then
+    backgroundAlpha = 0.96
+  elseif backgroundAlpha ~= 0.96 then
+    backgroundAlpha = math.floor(backgroundAlpha * 20 + 0.5) / 20
+    backgroundAlpha = math.max(0.20, math.min(1, backgroundAlpha))
+  end
+  ShirsInventoryDB.backgroundAlpha = backgroundAlpha
+  local frameStrata = ShirsInventoryDB.frameStrata
+  if frameStrata ~= "LOW" and frameStrata ~= "MEDIUM" and frameStrata ~= "HIGH" and
+    frameStrata ~= "DIALOG" and frameStrata ~= "TOOLTIP" then
+    frameStrata = "HIGH"
+  end
+  ShirsInventoryDB.frameStrata = frameStrata
+  if type(ShirsInventoryDB.categoryBankOnly) ~= "boolean" then
+    ShirsInventoryDB.categoryBankOnly = false
+  end
   if ShirsInventoryDB.useCoinIcons == nil then
     ShirsInventoryDB.useCoinIcons = true
   end
@@ -1216,6 +1236,57 @@ function ShirsInventory_ToggleShowRarityBoxes()
   local enabled = not ShirsInventory_GetShowRarityBoxes()
   ShirsInventory_SetShowRarityBoxes(enabled)
   return enabled
+end
+
+function ShirsInventory_GetShowRecipeGlow()
+  return ShirsInventory_EnsureDB().showRecipeGlow and true or false
+end
+
+function ShirsInventory_SetShowRecipeGlow(enabled)
+  ShirsInventory_EnsureDB().showRecipeGlow = enabled and true or false
+  return ShirsInventory_GetShowRecipeGlow()
+end
+
+function ShirsInventory_GetBackgroundAlpha()
+  return ShirsInventory_EnsureDB().backgroundAlpha
+end
+
+function ShirsInventory_SetBackgroundAlpha(value)
+  value = tonumber(value)
+  if not value then
+    ShirsInventory_EnsureDB().backgroundAlpha = 0.96
+    return 0.96
+  end
+  value = math.floor(value * 20 + 0.5) / 20
+  value = math.max(0.20, math.min(1, value))
+  ShirsInventory_EnsureDB().backgroundAlpha = value
+  return value
+end
+
+function ShirsInventory_GetFrameStrata()
+  return ShirsInventory_EnsureDB().frameStrata
+end
+
+function ShirsInventory_SetFrameStrata(value)
+  if value ~= "LOW" and value ~= "MEDIUM" and value ~= "HIGH" and value ~= "DIALOG" and value ~= "TOOLTIP" then
+    value = "HIGH"
+  end
+  ShirsInventory_EnsureDB().frameStrata = value
+  return value
+end
+
+function ShirsInventory_GetCategoryBankOnly()
+  return ShirsInventory_EnsureDB().categoryBankOnly and true or false
+end
+
+function ShirsInventory_SetCategoryBankOnly(enabled)
+  ShirsInventory_EnsureDB().categoryBankOnly = enabled and true or false
+  return ShirsInventory_GetCategoryBankOnly()
+end
+
+function ShirsInventory_IsCategoryViewEnabled(isBank)
+  if not ShirsInventory_GetCategoryMode() then return false end
+  return not ShirsInventory_GetCategoryBankOnly() or isBank and true or false
 end
 
 function ShirsInventory_GetUseCoinIcons()

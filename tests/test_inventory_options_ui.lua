@@ -983,26 +983,27 @@ assert(string.find(settings, "Manage selected item list", 1, true) and
   "settings are missing the selected-item manager and its Top/Bottom controls")
 assert(not string.find(settings, ":SetShown", 1, true),
   "selected-item manager uses SetShown, which is not part of the Interface 11200 API floor")
-assert(string.find(settings, 'ShirsInventory_CreatePanel("ShirsInventorySettingsFrame", 440, 610, "DIALOG")', 1, true) and
+assert(string.find(settings, 'ShirsInventory_CreatePanel("ShirsInventorySettingsFrame", 440, 790, "DIALOG")', 1, true) and
   string.find(settings, 'frame.help:SetWidth(392)', 1, true) and
   string.find(settings, 'check.label:SetWidth(362)', 1, true) and
   string.find(settings, 'check.label:SetHeight(28)', 1, true),
   "premium settings frame does not reserve exact safe text widths")
 assert(string.find(settings, 'ShirsInventory_CreateSectionHeading(frame, "BEHAVIOR", -82)', 1, true) and
   string.find(settings, 'ShirsInventory_CreateSectionHeading(frame, "ITEMS & DISPLAY", -228)', 1, true) and
-  string.find(settings, 'ShirsInventory_CreateSectionHeading(frame, "WINDOW LAYOUT", -466)', 1, true),
+  string.find(settings, 'ShirsInventory_CreateSectionHeading(frame, "WINDOW LAYOUT", -500)', 1, true),
   "premium settings section headings are missing or misplaced")
 assert(string.find(settings, 'frame, "Ignore gray + manually marked junk while sorting", "ignoreJunkSorting", -107', 1, true) and
   string.find(settings, 'frame, "Clear search when inventory or bank closes, or you click outside", "autoClearSearch", -194', 1, true) and
   string.find(settings, 'frame, "Show quest and rarity borders on items", "showRarityBoxes", -253', 1, true) and
-  string.find(settings, 'frame, "Hearthstone mode: Automatic (off = selected list)", "automaticHearthstoneItems", -340', 1, true) and
-  string.find(settings, 'frame, "Lock selected item slots while sorting (bags only)", "lockSelectedItemSlots", -369', 1, true),
+  string.find(settings, 'frame, "Glow recipes you already know or cannot learn yet", "showRecipeGlow", -282', 1, true) and
+  string.find(settings, 'frame, "Hearthstone mode: Automatic (off = selected list)", "automaticHearthstoneItems", -369', 1, true) and
+  string.find(settings, 'frame, "Lock selected item slots while sorting (bags only)", "lockSelectedItemSlots", -398', 1, true),
   "premium settings rows do not use the bounded section layout")
-assert(string.find(settings, 'frame.hearthstoneItemsButton:SetPoint("TOPLEFT", frame, "TOPLEFT", 70, -401)', 1, true) and
+assert(string.find(settings, 'frame.hearthstoneItemsButton:SetPoint("TOPLEFT", frame, "TOPLEFT", 70, -430)', 1, true) and
   string.find(settings, 'frame.hearthstoneItemsButton:SetWidth(300)', 1, true) and
-  string.find(settings, 'frame, "Use category view (reloads UI; bag sorting is disabled)", "categoryMode", -430', 1, true) and
-  string.find(settings, 'frame.itemsPerRowSlider:SetPoint("TOPLEFT", frame, "TOPLEFT", 60, -495)', 1, true) and
-  string.find(settings, 'frame.windowScaleSlider:SetPoint("TOPLEFT", frame, "TOPLEFT", 60, -538)', 1, true),
+  string.find(settings, 'frame, "Use category view (reloads UI; bag sorting is disabled)", "categoryMode", -459', 1, true) and
+  string.find(settings, 'frame.itemsPerRowSlider:SetPoint("TOPLEFT", frame, "TOPLEFT", 60, -529)', 1, true) and
+  string.find(settings, 'frame.windowScaleSlider:SetPoint("TOPLEFT", frame, "TOPLEFT", 60, -572)', 1, true),
   "premium settings actions and sliders do not align to the shared grid")
 assert(string.find(settings, 'ShirsInventory_CreatePanel("ShirsInventoryHearthstoneItemsFrame", 440, 470, "DIALOG")', 1, true) and
   string.find(settings, 'row:SetWidth(392)', 1, true) and
@@ -1192,7 +1193,7 @@ local settingsReloads = 0
 function ReloadUI() settingsReloads = settingsReloads + 1 end
 ShirsInventory_CreateSettingsUI()
 local builtSettings = constructedGlobals.ShirsInventorySettingsFrame
-assert(builtSettings and builtSettings.width == 440 and builtSettings.height == 610 and
+assert(builtSettings and builtSettings.width == 440 and builtSettings.height == 790 and
   builtSettings.point.point == "CENTER" and builtSettings.point.y == 20,
   "real settings constructor did not build the premium frame geometry")
 assert(type(ShirsInventory_ShowCategoryManager) == "function" and
@@ -1325,13 +1326,13 @@ assert(builtSettings.autoClearSearch.label.width == 362 and
 assert(builtSettings.lockSelectedItemSlots and
   builtSettings.lockSelectedItemSlots.label.width == 362 and
   builtSettings.lockSelectedItemSlots.label.height == 28 and
-  builtSettings.lockSelectedItemSlots.point.y == -369 and
+  builtSettings.lockSelectedItemSlots.point.y == -398 and
   builtSettings.hearthstoneItemsButton.width == 300 and
-  builtSettings.hearthstoneItemsButton.point.y == -401 and
-  builtSettings.categoryMode and builtSettings.categoryMode.point.y == -430 and
+  builtSettings.hearthstoneItemsButton.point.y == -430 and
+  builtSettings.categoryMode and builtSettings.categoryMode.point.y == -459 and
   builtSettings.itemsPerRowSlider.width == 320 and builtSettings.windowScaleSlider.width == 320 and
-  builtSettings.itemsPerRowSlider.point.x == 60 and builtSettings.itemsPerRowSlider.point.y == -495 and
-  builtSettings.windowScaleSlider.point.x == 60 and builtSettings.windowScaleSlider.point.y == -538 and
+  builtSettings.itemsPerRowSlider.point.x == 60 and builtSettings.itemsPerRowSlider.point.y == -529 and
+  builtSettings.windowScaleSlider.point.x == 60 and builtSettings.windowScaleSlider.point.y == -572 and
   builtSettings.closeButton.width == 96 and builtSettings.closeButton.point.y == 14,
   "real settings constructor produced misaligned action or slider geometry")
 

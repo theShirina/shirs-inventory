@@ -1,11 +1,32 @@
-## Shir's Inventory 0.8.1
+# Change log
 
-- Fixed gray and marked armor or weapons being placed in their main category instead of Junk.
-- Fixed empty Keyring capacity being counted as Empty Slots in Category View.
+## 0.8.2
 
-## Shir's Inventory 0.8.0
+### Added
 
-- Added name-based material grouping for Category View, so herbs, cloth, leather, ores, enchanting materials, elementals, engineering parts, and gems leave the generic Trade Goods group even when item subtype data is missing.
-- Added a Category gap setting and an Empty Slots bar button, while one-item headings now keep seven letters and larger groups keep their full names.
-- Replaced selected-list Up/Down controls with Top/Bottom buttons; drag-and-drop reordering remains available.
-- Fixed Category Settings layout by removing the duplicate Collapse Empty Slots option and separating Import status from Close.
+- Shift-click bag items to search in AUX or the stock Auction House while preserving chat-link and stack-split behaviour.
+- A separate setting to hide the blue and orange blocked-recipe glows without disabling normal rarity or quest borders.
+- Adjustable background opacity and frame layer controls for the inventory and bank, applied immediately.
+- A bank-only Category View mode that keeps carried bags in the standard view with their normal sorting and search behaviour.
+- Automatic inventory opening when the AUX window opens.
+
+## 0.8.1
+
+### Fixed
+
+- Gray armor and weapons marked as junk now go to Junk instead of staying in their main category.
+- Empty Keyring capacity is no longer counted as Empty Slots in Category View.
+
+## 0.8.0
+
+### Added
+
+- Name-based material grouping for Category View, including herbs, cloth, leather, ores, enchanting materials, elementals, engineering parts, and gems when item subtype data is missing.
+- A Category gap setting and an Empty Slots button for tighter shelf packing.
+- Seven-letter one-item headings and full headings for groups with two or more items.
+- Top and Bottom controls for the selected-item list; drag-and-drop reordering remains available.
+
+### Fixed
+
+- Removed the duplicate Collapse Empty Slots option from Category Settings.
+- Separated Import status from the Close control.

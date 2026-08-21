@@ -311,6 +311,12 @@ local categoryLayoutCache
 local categoryBagBarLayoutCache
 local categoryScrollBar
 local categoryScrollBarUpdating
+local bankCategoryScrollOffset = 0
+local bankCategoryScrollMax = 0
+local bankCategoryLayoutCache
+local bankCategoryFrameLayoutCache
+local bankCategoryScrollBar
+local bankCategoryScrollBarUpdating
 
 function ShirsInventory_GetCategoryDefinitions()
   local definitions = {}
@@ -335,7 +341,7 @@ end
 
 function ShirsInventory_GetCategoryEditMode()
   return shirsInventoryCategoryEditMode and
-    ShirsInventory_GetCategoryMode and ShirsInventory_GetCategoryMode() and true or false
+    ShirsInventory_IsCategoryViewEnabled and ShirsInventory_IsCategoryViewEnabled(false) and true or false
 end
 
 function ShirsInventory_ClearCategoryEditDrag()
@@ -355,7 +361,7 @@ function ShirsInventory_SetCategoryEditMode(enabled)
   end
   ShirsInventory_ClearCategoryEditDrag()
   shirsInventoryCategoryEditMode = enabled and
-    ShirsInventory_GetCategoryMode and ShirsInventory_GetCategoryMode() and true or false
+    ShirsInventory_IsCategoryViewEnabled and ShirsInventory_IsCategoryViewEnabled(false) and true or false
   return ShirsInventory_GetCategoryEditMode()
 end
 
@@ -840,7 +846,7 @@ function ShirsInventory_BuildCategoryLayout(groups, columns)
 end
 
 function ShirsInventory_ShouldShowInventoryAction(action, bank)
-  if bank or not (ShirsInventory_GetCategoryMode and ShirsInventory_GetCategoryMode()) then return true end
+  if bank or not (ShirsInventory_IsCategoryViewEnabled and ShirsInventory_IsCategoryViewEnabled(false)) then return true end
   return action == "sort" or action == "mode" or action == "direction" or action == "settings"
 end
 
@@ -1056,7 +1062,8 @@ end
 
 function ShirsInventory_GetItemVisualModel(texture, quality, itemType, enabled, recipeStatus)
   if not texture then return nil end
-  if ShirsInventory_IsRecipeItemType(itemType) then
+  if ShirsInventory_IsRecipeItemType(itemType) and
+    (not ShirsInventory_GetShowRecipeGlow or ShirsInventory_GetShowRecipeGlow()) then
     local visual = ShirsInventory_GetRecipeStatusVisual(recipeStatus)
     if visual then return visual end
   end
@@ -1334,6 +1341,88 @@ function ShirsInventory_Message(text)
   end
 end
 
+-- Shift-click auction search routing. aux owns the Auction House when its
+-- frame is visible; otherwise the stock browse tab handles the search. Chat
+-- insertion and the stack-split fallback keep priority inside the click
+-- handler, so a focused edit box always wins over an auction search.
+function ShirsInventory_GetAuctionSearchTarget()
+  if aux_frame and type(aux_frame.IsShown) == "function" and aux_frame:IsShown() then
+    return "aux"
+  end
+  if AuctionFrame and type(AuctionFrame.IsShown) == "function" and AuctionFrame:IsShown() and
+    AuctionFrameBrowse and type(AuctionFrameBrowse.IsShown) == "function" and AuctionFrameBrowse:IsShown() then
+    return "blizzard"
+  end
+  return nil
+end
+
+local function ShirsInventory_ItemNameFromLink(link)
+  if type(link) ~= "string" then return nil end
+  local open = string.find(link, "[", 1, true)
+  local close = string.find(link, "]", 1, true)
+  if not open or not close or close <= open then return nil end
+  local name = string.sub(link, open + 1, close - 1)
+  if not string.find(name, "%S") then return nil end
+  return name
+end
+
+function ShirsInventory_GetAuxModule()
+  if type(require) ~= "function" then return nil end
+  local ok, moduleInterface = pcall(require, "aux")
+  if not ok or type(moduleInterface) ~= "table" then return nil end
+  return moduleInterface
+end
+
+function ShirsInventory_InstallAuxAutoOpenHook()
+  local frame = aux_frame
+  if not frame or type(frame.GetScript) ~= "function" or type(frame.SetScript) ~= "function" then
+    return false
+  end
+  if frame.shirsInventoryAutoOpenHookInstalled then return true end
+  local previousOnShow = frame:GetScript("OnShow")
+  frame.shirsInventoryAutoOpenHookInstalled = true
+  frame:SetScript("OnShow", function()
+    if previousOnShow then previousOnShow() end
+    if type(OpenBackpack) == "function" then OpenBackpack() end
+  end)
+  return true
+end
+
+function ShirsInventory_RouteShiftClickSearch(bag, slot, link)
+  local target = ShirsInventory_GetAuctionSearchTarget()
+  if target == "aux" then
+    -- aux keeps its tab table private. Do not call UseContainerItem here:
+    -- aux.modified() deliberately bypasses its own hook while Shift is held.
+    -- SetItemRef's exact Vanilla path calls CLICK_LINK with the resolved item
+    -- name, so use that source-backed handler first and avoid aux's cache.
+    local auxModule = ShirsInventory_GetAuxModule()
+    if auxModule and type(auxModule.get_tab) == "function" then
+      local tab = auxModule.get_tab()
+      local itemID = ShirsInventory_GetItemId and ShirsInventory_GetItemId(link) or nil
+      local itemName = ShirsInventory_ItemNameFromLink(link)
+      if tab and type(tab.CLICK_LINK) == "function" and itemName then
+        tab.CLICK_LINK({ item_id = itemID, name = itemName, link = link })
+        return true
+      elseif tab and type(tab.USE_ITEM) == "function" and itemID then
+        tab.USE_ITEM({ item_id = itemID })
+        return true
+      end
+    end
+    return false
+  end
+  if target == "blizzard" then
+    local name = ShirsInventory_ItemNameFromLink(link)
+    if name and type(BrowseName) == "table" and type(BrowseName.SetText) == "function" and
+      type(AuctionFrameBrowse_Search) == "function" then
+      BrowseName:SetText(name)
+      AuctionFrameBrowse_Search()
+      return true
+    end
+    return false
+  end
+  return false
+end
+
 function ShirsInventory_HandleItemClick(button, mouseButton, ignoreModifiers)
   local bag, slot = button.bag, button.slot
   local keyring = ShirsInventory_GetKeyRingContainerID and ShirsInventory_GetKeyRingContainerID() or (KEYRING_CONTAINER or -2)
@@ -1369,7 +1458,7 @@ function ShirsInventory_HandleItemClick(button, mouseButton, ignoreModifiers)
   end
 
   if mouseButton == "RightButton" and not ignoreModifiers and bag >= 0 and bag <= 4 and
-    not (ShirsInventory_GetCategoryMode and ShirsInventory_GetCategoryMode()) and
+    not (ShirsInventory_IsCategoryViewEnabled and ShirsInventory_IsCategoryViewEnabled(false)) and
     IsControlKeyDown and IsControlKeyDown() and not (IsAltKeyDown and IsAltKeyDown()) then
     local itemId = ShirsInventory_GetItemId(GetContainerItemLink(bag, slot))
     local ok, status = ShirsInventory_ToggleHearthstoneItem(itemId)
@@ -1429,6 +1518,9 @@ function ShirsInventory_HandleItemClick(button, mouseButton, ignoreModifiers)
         WIM_EditBoxInFocus:Insert(GetContainerItemLink(bag, slot))
       elseif ChatFrameEditBox and ChatFrameEditBox:IsShown() then
         ChatFrameEditBox:Insert(GetContainerItemLink(bag, slot))
+      elseif ShirsInventory_RouteShiftClickSearch and
+        ShirsInventory_RouteShiftClickSearch(bag, slot, GetContainerItemLink(bag, slot)) then
+        -- The item was sent to aux or the stock Auction House search.
       elseif not locked and count and count > 1 and OpenStackSplitFrame then
         button.SplitStack = function(_, split)
           SplitContainerItem(bag, slot, split)
@@ -1663,6 +1755,7 @@ end
 local inventoryButtons = {}
 local bagBarButtons = {}
 local bankButtons = {}
+local bankCategoryHeaders = {}
 local bankBagButtons = {}
 local categoryRebuildPending
 local bankPurchaseButton
@@ -1954,7 +2047,7 @@ function ShirsInventory_GetInventoryButtonSpecs(bank)
       tooltipHint = "Click to open Settings.",
     },
   }
-  if not bank and ShirsInventory_GetCategoryMode and ShirsInventory_GetCategoryMode() then
+  if not bank and ShirsInventory_IsCategoryViewEnabled and ShirsInventory_IsCategoryViewEnabled(false) then
     local editing = ShirsInventory_GetCategoryEditMode()
     specs.sort = {
       text = "Manage",
@@ -2061,7 +2154,7 @@ function ShirsInventory_RefreshBankButtonStyles()
 end
 
 function ShirsInventory_OnSortButtonClick(bank)
-  if not bank and ShirsInventory_GetCategoryMode and ShirsInventory_GetCategoryMode() then
+  if not bank and ShirsInventory_IsCategoryViewEnabled and ShirsInventory_IsCategoryViewEnabled(false) then
     if ShirsInventory_ToggleCategoryManager then return ShirsInventory_ToggleCategoryManager() end
     return false
   end
@@ -2074,7 +2167,7 @@ function ShirsInventory_OnSortButtonClick(bank)
 end
 
 function ShirsInventory_OnDirectionButtonClick(bank)
-  if not bank and ShirsInventory_GetCategoryMode and ShirsInventory_GetCategoryMode() then
+  if not bank and ShirsInventory_IsCategoryViewEnabled and ShirsInventory_IsCategoryViewEnabled(false) then
     local collapsed = ShirsInventory_GetCollapseEmptySlots and ShirsInventory_GetCollapseEmptySlots()
     if ShirsInventory_SetCollapseEmptySlots then
       ShirsInventory_SetCollapseEmptySlots(not collapsed)
@@ -2088,7 +2181,7 @@ function ShirsInventory_OnDirectionButtonClick(bank)
 end
 
 function ShirsInventory_OnModeButtonClick(bank)
-  if not bank and ShirsInventory_GetCategoryMode and ShirsInventory_GetCategoryMode() then
+  if not bank and ShirsInventory_IsCategoryViewEnabled and ShirsInventory_IsCategoryViewEnabled(false) then
     local wasEditing = ShirsInventory_GetCategoryEditMode()
     local editing = ShirsInventory_ToggleCategoryEditMode()
     if not wasEditing and not editing and ShirsInventory_Message then
@@ -2881,7 +2974,7 @@ end
 function ShirsInventory_RecoverInventoryViewport(frame)
   frame = frame or ShirsInventoryFrame
   if not frame then return false end
-  if ShirsInventory_GetCategoryMode and ShirsInventory_GetCategoryMode() then
+  if ShirsInventory_IsCategoryViewEnabled and ShirsInventory_IsCategoryViewEnabled(false) then
     return ShirsInventory_RecoverCategoryViewport(frame)
   end
   ShirsInventory_ApplyViewportScale(frame, ShirsInventory_GetInventoryBottomMargin())
@@ -2939,6 +3032,21 @@ function ShirsInventory_ApplyLayoutSettings()
     ShirsInventory_UpdateBank then
     ShirsInventory_UpdateBank(ShirsInventoryBankFrame)
     ShirsInventory_RecoverBankViewport(ShirsInventoryBankFrame)
+  end
+  return true
+end
+
+function ShirsInventory_ApplyAppearanceSettings()
+  local strata = ShirsInventory_GetFrameStrata and ShirsInventory_GetFrameStrata() or "HIGH"
+  local alpha = ShirsInventory_GetBackgroundAlpha and ShirsInventory_GetBackgroundAlpha() or 0.96
+  local frames = { ShirsInventoryFrame, ShirsInventoryBankFrame }
+  local index
+  for index = 1, table.getn(frames) do
+    local frame = frames[index]
+    if frame then
+      if frame.SetFrameStrata then frame:SetFrameStrata(strata) end
+      if frame.SetBackdropColor then frame:SetBackdropColor(0.035, 0.045, 0.065, alpha) end
+    end
   end
   return true
 end
@@ -3286,7 +3394,7 @@ function ShirsInventory_GetCategoryScrollMax()
 end
 
 function ShirsInventory_GetCategoryScrollable()
-  return categoryScrollMax > 0 and ShirsInventory_GetCategoryMode() and true or false
+  return categoryScrollMax > 0 and ShirsInventory_IsCategoryViewEnabled(false) and true or false
 end
 
 -- Shared category wheel handler. Attached to the frame, scrollbar, item
@@ -3294,7 +3402,7 @@ end
 -- the parent frame in every client. The parent guard keeps bank buttons
 -- (parented to the bank frame) from scrolling the carried category view.
 function ShirsInventory_CategoryWheelHandler()
-  if not (ShirsInventory_GetCategoryMode and ShirsInventory_GetCategoryMode()) then return end
+  if not (ShirsInventory_IsCategoryViewEnabled and ShirsInventory_IsCategoryViewEnabled(false)) then return end
   if categoryScrollMax <= 0 then return end
   local owner = this and this.GetParent and this:GetParent() or nil
   if this ~= ShirsInventoryFrame and owner and owner ~= ShirsInventoryFrame then return end
@@ -3316,7 +3424,7 @@ end
 function ShirsInventory_UpdateCategoryScrollbar()
   local frame = ShirsInventoryFrame
   if not frame then return end
-  if categoryScrollMax > 0 and ShirsInventory_GetCategoryMode() then
+  if categoryScrollMax > 0 and ShirsInventory_IsCategoryViewEnabled(false) then
     if not categoryScrollBar then
       if type(CreateFrame) ~= "function" then return end
       categoryScrollBar = CreateFrame("Slider", nil, frame)
@@ -3374,7 +3482,7 @@ end
 
 function ShirsInventory_Update()
   if not ShirsInventoryFrame or not ShirsInventoryFrame:IsShown() then return end
-  if ShirsInventory_GetCategoryMode and ShirsInventory_GetCategoryMode() then
+  if ShirsInventory_IsCategoryViewEnabled and ShirsInventory_IsCategoryViewEnabled(false) then
     if ShirsInventory_ShouldDeferCategoryRebuild() then
       categoryRebuildPending = true
     else
@@ -3725,12 +3833,249 @@ function ShirsInventory_HandleBankEvent(eventName, frame)
   return false
 end
 
+function ShirsInventory_GetBankRenderMode()
+  if ShirsInventory_IsCategoryViewEnabled and ShirsInventory_IsCategoryViewEnabled(true) then
+    return "category"
+  end
+  return "standard"
+end
+
+local function ShirsInventory_HideBankCategoryHeaders()
+  local index
+  for index = 1, table.getn(bankCategoryHeaders) do bankCategoryHeaders[index]:Hide() end
+end
+
+function ShirsInventory_GetBankCategoryScrollMax()
+  return bankCategoryScrollMax or 0
+end
+
+function ShirsInventory_GetBankCategoryScrollOffset()
+  return bankCategoryScrollOffset or 0
+end
+
+function ShirsInventory_BankCategoryWheelHandler()
+  if ShirsInventory_GetBankRenderMode() ~= "category" or bankCategoryScrollMax <= 0 then return end
+  local delta = tonumber(arg1) or 0
+  if delta == 0 then return end
+  local value = bankCategoryScrollOffset - delta * 40
+  if value < 0 then value = 0 end
+  if value > bankCategoryScrollMax then value = bankCategoryScrollMax end
+  if value == bankCategoryScrollOffset then return end
+  bankCategoryScrollOffset = value
+  ShirsInventory_ApplyBankCategoryScroll()
+  if bankCategoryScrollBar and bankCategoryScrollBar.SetValue then
+    bankCategoryScrollBarUpdating = true
+    bankCategoryScrollBar:SetValue(value)
+    bankCategoryScrollBarUpdating = false
+  end
+end
+
+local function ShirsInventory_EnableBankCategoryWheel(frame)
+  if not frame then return end
+  if frame.EnableMouseWheel then frame:EnableMouseWheel(true) end
+  if frame.SetScript then frame:SetScript("OnMouseWheel", ShirsInventory_BankCategoryWheelHandler) end
+end
+
+function ShirsInventory_ApplyBankCategoryScroll()
+  local layout = bankCategoryLayoutCache
+  local bankLayout = bankCategoryFrameLayoutCache
+  local frame = ShirsInventoryBankFrame
+  if not layout or not bankLayout or not frame then return end
+  local frameHeight = frame.GetHeight and frame:GetHeight() or 0
+  local offset = bankCategoryScrollOffset or 0
+  local groupIndex
+  for groupIndex = 1, table.getn(layout.groups) do
+    local group = layout.groups[groupIndex]
+    local header = bankCategoryHeaders[groupIndex]
+    if header then
+      local displayY = ShirsInventory_GetCategoryScrollY(bankLayout.gridTopOffset - group.labelY, offset)
+      header:ClearAllPoints()
+      header:SetPoint("TOPLEFT", frame, "TOPLEFT", 14 + group.columnX * bankLayout.itemStep, displayY)
+      if ShirsInventory_IsCategoryScrollElementVisible(
+        displayY, 18, frameHeight, bankLayout.gridTopOffset
+      ) then header:Show() else header:Hide() end
+    end
+    local itemIndex
+    for itemIndex = 1, table.getn(group.items) do
+      local item = group.items[itemIndex]
+      local button = item.shirsBankScrollButton
+      if button then
+        local column = math.mod(itemIndex - 1, group.columns)
+        local row = math.floor((itemIndex - 1) / group.columns)
+        local displayY = ShirsInventory_GetCategoryScrollY(
+          bankLayout.gridTopOffset - group.itemY - row * bankLayout.itemStep, offset
+        )
+        button:ClearAllPoints()
+        button:SetPoint(
+          "TOPLEFT", frame, "TOPLEFT",
+          14 + (group.columnX + column) * bankLayout.itemStep, displayY
+        )
+        if ShirsInventory_IsCategoryScrollElementVisible(
+          displayY, bankLayout.itemStep, frameHeight, bankLayout.gridTopOffset
+        ) then button:Show() else button:Hide() end
+      end
+    end
+  end
+end
+
+function ShirsInventory_UpdateBankCategoryScrollbar()
+  local frame = ShirsInventoryBankFrame
+  if not frame then return end
+  if bankCategoryScrollMax > 0 and ShirsInventory_GetBankRenderMode() == "category" then
+    if not bankCategoryScrollBar then
+      bankCategoryScrollBar = CreateFrame("Slider", nil, frame)
+      bankCategoryScrollBar:SetOrientation("VERTICAL")
+      bankCategoryScrollBar:SetValueStep(40)
+      bankCategoryScrollBar:SetWidth(CATEGORY_SCROLLBAR_WIDTH)
+      bankCategoryScrollBar:SetThumbTexture("Interface\\Buttons\\UI-ScrollBar-Knob")
+      bankCategoryScrollBar:SetPoint("TOPLEFT", frame, "TOPRIGHT", -CATEGORY_SCROLLBAR_WIDTH - 4, -64)
+      bankCategoryScrollBar:SetPoint("BOTTOMLEFT", frame, "BOTTOMRIGHT", -CATEGORY_SCROLLBAR_WIDTH - 4, 30)
+      bankCategoryScrollBar:SetScript("OnValueChanged", function()
+        if bankCategoryScrollBarUpdating then return end
+        local value = tonumber(this:GetValue()) or 0
+        if value < 0 then value = 0 end
+        if value > bankCategoryScrollMax then value = bankCategoryScrollMax end
+        bankCategoryScrollOffset = value
+        ShirsInventory_ApplyBankCategoryScroll()
+      end)
+      ShirsInventory_EnableBankCategoryWheel(bankCategoryScrollBar)
+    end
+    bankCategoryScrollBarUpdating = true
+    bankCategoryScrollBar:SetMinMaxValues(0, bankCategoryScrollMax)
+    bankCategoryScrollBar:SetValue(bankCategoryScrollOffset)
+    bankCategoryScrollBarUpdating = false
+    bankCategoryScrollBar:Show()
+  elseif bankCategoryScrollBar then
+    bankCategoryScrollBar:Hide()
+  end
+end
+
+local function ShirsInventory_GetBankCategoryHeader(index, frame)
+  local header = bankCategoryHeaders[index]
+  if header then return header end
+  header = CreateFrame("Button", nil, frame)
+  header:SetHeight(18)
+  header.text = header:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+  header.text:SetAllPoints(header)
+  header.text:SetTextColor(1, 0.78, 0.18)
+  header.text:SetJustifyH("LEFT")
+  header:SetScript("OnEnter", function()
+    if GameTooltip and GameTooltip.SetOwner and this.shirsFullCategoryText then
+      GameTooltip:SetOwner(this, "ANCHOR_TOPLEFT")
+      GameTooltip:SetText(this.shirsFullCategoryText, 1, 0.82, 0)
+      GameTooltip:Show()
+    end
+  end)
+  header:SetScript("OnLeave", function()
+    if GameTooltip then GameTooltip:Hide() end
+  end)
+  ShirsInventory_EnableBankCategoryWheel(header)
+  bankCategoryHeaders[index] = header
+  return header
+end
+
+function ShirsInventory_RebuildBankCategoryGrid(frame, slotCounts, slots)
+  frame = frame or ShirsInventoryBankFrame
+  if not frame then return false end
+  local bankLayout = ShirsInventory_GetBankFrameLayout()
+  slotCounts = slotCounts or ShirsInventory_GetBankSlotCounts()
+  slots = slots or ShirsInventory_BuildBankSlots(slotCounts)
+  local items = ShirsInventory_BuildCategoryInventoryItems(slots)
+  local groups = ShirsInventory_BuildCategoryGroups(items)
+  local layout = ShirsInventory_BuildCategoryLayout(groups, bankLayout.maximumColumns)
+  local freeStates = ShirsInventory_BuildCategoryFreeStates(items)
+  local buttonIndex = 0
+  local groupIndex
+
+  local contentHeight = layout.height + bankLayout.gridTopOffset * -1 + bankLayout.footerHeight
+  local viewportWidth, viewportHeight = ShirsInventory_GetInventoryViewportSize()
+  local requestedScale = ShirsInventory_GetWindowScale and ShirsInventory_GetWindowScale() or 1
+  local scrollModel = ShirsInventory_GetCategoryScrollModel(
+    contentHeight, requestedScale, viewportHeight or 0, 8
+  )
+  bankCategoryScrollMax = scrollModel.maxScroll
+  if scrollModel.scrollable then
+    if bankCategoryScrollOffset > bankCategoryScrollMax then bankCategoryScrollOffset = bankCategoryScrollMax end
+    if bankCategoryScrollOffset < 0 then bankCategoryScrollOffset = 0 end
+  else
+    bankCategoryScrollOffset = 0
+  end
+  bankCategoryLayoutCache = layout
+  bankCategoryFrameLayoutCache = bankLayout
+  frame:SetScale(requestedScale)
+  frame:SetWidth(layout.width + (scrollModel.scrollable and CATEGORY_SCROLLBAR_WIDTH or 0))
+  frame:SetHeight(scrollModel.frameHeight)
+  ShirsInventory_RecoverBankViewport(frame)
+  ShirsInventory_UpdateBankBagBar(frame, slotCounts)
+  ShirsInventory_EnableBankCategoryWheel(frame)
+
+  for groupIndex = 1, table.getn(layout.groups) do
+    local group = layout.groups[groupIndex]
+    local header = ShirsInventory_GetBankCategoryHeader(groupIndex, frame)
+    header:SetWidth(group.columns * bankLayout.itemStep)
+    header.shirsFullCategoryText = ShirsInventory_GetCategoryHeaderTooltipText(group)
+    header.text:SetText(ShirsInventory_GetCategoryHeaderDisplayText(group))
+    header:ClearAllPoints()
+    header:SetPoint(
+      "TOPLEFT", frame, "TOPLEFT",
+      14 + group.columnX * bankLayout.itemStep,
+      bankLayout.gridTopOffset - group.labelY
+    )
+    header:Show()
+    local itemIndex
+    for itemIndex = 1, table.getn(group.items) do
+      local item = group.items[itemIndex]
+      buttonIndex = buttonIndex + 1
+      local button = bankButtons[buttonIndex] or ShirsInventory_CreateItemButton(
+        buttonIndex, frame, "ShirsInventoryBankItem", bankButtons
+      )
+      button.shirsInventorySearchEnabled = false
+      button.shirsInventorySearchFrame = frame
+      item.shirsBankScrollButton = button
+      button.bag = item.bag
+      button.slot = item.slot
+      button:SetID(item.slot)
+      button:ClearAllPoints()
+      local column = math.mod(itemIndex - 1, group.columns)
+      local row = math.floor((itemIndex - 1) / group.columns)
+      button:SetPoint(
+        "TOPLEFT", frame, "TOPLEFT",
+        14 + (group.columnX + column) * bankLayout.itemStep,
+        bankLayout.gridTopOffset - group.itemY - row * bankLayout.itemStep
+      )
+      button:Show()
+      ShirsInventory_EnableBankCategoryWheel(button)
+      ShirsInventory_UpdateItemButton(button)
+      if item.collapsedEmptyCount then SetItemButtonCount(button, item.collapsedEmptyCount) end
+    end
+  end
+  local index
+  for index = table.getn(layout.groups) + 1, table.getn(bankCategoryHeaders) do
+    bankCategoryHeaders[index]:Hide()
+  end
+  for index = buttonIndex + 1, table.getn(bankButtons) do bankButtons[index]:Hide() end
+  ShirsInventory_ApplyBankCategoryScroll()
+  ShirsInventory_UpdateBankCategoryScrollbar()
+  frame.freeText:SetText(ShirsInventory_CountFreeInventorySlots(freeStates) .. " free")
+  ShirsInventory_RefreshBankButtonStyles()
+  return true
+end
+
 function ShirsInventory_UpdateBank(frame)
   frame = frame or ShirsInventoryBankFrame
   if not frame or not frame:IsShown() then return false end
   local bankLayout = ShirsInventory_GetBankFrameLayout()
   local slotCounts = ShirsInventory_GetBankSlotCounts()
   local slots = ShirsInventory_BuildBankSlots(slotCounts)
+  if ShirsInventory_GetBankRenderMode() == "category" then
+    return ShirsInventory_RebuildBankCategoryGrid(frame, slotCounts, slots)
+  end
+  ShirsInventory_HideBankCategoryHeaders()
+  bankCategoryScrollOffset = 0
+  bankCategoryScrollMax = 0
+  bankCategoryLayoutCache = nil
+  bankCategoryFrameLayoutCache = nil
+  ShirsInventory_UpdateBankCategoryScrollbar()
   local grid = ShirsInventory_GetGridLayout(table.getn(slots), bankLayout.maximumColumns)
   local free = 0
   frame:SetWidth(grid.width)
@@ -3773,7 +4118,7 @@ function ShirsInventory_CreateBankFrame()
   local frame = CreateFrame("Frame", "ShirsInventoryBankFrame", UIParent)
   ShirsInventoryBankFrame = frame
   frame:SetScale(ShirsInventory_GetWindowScale())
-  frame:SetFrameStrata("HIGH")
+  frame:SetFrameStrata(ShirsInventory_GetFrameStrata and ShirsInventory_GetFrameStrata() or "HIGH")
   frame:SetToplevel(true)
   frame:SetMovable(true)
   frame:SetClampedToScreen(true)
@@ -3788,7 +4133,7 @@ function ShirsInventory_CreateBankFrame()
     edgeSize = 16,
     insets = { left = 4, right = 4, top = 4, bottom = 4 },
   })
-  frame:SetBackdropColor(0.035, 0.045, 0.065, 0.96)
+  frame:SetBackdropColor(0.035, 0.045, 0.065, ShirsInventory_GetBackgroundAlpha and ShirsInventory_GetBackgroundAlpha() or 0.96)
   frame:SetBackdropBorderColor(0.3, 0.55, 0.8, 1)
 
   frame.title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
@@ -3853,7 +4198,7 @@ local function ShirsInventory_CreateMainFrame()
   local frame = CreateFrame("Frame", "ShirsInventoryFrame", UIParent)
   ShirsInventoryFrame = frame
   frame:SetScale(ShirsInventory_GetWindowScale())
-  frame:SetFrameStrata("HIGH")
+  frame:SetFrameStrata(ShirsInventory_GetFrameStrata and ShirsInventory_GetFrameStrata() or "HIGH")
   frame:SetToplevel(true)
   ShirsInventory_ConfigureInventoryFrameMovement(frame)
   frame:EnableMouse(true)
@@ -3867,7 +4212,7 @@ local function ShirsInventory_CreateMainFrame()
     edgeSize = 16,
     insets = { left = 4, right = 4, top = 4, bottom = 4 },
   })
-  frame:SetBackdropColor(0.035, 0.045, 0.065, 0.96)
+  frame:SetBackdropColor(0.035, 0.045, 0.065, ShirsInventory_GetBackgroundAlpha and ShirsInventory_GetBackgroundAlpha() or 0.96)
   frame:SetBackdropBorderColor(0.3, 0.55, 0.8, 1)
 
   frame.title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
@@ -4062,12 +4407,14 @@ end
 function ShirsInventory_HandleLoaderEvent(eventName, addonName, loader)
   if eventName == "ADDON_LOADED" then
     if addonName == "ShirsInventory" then ShirsInventory_InitializeUI() end
+    ShirsInventory_InstallAuxAutoOpenHook()
     if ShirsInventory_IsBagAddonProviderName and ShirsInventory_IsBagAddonProviderName(addonName) then
       ShirsInventory_ScanLoadedBagAddons()
       ShirsInventory_ApplyFeatureSelection()
     end
   elseif eventName == "PLAYER_LOGIN" then
     ShirsInventory_InitializeUI()
+    ShirsInventory_InstallAuxAutoOpenHook()
     ShirsInventory_ScanLoadedBagAddons()
     ShirsInventory_ApplyFeatureSelection()
     if loader and loader.UnregisterEvent then loader:UnregisterEvent("PLAYER_LOGIN") end

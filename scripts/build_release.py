@@ -61,7 +61,7 @@ def main() -> None:
 
     readme = f"""Shir's Inventory {version}
 
-Made and tested for Microbot's WoW 1.12.1 client.
+Made and tested for a WoW 1.12 client.
 
 INSTALL
 1. Extract the ShirsInventory folder into Interface/AddOns.

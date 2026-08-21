@@ -745,6 +745,7 @@ local function ShirsInventory_RefreshSettings()
   settingsFrame.questItemsOppositeEdge:SetChecked(ShirsInventory_GetQuestItemsOppositeEdge() and 1 or nil)
   settingsFrame.autoSellJunk:SetChecked(ShirsInventory_GetAutoSellJunk() and 1 or nil)
   settingsFrame.showRarityBoxes:SetChecked(ShirsInventory_GetShowRarityBoxes() and 1 or nil)
+  settingsFrame.showRecipeGlow:SetChecked(ShirsInventory_GetShowRecipeGlow() and 1 or nil)
   settingsFrame.useCoinIcons:SetChecked(ShirsInventory_GetUseCoinIcons() and 1 or nil)
   settingsFrame.hideItemOwnershipInCombat:SetChecked(
     ShirsInventory_GetHideItemOwnershipInCombat() and 1 or nil
@@ -765,6 +766,18 @@ local function ShirsInventory_RefreshSettings()
   settingsFrame.windowScaleSliderText:SetText(
     "Window scale: " .. math.floor(ShirsInventory_GetWindowScale() * 100 + 0.5) .. "%"
   )
+  if settingsFrame.backgroundAlphaSlider then
+    settingsFrame.backgroundAlphaSlider:SetValue(ShirsInventory_GetBackgroundAlpha())
+    settingsFrame.backgroundAlphaSliderText:SetText(
+      "Background opacity: " .. math.floor(ShirsInventory_GetBackgroundAlpha() * 100 + 0.5) .. "%"
+    )
+  end
+  if settingsFrame.frameStrataButton then
+    settingsFrame.frameStrataButton:SetText("Frame layer: " .. ShirsInventory_GetFrameStrata())
+  end
+  if settingsFrame.categoryBankOnly then
+    settingsFrame.categoryBankOnly:SetChecked(ShirsInventory_GetCategoryBankOnly() and 1 or nil)
+  end
   refreshingSettings = false
 end
 
@@ -780,7 +793,7 @@ function ShirsInventory_CreateLayoutSliders(frame)
     "Slider", "ShirsInventoryItemsPerRowSlider", frame, "OptionsSliderTemplate"
   )
   frame.itemsPerRowSlider:SetWidth(320)
-  frame.itemsPerRowSlider:SetPoint("TOPLEFT", frame, "TOPLEFT", 60, -495)
+  frame.itemsPerRowSlider:SetPoint("TOPLEFT", frame, "TOPLEFT", 60, -529)
   frame.itemsPerRowSlider:SetMinMaxValues(10, 20)
   frame.itemsPerRowSlider:SetValueStep(1)
   frame.itemsPerRowSliderText = getglobal("ShirsInventoryItemsPerRowSliderText")
@@ -796,7 +809,7 @@ function ShirsInventory_CreateLayoutSliders(frame)
     "Slider", "ShirsInventoryWindowScaleSlider", frame, "OptionsSliderTemplate"
   )
   frame.windowScaleSlider:SetWidth(320)
-  frame.windowScaleSlider:SetPoint("TOPLEFT", frame, "TOPLEFT", 60, -538)
+  frame.windowScaleSlider:SetPoint("TOPLEFT", frame, "TOPLEFT", 60, -572)
   frame.windowScaleSlider:SetMinMaxValues(0.65, 1)
   frame.windowScaleSlider:SetValueStep(0.05)
   frame.windowScaleSliderText = getglobal("ShirsInventoryWindowScaleSliderText")
@@ -812,8 +825,81 @@ function ShirsInventory_CreateLayoutSliders(frame)
   return true
 end
 
+local SHIRS_INVENTORY_FRAME_STRATA_ORDER = { "LOW", "MEDIUM", "HIGH", "DIALOG", "TOOLTIP" }
+
+function ShirsInventory_CreateAppearanceControls(frame)
+  if not frame or not CreateFrame then return false end
+  frame.appearanceHeading, frame.appearanceRule = ShirsInventory_CreateSectionHeading(
+    frame, "WINDOW APPEARANCE", -614
+  )
+
+  frame.backgroundAlphaSlider = CreateFrame(
+    "Slider", "ShirsInventoryBackgroundAlphaSlider", frame, "OptionsSliderTemplate"
+  )
+  frame.backgroundAlphaSlider:SetWidth(320)
+  frame.backgroundAlphaSlider:SetPoint("TOPLEFT", frame, "TOPLEFT", 60, -643)
+  frame.backgroundAlphaSlider:SetMinMaxValues(0.2, 1)
+  frame.backgroundAlphaSlider:SetValueStep(0.05)
+  frame.backgroundAlphaSliderText = getglobal("ShirsInventoryBackgroundAlphaSliderText")
+  getglobal("ShirsInventoryBackgroundAlphaSliderLow"):SetText("20%")
+  getglobal("ShirsInventoryBackgroundAlphaSliderHigh"):SetText("100%")
+  frame.backgroundAlphaSlider:SetScript("OnValueChanged", function()
+    if refreshingSettings then return end
+    ShirsInventory_SetBackgroundAlpha(this:GetValue())
+    if type(ShirsInventory_ApplyAppearanceSettings) == "function" then
+      ShirsInventory_ApplyAppearanceSettings()
+    end
+    frame.backgroundAlphaSliderText:SetText(
+      "Background opacity: " .. math.floor(ShirsInventory_GetBackgroundAlpha() * 100 + 0.5) .. "%"
+    )
+  end)
+
+  frame.frameStrataButton = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+  frame.frameStrataButton:SetWidth(300)
+  frame.frameStrataButton:SetHeight(24)
+  frame.frameStrataButton:SetPoint("TOPLEFT", frame, "TOPLEFT", 70, -686)
+  frame.frameStrataButton:SetText("Frame layer: " .. ShirsInventory_GetFrameStrata())
+  frame.frameStrataButton:SetScript("OnClick", function()
+    local current = ShirsInventory_GetFrameStrata()
+    local order = SHIRS_INVENTORY_FRAME_STRATA_ORDER
+    local index = 1
+    while index <= table.getn(order) and order[index] ~= current do index = index + 1 end
+    if index > table.getn(order) then index = 1 end
+    local nextValue = order[math.mod(index, table.getn(order)) + 1]
+    ShirsInventory_SetFrameStrata(nextValue)
+    if type(ShirsInventory_ApplyAppearanceSettings) == "function" then
+      ShirsInventory_ApplyAppearanceSettings()
+    end
+    frame.frameStrataButton:SetText("Frame layer: " .. ShirsInventory_GetFrameStrata())
+    ShirsInventory_RefreshSettings()
+  end)
+
+  frame.categoryBankOnly = ShirsInventory_CreateFeatureCheck(
+    frame, "Use category view for the bank only", "categoryBankOnly", -715
+  )
+  frame.categoryBankOnly:SetScript("OnClick", function()
+    ShirsInventory_SetCategoryBankOnly(this:GetChecked() and true or false)
+    if ShirsInventoryFrame and ShirsInventoryFrame.IsShown and ShirsInventoryFrame:IsShown() and
+      type(ShirsInventory_Update) == "function" then
+      ShirsInventory_Update()
+    end
+    if ShirsInventoryBankFrame and ShirsInventoryBankFrame.IsShown and ShirsInventoryBankFrame:IsShown() and
+      type(ShirsInventory_UpdateBank) == "function" then
+      ShirsInventory_UpdateBank(ShirsInventoryBankFrame)
+    end
+    if type(ShirsInventory_RefreshBankButtonStyles) == "function" then
+      ShirsInventory_RefreshBankButtonStyles()
+    end
+    if type(ShirsInventory_UpdateControlLabels) == "function" then
+      ShirsInventory_UpdateControlLabels()
+    end
+    ShirsInventory_RefreshSettings()
+  end)
+  return true
+end
+
 local function ShirsInventory_CreateSettingsFrame()
-  local frame = ShirsInventory_CreatePanel("ShirsInventorySettingsFrame", 440, 610, "DIALOG")
+  local frame = ShirsInventory_CreatePanel("ShirsInventorySettingsFrame", 440, 790, "DIALOG")
   settingsFrame = frame
   frame:SetPoint("CENTER", UIParent, "CENTER", 0, 20)
 
@@ -831,7 +917,7 @@ local function ShirsInventory_CreateSettingsFrame()
 
   frame.behaviorHeading, frame.behaviorRule = ShirsInventory_CreateSectionHeading(frame, "BEHAVIOR", -82)
   frame.itemsHeading, frame.itemsRule = ShirsInventory_CreateSectionHeading(frame, "ITEMS & DISPLAY", -228)
-  frame.layoutHeading, frame.layoutRule = ShirsInventory_CreateSectionHeading(frame, "WINDOW LAYOUT", -466)
+  frame.layoutHeading, frame.layoutRule = ShirsInventory_CreateSectionHeading(frame, "WINDOW LAYOUT", -500)
 
   frame.ignoreJunkSorting = ShirsInventory_CreateFeatureCheck(
     frame, "Ignore gray + manually marked junk while sorting", "ignoreJunkSorting", -107
@@ -848,25 +934,28 @@ local function ShirsInventory_CreateSettingsFrame()
   frame.showRarityBoxes = ShirsInventory_CreateFeatureCheck(
     frame, "Show quest and rarity borders on items", "showRarityBoxes", -253
   )
+  frame.showRecipeGlow = ShirsInventory_CreateFeatureCheck(
+    frame, "Glow recipes you already know or cannot learn yet", "showRecipeGlow", -282
+  )
   frame.useCoinIcons = ShirsInventory_CreateFeatureCheck(
-    frame, "Use coin icons for currency (off = g/s/c text)", "useCoinIcons", -282
+    frame, "Use coin icons for currency (off = g/s/c text)", "useCoinIcons", -311
   )
   frame.hideItemOwnershipInCombat = ShirsInventory_CreateFeatureCheck(
-    frame, "Hide item ownership details while in combat", "hideItemOwnershipInCombat", -311
+    frame, "Hide item ownership details while in combat", "hideItemOwnershipInCombat", -340
   )
   frame.automaticHearthstoneItems = ShirsInventory_CreateFeatureCheck(
-    frame, "Hearthstone mode: Automatic (off = selected list)", "automaticHearthstoneItems", -340
+    frame, "Hearthstone mode: Automatic (off = selected list)", "automaticHearthstoneItems", -369
   )
   frame.lockSelectedItemSlots = ShirsInventory_CreateFeatureCheck(
-    frame, "Lock selected item slots while sorting (bags only)", "lockSelectedItemSlots", -369
+    frame, "Lock selected item slots while sorting (bags only)", "lockSelectedItemSlots", -398
   )
   frame.hearthstoneItemsButton = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
   frame.hearthstoneItemsButton:SetWidth(300)
   frame.hearthstoneItemsButton:SetHeight(24)
-  frame.hearthstoneItemsButton:SetPoint("TOPLEFT", frame, "TOPLEFT", 70, -401)
+  frame.hearthstoneItemsButton:SetPoint("TOPLEFT", frame, "TOPLEFT", 70, -430)
   frame.hearthstoneItemsButton:SetText("Manage selected item list (0)")
   frame.categoryMode = ShirsInventory_CreateFeatureCheck(
-    frame, "Use category view (reloads UI; bag sorting is disabled)", "categoryMode", -430
+    frame, "Use category view (reloads UI; bag sorting is disabled)", "categoryMode", -459
   )
   frame.ignoreJunkSorting:SetScript("OnClick", function()
     ShirsInventory_SetIgnoreJunkSorting(this:GetChecked() and true or false)
@@ -887,6 +976,11 @@ local function ShirsInventory_CreateSettingsFrame()
     if type(ShirsInventory_RefreshRarityBoxes) == "function" then
       ShirsInventory_RefreshRarityBoxes()
     end
+    ShirsInventory_RefreshSettings()
+  end)
+  frame.showRecipeGlow:SetScript("OnClick", function()
+    ShirsInventory_SetShowRecipeGlow(this:GetChecked() and true or false)
+    if type(ShirsInventory_RefreshRarityBoxes) == "function" then ShirsInventory_RefreshRarityBoxes() end
     ShirsInventory_RefreshSettings()
   end)
   frame.useCoinIcons:SetScript("OnClick", function()
@@ -921,6 +1015,7 @@ local function ShirsInventory_CreateSettingsFrame()
   end)
 
   ShirsInventory_CreateLayoutSliders(frame)
+  ShirsInventory_CreateAppearanceControls(frame)
 
   frame.closeButton = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
   frame.closeButton:SetWidth(96)

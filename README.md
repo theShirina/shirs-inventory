@@ -1,8 +1,22 @@
 # Shir's Inventory
 
-A standalone bag addon made and tested for Microbot's WoW 1.12.1 client.
+A standalone bag addon for WoW 1.12 clients.
 
-Current release: **0.8.1**.
+Current release: **0.8.2**.
+
+## What's new in 0.8.2
+
+### Added
+
+- Shift-click bag items to search in AUX or the stock Auction House. Focused chat boxes still receive item links, and ordinary stack splitting remains available outside the Auction House.
+- AUX now opens Shir's Inventory when its Auction House window opens.
+- A separate option hides the blue **Already known** and orange **Skill too low** recipe glows without hiding ordinary rarity or quest borders.
+- Inventory and bank windows have live background-opacity and frame-layer controls.
+- Category View can be limited to the bank while carried bags keep their standard view, sorting and search behaviour.
+
+Live testing covered AUX and stock Auction House search, AUX inventory opening, the new appearance controls, and bank-only Category View on a WoW 1.12 client. Other clients have not been tested; please report issues on GitHub.
+
+[Download v0.8.2](https://github.com/theShirina/shirs-inventory/releases/tag/v0.8.2)
 
 ## What's new in 0.8.1
 
@@ -28,7 +42,7 @@ Current release: **0.8.1**.
 ## What's new in 0.7.7
 
 - Item cooldown numbers use `GameFontNormalLarge`, one more stock font step than 0.7.6.
-- Recipes marked **Already known** on any character are remembered on the account. Another character with the skill sees the same blue known mark; a character below the skill still gets the orange **skill too low** mark. Live testing still needs a `/reload` on the Keybind Display Test client after learning a recipe on one character and opening bags on another.
+- Recipes marked **Already known** on any character are remembered on the account. Another character with the skill sees the same blue known mark; a character below the skill still gets the orange **skill too low** mark. Cross-character refresh may still need a `/reload` after learning a recipe on one character and opening bags on another.
 
 ## What's new in 0.7.6
 
@@ -41,7 +55,7 @@ Current release: **0.8.1**.
 ## What's new in 0.7.4
 
 - Recipes you cannot learn now stand out in the bags: **Already known** uses a teal wash and teal edges; **skill too low** uses an amber wash and amber edges.
-- Learnable recipes keep their normal rarity or quest border. Live testing still needs a `/reload` on the Keybind Display Test client with one known recipe and one too-high skill recipe in bags.
+- Learnable recipes keep their normal rarity or quest border.
 
 ## What's new in 0.7.3
 
@@ -74,32 +88,34 @@ Current release: **0.8.1**.
 - Gives the bank the same Sort, grouping, direction, and Settings controls as the inventory.
 - Sorts bags and the bank by item type or rarity.
 - Keeps standard enchanting dust, essences, and shards together when sorting by item type.
-- Keeps Token of Mastery and the four Microbot raid tokens together when sorting by item type.
-- Inserts Shift-clicked item links into the focused WIM whisper.
+- Keeps Token of Mastery and the four WoW raid tokens together when sorting by item type.
+- Shift-clicks item links into focused chat boxes, or searches AUX and the stock Auction House when no chat box is focused.
 - Sorts from the top or bottom and merges partial stacks.
 - Can submit pairwise-disjoint cursor moves in a repeating `4, 4, 4, 3` safety cycle. Each later move needs fresh identity, count, and lock checks on its own untouched endpoints; dependent moves wait for the prior burst's combined exact bag signature with a 0.01-second minimum check interval.
 - Keeps quest-bordered items at the opposite end of the occupied sorted block by default, with conjured items directly outside them.
 - Always anchors Hearthstone; Automatic mode adds Onyxia Scale Cloak, field services, pets and mounts, and profession tools at the same edge.
 - Lets each character switch to Selected mode and Ctrl-right-click up to 30 carried item types to place them directly beside Hearthstone. The manager has a visible `::` drag grip, source and drop-target feedback, Up/Down controls, remove, clear-all, and paging. Bank sorting stays unchanged.
 - Can instead lock every carried slot occupied by a selected item type. Locked slots and stacks stay fixed while all other slots sort around them; bank sorting stays unchanged.
-- Keeps the four Microbot world-buff scrolls next to each other in either sort mode and direction.
+- Keeps the four WoW world-buff scrolls next to each other in either sort mode and direction.
 - Sorts herbs and enchanting materials into their matching specialty bags while keeping incompatible profession reagents in normal bags.
 - Keeps quiver, ammo-pouch, and soul-bag items in compatible bags.
-- Shows quest and rarity borders, native cooldown sweeps with compact remaining-time labels, stack counts, money, and normal item tooltips.
+- Shows quest and rarity borders, optional blocked-recipe glows, native cooldown sweeps with compact remaining-time labels, stack counts, money, and normal item tooltips.
 - Marks items as junk and sells gray or marked junk through a guarded merchant queue.
 - Adds a bordered Sell Junk icon beside the merchant repair buttons.
 - Tracks gold across characters on the same account.
 - Tracks every carried and banked item across characters on the same account and shows the location totals in item tooltips.
 - Can hide same-account owned-item details while the player is in combat.
 - Refreshes carried items at login and on bag changes; bank snapshots refresh whenever each character opens the bank.
-- Lets each character choose 10–20 items per row and scale the inventory and bank windows from 65% to 100%, with automatic viewport fitting.
+- Lets each character choose 10–20 items per row, scale both windows from 65% to 100%, adjust background opacity, and choose the inventory and bank frame layer.
+- Can limit Category View to the bank while carried bags retain their standard grid, sorting and search.
+- Opens the combined inventory automatically when AUX opens.
 - Keeps valid inventory positions near the top and right screen edges after closing and reopening the bags.
 - Ships as one full suite: combined bags, sorting, and junk tools stay enabled together.
 - Reclaims the bag bar from other loaded bag replacements; running two bag UIs together is not supported.
 
 ## Download and install
 
-1. Download the ZIP from the [v0.8.0 release page](https://github.com/theShirina/shirs-inventory/releases/tag/v0.8.0).
+1. Download the ZIP from the [v0.8.2 release page](https://github.com/theShirina/shirs-inventory/releases/tag/v0.8.2).
 2. Extract the `ShirsInventory` folder into your client's `Interface/AddOns` folder.
 3. Restart the client.
 

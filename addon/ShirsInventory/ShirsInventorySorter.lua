@@ -439,7 +439,7 @@ function ShirsInventory_GetBagSortContainers()
 end
 
 function ShirsInventory_SortBags()
-  if ShirsInventory_GetCategoryMode and ShirsInventory_GetCategoryMode() then
+  if ShirsInventory_IsCategoryViewEnabled and ShirsInventory_IsCategoryViewEnabled(false) then
     Message("Bag sorting is unavailable in category view.")
     return false, "category-mode"
   end
