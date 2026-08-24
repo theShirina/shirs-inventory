@@ -2499,11 +2499,19 @@ local function ShirsInventory_OnItemEnter(button)
       itemName = info and info.name or nil
     end
     local mark = itemName and ShirsInventory_GetAccountKnownCraftTooltipLine(itemName) or nil
-    local lineCount = GameTooltip:NumLines()
+    local lineCount = type(GameTooltip.NumLines) == "function" and GameTooltip:NumLines() or 0
+    local rowLeft = function(row)
+      if type(getglobal) ~= "function" then return nil end
+      return getglobal("GameTooltipTextLeft" .. row)
+    end
+    local rowRight = function(row)
+      if type(getglobal) ~= "function" then return nil end
+      return getglobal("GameTooltipTextRight" .. row)
+    end
     local targetIndex = nil
     local rowIndex
     for rowIndex = 1, lineCount do
-      local left = GameTooltip["textLeft" .. rowIndex]
+      local left = rowLeft(rowIndex)
       if left and left.GetText then
         local text = left:GetText()
         if type(text) == "string" then
@@ -2514,28 +2522,18 @@ local function ShirsInventory_OnItemEnter(button)
         end
       end
     end
-    if mark and targetIndex and lineCount >= targetIndex then
+    if mark and targetIndex then
       local insertRow = targetIndex + 1
-      -- Grow: repurpose the last row's regions, then shift rows downward.
-      local last = GameTooltip["textLeft" .. lineCount]
-      local lastRight = GameTooltip["textRight" .. lineCount]
-      local newLeft, newRight
-      if last and last.SetText then
-        newLeft = last
-        newRight = lastRight
-      elseif GameTooltip.SetScript and CreateFrame then
-        -- Vanilla tooltip growth: AddLine on a fresh empty line extends it.
-        GameTooltip:AddLine(" ")
-        lineCount = GameTooltip:NumLines()
-        newLeft = GameTooltip["textLeft" .. lineCount]
-      end
-      if newLeft and newLeft.SetText then
+      -- Grow by one row, then shift rows downward from the bottom.
+      GameTooltip:AddLine(" ")
+      local grown = type(GameTooltip.NumLines) == "function" and GameTooltip:NumLines() or 0
+      if grown > lineCount then
         local shift
-        for shift = lineCount - 1, insertRow, -1 do
-          local srcL = GameTooltip["textLeft" .. shift]
-          local dstL = GameTooltip["textLeft" .. (shift + 1)]
-          local srcR = GameTooltip["textRight" .. shift]
-          local dstR = GameTooltip["textRight" .. (shift + 1)]
+        for shift = grown - 1, insertRow, -1 do
+          local srcL = rowLeft(shift)
+          local dstL = rowLeft(shift + 1)
+          local srcR = rowRight(shift)
+          local dstR = rowRight(shift + 1)
           if dstL and dstL.SetText then
             dstL:SetText(srcL and srcL.GetText and srcL:GetText() or nil)
             if dstL.SetTextColor and srcL and srcL.GetTextColor then
@@ -2551,8 +2549,8 @@ local function ShirsInventory_OnItemEnter(button)
             end
           end
         end
-        local vacatedL = GameTooltip["textLeft" .. insertRow]
-        local vacatedR = GameTooltip["textRight" .. insertRow]
+        local vacatedL = rowLeft(insertRow)
+        local vacatedR = rowRight(insertRow)
         if vacatedL and vacatedL.SetText then
           vacatedL:SetText(mark.text)
           if vacatedL.SetTextColor then
@@ -2562,7 +2560,9 @@ local function ShirsInventory_OnItemEnter(button)
         if vacatedR and vacatedR.SetText then
           vacatedR:SetText(nil)
         end
-        if GameTooltip.Show then GameTooltip:Show() end
+      else
+        -- Row growth failed; append at the bottom rather than lose the mark.
+        GameTooltip:AddLine(mark.text, mark.r, mark.g, mark.b)
       end
     end
   end
