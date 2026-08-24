@@ -2560,6 +2560,23 @@ local function ShirsInventory_OnItemEnter(button)
         if vacatedR and vacatedR.SetText then
           vacatedR:SetText(nil)
         end
+        -- Vanilla anchors each tooltip money frame to TextRight of the row
+        -- count at the time SetTooltipMoney ran. Rows below the requirement
+        -- moved down one, so repoint every money frame one row lower too.
+        if type(getglobal) == "function" then
+          local moneyIndex = 1
+          while true do
+            local candidate = moneyIndex == 1 and "GameTooltipMoneyFrame"
+              or "GameTooltipMoneyFrame" .. moneyIndex
+            local moneyFrame = getglobal(candidate)
+            if not moneyFrame or not moneyFrame.ClearAllPoints or not moneyFrame.SetPoint then
+              break
+            end
+            moneyFrame:ClearAllPoints()
+            moneyFrame:SetPoint("TOPLEFT", "GameTooltipTextRight" .. grown, "TOPRIGHT", 0, 0)
+            moneyIndex = moneyIndex + 1
+          end
+        end
       else
         -- Row growth failed; append at the bottom rather than lose the mark.
         GameTooltip:AddLine(mark.text, mark.r, mark.g, mark.b)
