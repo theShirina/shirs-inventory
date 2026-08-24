@@ -143,4 +143,38 @@ assert(not ShirsInventory_GetAccountKnownCraftTooltipLine(nil),
 assert(not ShirsInventory_GetAccountKnownCraftTooltipLine("Swiftness Potion"),
   "a non-recipe item name must not produce the tooltip line")
 
+-- Line placement: the account-known line must land directly under the
+-- profession requirement line instead of at the tooltip's bottom.
+local function makeLine(text)
+  return { text = text }
+end
+local sampleLines = {
+  makeLine("Pattern: Swiftness Potion"),
+  makeLine("Requires Alchemy (50)"),
+  makeLine("Use: Teaches you how to make a Swiftness Potion."),
+}
+local inserted = ShirsInventory_InsertKnownCraftIntoLines(sampleLines,
+  "Pattern: Swiftness Potion")
+assert(inserted and table.getn(inserted) == 4,
+  "the inserted line list must grow by exactly one line")
+assert(inserted[3].text == "Already known on this account",
+  "the account-known line must sit directly under the requirement line")
+assert(inserted[2].text == "Requires Alchemy (50)",
+  "the requirement line must stay above it")
+assert(inserted[4].text == "Use: Teaches you how to make a Swiftness Potion.",
+  "later lines must follow unchanged")
+
+local noRequirement = ShirsInventory_InsertKnownCraftIntoLines({
+  makeLine("Pattern: Swiftness Potion"),
+}, "Pattern: Swiftness Potion")
+assert(noRequirement[2].text == "Already known on this account",
+  "without a requirement line the mark falls back to the end")
+
+assert(ShirsInventory_InsertKnownCraftIntoLines(sampleLines,
+  "Pattern: Healing Potion") == nil,
+  "an unknown craft must leave the original list untouched")
+assert(ShirsInventory_InsertKnownCraftIntoLines(nil,
+  "Pattern: Green Silk Armor") == nil,
+  "missing lines must not crash placement")
+
 print("PROFESSION_BOOK_RECIPES_TEST=PASS")

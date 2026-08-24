@@ -1145,6 +1145,30 @@ function ShirsInventory_GetAccountKnownCraftTooltipLine(itemName)
   return { text = "Already known on this account", r = 0.3, g = 0.8, b = 1 }
 end
 
+function ShirsInventory_InsertKnownCraftIntoLines(lines, itemName)
+  local mark = ShirsInventory_GetAccountKnownCraftTooltipLine and
+    ShirsInventory_GetAccountKnownCraftTooltipLine(itemName) or nil
+  if not mark or type(lines) ~= "table" then return nil end
+  local out = {}
+  local inserted = false
+  local index
+  for index = 1, table.getn(lines) do
+    local line = lines[index]
+    table.insert(out, line)
+    if not inserted and type(line) == "table" and type(line.text) == "string" then
+      local word = string.gsub(line.text, "^Requires%s+(%a+).*", "%1")
+      if word ~= line.text and string.lower(word) ~= "level" then
+        table.insert(out, { text = mark.text, r = mark.r, g = mark.g, b = mark.b })
+        inserted = true
+      end
+    end
+  end
+  if not inserted then
+    table.insert(out, { text = mark.text, r = mark.r, g = mark.g, b = mark.b })
+  end
+  return out
+end
+
 function ShirsInventory_GetRecipeLearnStatusForSlot(bag, slot, itemType)
   if not ShirsInventory_IsRecipeItemType(itemType) then return nil end
   local link = type(GetContainerItemLink) == "function" and GetContainerItemLink(bag, slot) or nil
@@ -2464,17 +2488,50 @@ local function ShirsInventory_OnItemEnter(button)
   end
   ShirsInventory_SetItemTooltip(button)
   local itemId = ShirsInventory_GetItemId(GetContainerItemLink(button.bag, button.slot))
+  -- Rebuild the native tooltip portion so the account-known craft mark sits
+  -- directly under the profession requirement line instead of at the bottom.
+  if ShirsInventory_GetAccountKnownCraftTooltipLine and GameTooltip.NumLines then
+    local link = GetContainerItemLink(button.bag, button.slot)
+    local itemName
+    if ShirsInventory_GetItemInfoFields then
+      local info = ShirsInventory_GetItemInfoFields(link)
+      itemName = info and info.name or nil
+    end
+    if itemName and ShirsInventory_GetAccountKnownCraftTooltipLine(itemName) then
+      local captured = {}
+      local lineCount = GameTooltip:NumLines()
+      local lineIndex
+      for lineIndex = 1, lineCount do
+        local left = _G["GameTooltipTextLeft" .. lineIndex]
+        if left and left.GetText then
+          local text = left:GetText()
+          if text then
+            local r, g, b = left:GetTextColor()
+            table.insert(captured, { text = text, r = r, g = g, b = b })
+          end
+        end
+        local right = _G["GameTooltipTextRight" .. lineIndex]
+        if right and right.GetText then
+          local text = right:GetText()
+          if text then
+            local r, g, b = right:GetTextColor()
+            table.insert(captured, { text = text, r = r, g = g, b = b })
+          end
+        end
+      end
+      local rebuilt = ShirsInventory_InsertKnownCraftIntoLines(captured, itemName)
+      if rebuilt and GameTooltip.ClearLines then
+        GameTooltip:ClearLines()
+        local _, entry
+        for _, entry in ipairs(rebuilt) do
+          if GameTooltip.AddLine then
+            GameTooltip:AddLine(entry.text, entry.r, entry.g, entry.b)
+          end
+        end
+      end
+    end
+  end
   ShirsInventory_AddAccountItemTooltip(GameTooltip, itemId)
-  local itemName
-  if ShirsInventory_GetItemInfoFields then
-    local info = ShirsInventory_GetItemInfoFields(GetContainerItemLink(button.bag, button.slot))
-    itemName = info and info.name or nil
-  end
-  local knownCraftLine = ShirsInventory_GetAccountKnownCraftTooltipLine and
-    ShirsInventory_GetAccountKnownCraftTooltipLine(itemName) or nil
-  if knownCraftLine and GameTooltip.AddLine then
-    GameTooltip:AddLine(knownCraftLine.text, knownCraftLine.r, knownCraftLine.g, knownCraftLine.b)
-  end
   if ShirsInventory_GetCategoryEditMode and ShirsInventory_GetCategoryEditMode() then
     GameTooltip:AddLine("Drag onto a category heading to place this item type there", 0.4, 0.85, 1, true)
     if ShirsInventory_GetCategoryAssignment and ShirsInventory_GetCategoryAssignment(itemId) then
