@@ -1135,6 +1135,16 @@ function ShirsInventory_ResolveRecipeLearnStatus(localStatus, itemId, itemName)
   return localStatus
 end
 
+function ShirsInventory_GetAccountKnownCraftTooltipLine(itemName)
+  local craftName = ShirsInventory_RecipeItemCraftName and ShirsInventory_RecipeItemCraftName(itemName) or nil
+  if not craftName then return nil end
+  if type(ShirsInventory_AccountKnowsCraftName) ~= "function" or
+    not ShirsInventory_AccountKnowsCraftName(craftName) then
+    return nil
+  end
+  return { text = "Already known on this account", r = 0.3, g = 0.8, b = 1 }
+end
+
 function ShirsInventory_GetRecipeLearnStatusForSlot(bag, slot, itemType)
   if not ShirsInventory_IsRecipeItemType(itemType) then return nil end
   local link = type(GetContainerItemLink) == "function" and GetContainerItemLink(bag, slot) or nil
@@ -2455,6 +2465,16 @@ local function ShirsInventory_OnItemEnter(button)
   ShirsInventory_SetItemTooltip(button)
   local itemId = ShirsInventory_GetItemId(GetContainerItemLink(button.bag, button.slot))
   ShirsInventory_AddAccountItemTooltip(GameTooltip, itemId)
+  local itemName
+  if ShirsInventory_GetItemInfoFields then
+    local info = ShirsInventory_GetItemInfoFields(GetContainerItemLink(button.bag, button.slot))
+    itemName = info and info.name or nil
+  end
+  local knownCraftLine = ShirsInventory_GetAccountKnownCraftTooltipLine and
+    ShirsInventory_GetAccountKnownCraftTooltipLine(itemName) or nil
+  if knownCraftLine and GameTooltip.AddLine then
+    GameTooltip:AddLine(knownCraftLine.text, knownCraftLine.r, knownCraftLine.g, knownCraftLine.b)
+  end
   if ShirsInventory_GetCategoryEditMode and ShirsInventory_GetCategoryEditMode() then
     GameTooltip:AddLine("Drag onto a category heading to place this item type there", 0.4, 0.85, 1, true)
     if ShirsInventory_GetCategoryAssignment and ShirsInventory_GetCategoryAssignment(itemId) then

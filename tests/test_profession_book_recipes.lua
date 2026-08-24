@@ -128,4 +128,19 @@ assert(ShirsInventory_ResolveRecipeLearnStatus("already_known", 6452, "Recipe: P
 assert(ShirsInventory_ResolveRecipeLearnStatus(nil, 2555) == nil,
   "a learnable scroll without a name and without a stored recipe ID must stay unmarked")
 
+-- Tooltip line model: account-known crafts get an explicit informational line.
+assert(type(ShirsInventory_GetAccountKnownCraftTooltipLine) == "function",
+  "account-known craft tooltip-line helper is missing")
+local knownLine = ShirsInventory_GetAccountKnownCraftTooltipLine("Pattern: Swiftness Potion")
+assert(knownLine and knownLine.text == "Already known on this account",
+  "a scroll matching an account-known craft must produce the tooltip line")
+assert(knownLine.r == 0.3 and knownLine.g == 0.8 and knownLine.b == 1,
+  "the account-known craft line must use the account-info blue")
+assert(not ShirsInventory_GetAccountKnownCraftTooltipLine("Pattern: Healing Potion"),
+  "an unknown craft must not produce the tooltip line")
+assert(not ShirsInventory_GetAccountKnownCraftTooltipLine(nil),
+  "a missing name must not produce the tooltip line")
+assert(not ShirsInventory_GetAccountKnownCraftTooltipLine("Swiftness Potion"),
+  "a non-recipe item name must not produce the tooltip line")
+
 print("PROFESSION_BOOK_RECIPES_TEST=PASS")
