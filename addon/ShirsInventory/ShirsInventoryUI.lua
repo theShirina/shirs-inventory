@@ -2488,8 +2488,9 @@ local function ShirsInventory_OnItemEnter(button)
   end
   ShirsInventory_SetItemTooltip(button)
   local itemId = ShirsInventory_GetItemId(GetContainerItemLink(button.bag, button.slot))
-  -- Rebuild the native tooltip portion so the account-known craft mark sits
-  -- directly under the profession requirement line instead of at the bottom.
+  -- Nudge the account-known craft mark directly under the profession
+  -- requirement line by shifting existing FontStrings down one row and
+  -- reusing the freed region for the mark. Alignment and wrapping survive.
   if ShirsInventory_GetAccountKnownCraftTooltipLine and GameTooltip.NumLines then
     local link = GetContainerItemLink(button.bag, button.slot)
     local itemName
@@ -2497,32 +2498,71 @@ local function ShirsInventory_OnItemEnter(button)
       local info = ShirsInventory_GetItemInfoFields(link)
       itemName = info and info.name or nil
     end
-    if itemName and ShirsInventory_GetAccountKnownCraftTooltipLine(itemName) then
-      local captured = {}
-      local regions
-      if GameTooltip.GetRegions then regions = {GameTooltip:GetRegions()} end
-      local _, region
-      if regions then
-        for _, region in ipairs(regions) do
-          if region and region.GetObjectType and region.GetObjectType(region) == "FontString"
-            and region.GetText then
-            local text = region:GetText()
-            if text then
-              local r, g, b = region:GetTextColor()
-              table.insert(captured, { text = text, r = r, g = g, b = b })
-            end
+    local mark = itemName and ShirsInventory_GetAccountKnownCraftTooltipLine(itemName) or nil
+    local lineCount = GameTooltip:NumLines()
+    local targetIndex = nil
+    local rowIndex
+    for rowIndex = 1, lineCount do
+      local left = GameTooltip["textLeft" .. rowIndex]
+      if left and left.GetText then
+        local text = left:GetText()
+        if type(text) == "string" then
+          local word = string.gsub(text, "^Requires%s+(%a+).*", "%1")
+          if word ~= text and string.lower(word) ~= "level" then
+            targetIndex = rowIndex
           end
         end
       end
-      local rebuilt = ShirsInventory_InsertKnownCraftIntoLines(captured, itemName)
-      if rebuilt and GameTooltip.ClearLines then
-        GameTooltip:ClearLines()
-        local _, entry
-        for _, entry in ipairs(rebuilt) do
-          if GameTooltip.AddLine then
-            GameTooltip:AddLine(entry.text, entry.r, entry.g, entry.b)
+    end
+    if mark and targetIndex and lineCount >= targetIndex then
+      local insertRow = targetIndex + 1
+      -- Grow: repurpose the last row's regions, then shift rows downward.
+      local last = GameTooltip["textLeft" .. lineCount]
+      local lastRight = GameTooltip["textRight" .. lineCount]
+      local newLeft, newRight
+      if last and last.SetText then
+        newLeft = last
+        newRight = lastRight
+      elseif GameTooltip.SetScript and CreateFrame then
+        -- Vanilla tooltip growth: AddLine on a fresh empty line extends it.
+        GameTooltip:AddLine(" ")
+        lineCount = GameTooltip:NumLines()
+        newLeft = GameTooltip["textLeft" .. lineCount]
+      end
+      if newLeft and newLeft.SetText then
+        local shift
+        for shift = lineCount - 1, insertRow, -1 do
+          local srcL = GameTooltip["textLeft" .. shift]
+          local dstL = GameTooltip["textLeft" .. (shift + 1)]
+          local srcR = GameTooltip["textRight" .. shift]
+          local dstR = GameTooltip["textRight" .. (shift + 1)]
+          if dstL and dstL.SetText then
+            dstL:SetText(srcL and srcL.GetText and srcL:GetText() or nil)
+            if dstL.SetTextColor and srcL and srcL.GetTextColor then
+              local r, g, b = srcL:GetTextColor()
+              dstL:SetTextColor(r, g, b)
+            end
+          end
+          if dstR and dstR.SetText and srcR then
+            dstR:SetText(srcR.GetText and srcR:GetText() or nil)
+            if dstR.SetTextColor and srcR.GetTextColor then
+              local r, g, b = srcR:GetTextColor()
+              dstR:SetTextColor(r, g, b)
+            end
           end
         end
+        local vacatedL = GameTooltip["textLeft" .. insertRow]
+        local vacatedR = GameTooltip["textRight" .. insertRow]
+        if vacatedL and vacatedL.SetText then
+          vacatedL:SetText(mark.text)
+          if vacatedL.SetTextColor then
+            vacatedL:SetTextColor(mark.r, mark.g, mark.b)
+          end
+        end
+        if vacatedR and vacatedR.SetText then
+          vacatedR:SetText(nil)
+        end
+        if GameTooltip.Show then GameTooltip:Show() end
       end
     end
   end
