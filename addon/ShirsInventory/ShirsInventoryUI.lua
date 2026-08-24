@@ -2499,23 +2499,18 @@ local function ShirsInventory_OnItemEnter(button)
     end
     if itemName and ShirsInventory_GetAccountKnownCraftTooltipLine(itemName) then
       local captured = {}
-      local lineCount = GameTooltip:NumLines()
-      local lineIndex
-      for lineIndex = 1, lineCount do
-        local left = _G["GameTooltipTextLeft" .. lineIndex]
-        if left and left.GetText then
-          local text = left:GetText()
-          if text then
-            local r, g, b = left:GetTextColor()
-            table.insert(captured, { text = text, r = r, g = g, b = b })
-          end
-        end
-        local right = _G["GameTooltipTextRight" .. lineIndex]
-        if right and right.GetText then
-          local text = right:GetText()
-          if text then
-            local r, g, b = right:GetTextColor()
-            table.insert(captured, { text = text, r = r, g = g, b = b })
+      local regions
+      if GameTooltip.GetRegions then regions = {GameTooltip:GetRegions()} end
+      local _, region
+      if regions then
+        for _, region in ipairs(regions) do
+          if region and region.GetObjectType and region.GetObjectType(region) == "FontString"
+            and region.GetText then
+            local text = region:GetText()
+            if text then
+              local r, g, b = region:GetTextColor()
+              table.insert(captured, { text = text, r = r, g = g, b = b })
+            end
           end
         end
       end
