@@ -600,6 +600,40 @@ function ShirsInventory_ParseItemID(value)
   return nil
 end
 
+ShirsInventory_RecipeNamePrefixes = {
+  "recipe:",
+  "pattern:",
+  "formula:",
+  "plans:",
+  "schematic:",
+  "manual:",
+}
+
+function ShirsInventory_NormalizeCraftName(name)
+  if type(name) ~= "string" then return nil end
+  local trimmed = string.gsub(name, "^%s+", "")
+  trimmed = string.gsub(trimmed, "%s+$", "")
+  if trimmed == "" then return nil end
+  return string.lower(trimmed)
+end
+
+function ShirsInventory_RecipeItemCraftName(itemName)
+  local normalized = ShirsInventory_NormalizeCraftName(itemName)
+  if not normalized then return nil end
+  local prefixes = ShirsInventory_RecipeNamePrefixes
+  local index
+  for index = 1, table.getn(prefixes) do
+    local prefix = prefixes[index]
+    if string.sub(normalized, 1, string.len(prefix)) == prefix then
+      local remainder = string.sub(normalized, string.len(prefix) + 1)
+      remainder = string.gsub(remainder, "^%s+", "")
+      if remainder == "" then return nil end
+      return remainder
+    end
+  end
+  return nil
+end
+
 function ShirsInventory_GetAutomaticHearthstoneItems()
   return ShirsInventory_EnsureDB().automaticHearthstoneItems and true or false
 end
@@ -741,7 +775,7 @@ function ShirsInventory_LearnProfessionReagents(eventName)
   if not ShirsInventory_GetProfessionLearning() then return 0 end
 
   local getSkillLine, getNumSkills, getSkillInfo, getNumReagents, getReagentLink
-  if eventName == "CRAFT_SHOW" then
+  if eventName == "CRAFT_SHOW" or eventName == "CRAFT_UPDATE" then
     getSkillLine = GetCraftDisplaySkillLine
     getNumSkills = GetNumCrafts
     getSkillInfo = function(index)
@@ -792,11 +826,52 @@ function ShirsInventory_LearnProfessionReagents(eventName)
   return added
 end
 
+function ShirsInventory_LearnProfessionCrafts(eventName)
+  if not ShirsInventory_GetProfessionLearning() then return 0 end
+  if type(ShirsInventory_AccountRememberKnownCraft) ~= "function" then return 0 end
+
+  local getSkillLine, getNumSkills, getSkillInfo
+  if eventName == "CRAFT_SHOW" or eventName == "CRAFT_UPDATE" then
+    getSkillLine = GetCraftDisplaySkillLine
+    getNumSkills = GetNumCrafts
+    getSkillInfo = function(index)
+      local name, _, craftType = GetCraftInfo(index)
+      return name, craftType
+    end
+  else
+    getSkillLine = GetTradeSkillLine
+    getNumSkills = GetNumTradeSkills
+    getSkillInfo = GetTradeSkillInfo
+  end
+
+  if type(getSkillLine) ~= "function" or type(getNumSkills) ~= "function" or
+    type(getSkillInfo) ~= "function" then
+    return 0
+  end
+  if not ShirsInventory_GetProfessionCategory(getSkillLine()) then return 0 end
+
+  local added = 0
+  local skillIndex
+  local skillCount = tonumber(getNumSkills()) or 0
+  for skillIndex = 1, skillCount do
+    local skillName, skillType = getSkillInfo(skillIndex)
+    if skillName and skillType ~= "header" then
+      if ShirsInventory_AccountRememberKnownCraft(skillName) then
+        added = added + 1
+      end
+    end
+  end
+  if added > 0 and type(ShirsInventory_UpdateUI) == "function" then ShirsInventory_UpdateUI() end
+  return added
+end
+
 if CreateFrame then
   local professionLearner = CreateFrame("Frame", "ShirsInventoryProfessionLearner", UIParent)
   if professionLearner and professionLearner.RegisterEvent then
     professionLearner:RegisterEvent("TRADE_SKILL_SHOW")
     professionLearner:RegisterEvent("CRAFT_SHOW")
+    professionLearner:RegisterEvent("TRADE_SKILL_UPDATE")
+    professionLearner:RegisterEvent("CRAFT_UPDATE")
     professionLearner:Hide()
     local pendingEvent, elapsed = nil, 0
     professionLearner:SetScript("OnEvent", function()
@@ -810,7 +885,10 @@ if CreateFrame then
         professionLearner:Hide()
         local scanEvent = pendingEvent
         pendingEvent = nil
-        if scanEvent then ShirsInventory_LearnProfessionReagents(scanEvent) end
+        if scanEvent then
+          ShirsInventory_LearnProfessionReagents(scanEvent)
+          ShirsInventory_LearnProfessionCrafts(scanEvent)
+        end
       end
     end)
   end

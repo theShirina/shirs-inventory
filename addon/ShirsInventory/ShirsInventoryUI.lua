@@ -1113,7 +1113,7 @@ function ShirsInventory_CollectTooltipLines(bag, slot)
   return lines
 end
 
-function ShirsInventory_ResolveRecipeLearnStatus(localStatus, itemId)
+function ShirsInventory_ResolveRecipeLearnStatus(localStatus, itemId, itemName)
   if localStatus == "already_known" then
     if type(itemId) == "number" and type(ShirsInventory_AccountRememberKnownRecipe) == "function" then
       ShirsInventory_AccountRememberKnownRecipe(itemId)
@@ -1127,6 +1127,11 @@ function ShirsInventory_ResolveRecipeLearnStatus(localStatus, itemId)
     ShirsInventory_AccountKnowsRecipe(itemId) then
     return "already_known"
   end
+  local craftName = ShirsInventory_RecipeItemCraftName and ShirsInventory_RecipeItemCraftName(itemName) or nil
+  if craftName and type(ShirsInventory_AccountKnowsCraftName) == "function" and
+    ShirsInventory_AccountKnowsCraftName(craftName) then
+    return "already_known"
+  end
   return localStatus
 end
 
@@ -1134,8 +1139,9 @@ function ShirsInventory_GetRecipeLearnStatusForSlot(bag, slot, itemType)
   if not ShirsInventory_IsRecipeItemType(itemType) then return nil end
   local link = type(GetContainerItemLink) == "function" and GetContainerItemLink(bag, slot) or nil
   local itemId = type(ShirsInventory_GetItemId) == "function" and ShirsInventory_GetItemId(link) or nil
+  local info = ShirsInventory_GetItemInfoFields(link)
   local localStatus = ShirsInventory_GetRecipeLearnStatusFromLines(ShirsInventory_CollectTooltipLines(bag, slot))
-  return ShirsInventory_ResolveRecipeLearnStatus(localStatus, itemId)
+  return ShirsInventory_ResolveRecipeLearnStatus(localStatus, itemId, info and info.name or nil)
 end
 
 function ShirsInventory_GetClampedTopLeft(left, top, width, height, screenWidth, screenHeight,

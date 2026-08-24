@@ -32,6 +32,9 @@
 --     knownRecipes = {
 --       [6452] = true, -- recipe item IDs already learned on this account
 --     },
+--     knownCraftNames = {
+--       ["swiftness potion"] = true, -- names learned from an opened profession book
+--     },
 --   }
 --
 -- Gold refreshes on PLAYER_LOGIN and PLAYER_MONEY. Carried-item snapshots
@@ -58,6 +61,9 @@ function ShirsInventory_AccountEnsureDB()
   if type(ShirsInventoryAccountDB.knownRecipes) ~= "table" then
     ShirsInventoryAccountDB.knownRecipes = {}
   end
+  if type(ShirsInventoryAccountDB.knownCraftNames) ~= "table" then
+    ShirsInventoryAccountDB.knownCraftNames = {}
+  end
   return ShirsInventoryAccountDB
 end
 
@@ -74,6 +80,22 @@ function ShirsInventory_AccountKnowsRecipe(itemId)
   if type(itemId) ~= "number" or itemId <= 0 then return false end
   local db = ShirsInventory_AccountEnsureDB()
   return db.knownRecipes[itemId] == true
+end
+
+function ShirsInventory_AccountRememberKnownCraft(name)
+  local key = ShirsInventory_NormalizeCraftName and ShirsInventory_NormalizeCraftName(name) or nil
+  if not key then return false end
+  local db = ShirsInventory_AccountEnsureDB()
+  if db.knownCraftNames[key] == true then return false end
+  db.knownCraftNames[key] = true
+  return true
+end
+
+function ShirsInventory_AccountKnowsCraftName(name)
+  local key = ShirsInventory_NormalizeCraftName and ShirsInventory_NormalizeCraftName(name) or nil
+  if not key then return false end
+  local db = ShirsInventory_AccountEnsureDB()
+  return db.knownCraftNames[key] == true
 end
 
 -- The whole feature is gated on the full-suite bag UI option. Missing
