@@ -1169,6 +1169,26 @@ function ShirsInventory_InsertKnownCraftIntoLines(lines, itemName)
   return out
 end
 
+-- Return the row that should hold Item ID, the row directly below it for
+-- stock tooltip money, and whether the existing blank money row can be
+-- reused. ShirsLazyTrix adds Item ID after Vanilla has already added money.
+function ShirsInventory_GetTooltipMoneyPlacement(lines)
+  if type(lines) ~= "table" then return nil end
+  local index
+  for index = table.getn(lines), 1, -1 do
+    local text = lines[index]
+    if type(text) == "string" and string.find(text, "^Item ID:%s*%d+") then
+      local previous = lines[index - 1]
+      if index > 1 and (previous == nil or
+        (type(previous) == "string" and string.find(previous, "^%s*$"))) then
+        return index - 1, index, true
+      end
+      return index, index + 1, false
+    end
+  end
+  return nil
+end
+
 function ShirsInventory_GetRecipeLearnStatusForSlot(bag, slot, itemType)
   if not ShirsInventory_IsRecipeItemType(itemType) then return nil end
   local link = type(GetContainerItemLink) == "function" and GetContainerItemLink(bag, slot) or nil
@@ -2560,10 +2580,34 @@ local function ShirsInventory_OnItemEnter(button)
         if vacatedR and vacatedR.SetText then
           vacatedR:SetText(nil)
         end
-        -- Vanilla anchors each tooltip money frame to TextRight of the row
-        -- count at the time SetTooltipMoney ran. Rows below the requirement
-        -- moved down one, so repoint every money frame one row lower too.
+        -- Vanilla puts money 4px into TextLeft on its own blank row. LazyTrix
+        -- appends Item ID after that row, so move Item ID into the old money
+        -- row and reuse its former row for money directly underneath.
         if type(getglobal) == "function" then
+          local tooltipTexts = {}
+          local textIndex
+          for textIndex = 1, grown do
+            local textLine = rowLeft(textIndex)
+            tooltipTexts[textIndex] = textLine and textLine.GetText and textLine:GetText() or nil
+          end
+          local itemRow, moneyRow, reuseBlank = ShirsInventory_GetTooltipMoneyPlacement(tooltipTexts)
+          if itemRow and reuseBlank then
+            local sourceL = rowLeft(moneyRow)
+            local targetL = rowLeft(itemRow)
+            if sourceL and targetL and sourceL.GetText and targetL.SetText then
+              targetL:SetText(sourceL:GetText())
+              if targetL.SetTextColor and sourceL.GetTextColor then
+                local r, g, b = sourceL:GetTextColor()
+                targetL:SetTextColor(r, g, b)
+              end
+              sourceL:SetText(nil)
+            end
+          elseif itemRow and moneyRow > grown then
+            GameTooltip:AddLine(" ")
+            grown = type(GameTooltip.NumLines) == "function" and GameTooltip:NumLines() or moneyRow
+          else
+            moneyRow = grown
+          end
           local moneyIndex = 1
           while true do
             local candidate = moneyIndex == 1 and "GameTooltipMoneyFrame"
@@ -2573,7 +2617,7 @@ local function ShirsInventory_OnItemEnter(button)
               break
             end
             moneyFrame:ClearAllPoints()
-            moneyFrame:SetPoint("TOPLEFT", "GameTooltipTextRight" .. grown, "TOPRIGHT", 0, 0)
+            moneyFrame:SetPoint("LEFT", "GameTooltipTextLeft" .. moneyRow, "LEFT", 4, 0)
             moneyIndex = moneyIndex + 1
           end
         end

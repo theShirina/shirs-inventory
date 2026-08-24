@@ -177,4 +177,22 @@ assert(ShirsInventory_InsertKnownCraftIntoLines(nil,
   "Pattern: Green Silk Armor") == nil,
   "missing lines must not crash placement")
 
+assert(type(ShirsInventory_GetTooltipMoneyPlacement) == "function",
+  "tooltip money placement helper is missing")
+local itemRow, moneyRow, reuseBlank = ShirsInventory_GetTooltipMoneyPlacement({
+  "Requires Bolt of Silk Cloth (5)",
+  " ",
+  "Item ID: 7090",
+})
+assert(itemRow == 2 and moneyRow == 3 and reuseBlank == true,
+  "the Item ID must take the old money row and money must move directly below it")
+local plainItemRow, plainMoneyRow, plainReuse = ShirsInventory_GetTooltipMoneyPlacement({
+  "Requires Bolt of Silk Cloth (5)",
+  "Item ID: 7090",
+})
+assert(plainItemRow == 2 and plainMoneyRow == 3 and plainReuse == false,
+  "without a reusable blank row money must receive a new row below the Item ID")
+assert(ShirsInventory_GetTooltipMoneyPlacement({"Item ID card"}) == nil,
+  "only the exact Item ID tooltip prefix may trigger money relocation")
+
 print("PROFESSION_BOOK_RECIPES_TEST=PASS")
