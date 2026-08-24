@@ -116,21 +116,21 @@ if ShirsInventory_ClearHearthstoneItems() ~= 2 or ShirsInventory_GetHearthstoneI
 end
 
 local selectionIndex
-for selectionIndex = 1, 30 do
+for selectionIndex = 1, 50 do
   ok, status = ShirsInventory_SetHearthstoneItem(80000 + selectionIndex, true)
   if not ok or status ~= "added" then error("selected Hearthstone item limit rejected a valid entry") end
 end
 ok, status = ShirsInventory_SetHearthstoneItem(90000, true)
-if ok or status ~= "full" or ShirsInventory_GetHearthstoneItemCount() ~= 30 then
-  error("selected Hearthstone item limit did not stop at 30 entries")
+if ok or status ~= "full" or ShirsInventory_GetHearthstoneItemCount() ~= 50 then
+  error("selected Hearthstone item limit did not stop at 50 entries")
 end
 ShirsInventory_ClearHearthstoneItems()
 local oversizedSelection = {}
-for selectionIndex = 1, 35 do table.insert(oversizedSelection, 91000 + selectionIndex) end
+for selectionIndex = 1, 55 do table.insert(oversizedSelection, 91000 + selectionIndex) end
 ShirsInventoryDB.hearthstoneItems = oversizedSelection
 normalized = ShirsInventory_GetHearthstoneItems()
-if table.getn(normalized) ~= 30 or normalized[1] ~= 91001 or normalized[30] ~= 91030 then
-  error("oversized saved Hearthstone item list did not normalize to the first 30 valid IDs")
+if table.getn(normalized) ~= 50 or normalized[1] ~= 91001 or normalized[50] ~= 91050 then
+  error("oversized saved Hearthstone item list did not normalize to the first 50 valid IDs")
 end
 ShirsInventory_ClearHearthstoneItems()
 

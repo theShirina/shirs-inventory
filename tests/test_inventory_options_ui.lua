@@ -1506,21 +1506,24 @@ assert(table.concat(ShirsInventory_GetHearthstoneItems(), ",") == stableDragOrde
 ShirsInventory_ClearHearthstoneItems()
 ShirsInventory_RefreshHearthstoneItemsFrame()
 local pageItemIndex
-for pageItemIndex = 1, 30 do
+for pageItemIndex = 1, 50 do
   assert(ShirsInventory_SetHearthstoneItem(92000 + pageItemIndex, true),
-    "30-item manager paging setup rejected a valid selection")
+    "50-item manager paging setup rejected a valid selection")
 end
 ShirsInventory_RefreshHearthstoneItemsFrame()
-assert(builtManager.pageText.text == "Page 1 / 4" and builtManager.next.enabled,
-  "30 selected items did not produce four manager pages")
+assert(builtManager.pageText.text == "Page 1 / 7" and builtManager.next.enabled,
+  "50 selected items did not produce seven manager pages")
 this = builtManager.next
 builtManager.next.scripts.OnClick()
 builtManager.next.scripts.OnClick()
 builtManager.next.scripts.OnClick()
-assert(builtManager.pageText.text == "Page 4 / 4" and
-  builtManager.rows[1].itemID == 92025 and builtManager.rows[6].itemID == 92030 and
-  builtManager.rows[7].itemID == nil and not builtManager.next.enabled and builtManager.previous.enabled,
-  "the fourth selected-item manager page did not expose entries 25 through 30")
+builtManager.next.scripts.OnClick()
+builtManager.next.scripts.OnClick()
+builtManager.next.scripts.OnClick()
+assert(builtManager.pageText.text == "Page 7 / 7" and
+  builtManager.rows[1].itemID == 92049 and builtManager.rows[2].itemID == 92050 and
+  builtManager.rows[3].itemID == nil and not builtManager.next.enabled and builtManager.previous.enabled,
+  "the seventh selected-item manager page did not expose entries 49 and 50")
 ShirsInventory_ClearHearthstoneItems()
 ShirsInventory_RefreshHearthstoneItemsFrame()
 this = constructorThis

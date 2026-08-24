@@ -1535,7 +1535,7 @@ function ShirsInventory_HandleItemClick(button, mouseButton, ignoreModifiers)
     elseif status == "fixed" then
       ShirsInventory_Message("Hearthstone is always fixed at the selected edge.")
     elseif status == "full" then
-      ShirsInventory_Message("The selected item list is full (30).")
+      ShirsInventory_Message("The selected item list is full (50).")
     elseif not ok then
       ShirsInventory_Message("This item could not be added to the selected list.")
     end
@@ -4531,7 +4531,7 @@ function ShirsInventory_HandleSlashCommand(message)
     elseif status == "fixed" then
       ShirsInventory_Message("Hearthstone is always fixed at the selected edge.")
     elseif status == "full" then
-      ShirsInventory_Message("The selected item list is full (30).")
+      ShirsInventory_Message("The selected item list is full (50).")
     else
       ShirsInventory_Message("Use /si " .. command .. " <item ID or item link>.")
     end
