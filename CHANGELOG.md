@@ -1,4 +1,4 @@
-# Change log
+# Changelog
 
 ## 0.8.3
 
