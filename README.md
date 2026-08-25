@@ -11,8 +11,6 @@ Current release: **0.8.3**.
 - Opening a profession book now records its learned crafts account-wide. Matching recipe items on other characters show **Already known on this account** beneath the profession requirement.
 - The selected-item list now supports up to 50 carried item types instead of 30.
 
-Live testing covered the profession-book tracking, cross-character recipe tooltip, stock money-line placement, and expanded selected-item list on a WoW 1.12 client.
-
 [Download v0.8.3](https://github.com/theShirina/shirs-inventory/releases/tag/v0.8.3)
 
 ## What's new in 0.8.2
@@ -24,8 +22,6 @@ Live testing covered the profession-book tracking, cross-character recipe toolti
 - A separate option hides the blue **Already known** and orange **Skill too low** recipe glows without hiding ordinary rarity or quest borders.
 - Inventory and bank windows have live background-opacity and frame-layer controls.
 - Category View can be limited to the bank while carried bags keep their standard view, sorting and search behaviour.
-
-Live testing covered AUX and stock Auction House search, AUX inventory opening, the new appearance controls, and bank-only Category View on a WoW 1.12 client. Other clients have not been tested; please report issues on GitHub.
 
 [Download v0.8.2](https://github.com/theShirina/shirs-inventory/releases/tag/v0.8.2)
 
