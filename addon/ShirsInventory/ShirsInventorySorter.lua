@@ -248,7 +248,7 @@ local function ReadItem(container, position, count)
   local maxStack
   local inventoryType
   if type(itemInfo[5]) == "string" then
-    -- Vanilla/Microbot nine-value signature omits the required-level field.
+    -- Vanilla/WoW nine-value signature omits the required-level field.
     itemType = itemInfo[5]
     itemSubType = itemInfo[6]
     maxStack = itemInfo[7]

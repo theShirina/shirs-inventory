@@ -8,12 +8,12 @@
     {
       "sha256": "835bd082142548180d9bbf777a338b0d26a827b17e4b961b8e90f5b312974e0f",
       "family_records": 64,
-      "source": "isolated Microbot itemcache.wdb"
+      "source": "isolated WoW itemcache.wdb"
     },
     {
       "sha256": "07d3232979b2b47462f2526e8be5731756688b9595956204487089f8cb2dac1e",
       "family_records": 78,
-      "source": "main Microbot itemcache.wdb"
+      "source": "main WoW itemcache.wdb"
     }
   ],
   "counts": {
@@ -312,6 +312,6 @@
     "repository": "https://github.com/nexus-devs/wow-classic-items",
     "commit": "8339771805564c6de7850ff9428be8e841f69622",
     "license": "MIT",
-    "note": "Standard gathered herbs and enchanting materials corroborated; exact Vanilla/Microbot bag-family compatibility comes from pinned WDB/CMaNGOS evidence."
+    "note": "Standard gathered herbs and enchanting materials corroborated; exact Vanilla/WoW bag-family compatibility comes from pinned WDB/CMaNGOS evidence."
   }
 }

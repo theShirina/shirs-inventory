@@ -113,7 +113,7 @@ function GetItemInfo(itemID)
     return "Item " .. itemID, "link", quality, 1, 1, "Weapon", "One-Handed Swords", 1, "One-Hand"
   end
   if itemID == 2454 then
-    -- This Vanilla/Microbot client exposes the nine-value 1.12 signature:
+    -- This Vanilla/WoW client exposes the nine-value 1.12 signature:
     -- name, link, rarity, level, type, subtype, maxStack, equipLoc, texture.
     return "Elixir of Lion's Strength", "link", 1, 1, "Consumable", "Consumable", 5, "", "texture"
   end
@@ -200,7 +200,7 @@ assert(ShirsInventory_GetSpecialtyItemClass(10940, "Strange Dust", "Trade Goods"
 assert(ShirsInventory_GetSpecialtyItemClass(2447, "Peacebloom", "Trade Goods", "Trade Goods") == "herb",
   "BagFamily 6 herb was not recognized from its item ID")
 assert(ShirsInventory_GetSpecialtyItemClass(5173, "Deathweed", "Trade Goods", "Trade Goods") == "herb",
-  "Microbot cache-only herb was not recognized")
+  "WoW cache-only herb was not recognized")
 assert(ShirsInventory_GetSpecialtyItemClass(20725, "Nexus Crystal", "Trade Goods", "Trade Goods") == "enchanting",
   "Nexus Crystal was not recognized as an enchanting material")
 assert(ShirsInventory_GetSpecialtyItemClass(3371, "Empty Vial", "Trade Goods", "Trade Goods") == nil,
@@ -231,9 +231,9 @@ assert(ShirsInventory_IsPetOrMountItem("Miscellaneous", "Companion Pet", nil),
 assert(ShirsInventory_IsPetOrMountItem("Miscellaneous", "Mount", nil),
   "mount subtype was not recognized")
 assert(ShirsInventory_IsPetOrMountItem("Miscellaneous", "Custom", "Summon Tiny Dragon"),
-  "Microbot custom summon spell was not recognized as a pet")
+  "WoW custom summon spell was not recognized as a pet")
 assert(ShirsInventory_IsPetOrMountTooltipText("Use: Summons and dismisses your companion."),
-  "Microbot custom companion tooltip was not recognized")
+  "WoW custom companion tooltip was not recognized")
 assert(ShirsInventory_IsPetOrMountTooltipText("Use: Teaches you how to summon this mount."),
   "mount tooltip was not recognized")
 assert(ShirsInventory_IsPetOrMountTooltipText("Use: Summons and dismisses a rideable Dire Wolf."),
@@ -245,13 +245,13 @@ assert(ShirsInventory_GetEdgeAnchorRank(
 assert(not ShirsInventory_IsPetOrMountTooltipText("Use: Summons a temporary guardian."),
   "unrelated summon tooltip became a pet or mount")
 assert(ShirsInventory_IsPetOrMountItem("Miscellaneous", "Custom", nil, true),
-  "Microbot custom pet tooltip flag was ignored")
+  "WoW custom pet tooltip flag was ignored")
 assert(not ShirsInventory_IsPetOrMountItem("Weapon", "Sword", "Summon Tiny Dragon", true),
   "non-miscellaneous summon item became a pet anchor")
 assert(ShirsInventory_GetEdgeAnchorRank(90001, "Tiny Dragon", "Miscellaneous", "Custom", "Summon Tiny Dragon") == 3,
-  "Microbot custom pet was not grouped directly with mounts")
+  "WoW custom pet was not grouped directly with mounts")
 assert(ShirsInventory_GetEdgeAnchorRank(90002, "Clockwork Friend", "Miscellaneous", "Custom", nil, true) == 3,
-  "tooltip-only Microbot custom pet was not grouped directly with mounts")
+  "tooltip-only WoW custom pet was not grouped directly with mounts")
 assert(ShirsInventory_GetEdgeAnchorRank(6218) == 4, "Runed Copper Rod was not classified as a profession tool")
 assert(ShirsInventory_GetEdgeAnchorRank(15846) == 4, "Salt Shaker was not classified as a profession tool")
 assert(ShirsInventory_GetEdgeAnchorRank(9149) == 4, "Philosopher's Stone was not classified as a profession tool")
@@ -260,11 +260,11 @@ assert(ShirsInventory_GetEdgeAnchorRank(19727, "Blood Scythe", "Trade Goods", "H
 assert(ShirsInventory_GetEdgeAnchorRank(19022, "Nat Pagle's Extreme Angler FC-5000", "Weapon", "Fishing Pole") == 4,
   "fishing-pole subtype was not classified as a profession tool")
 assert(ShirsInventory_GetEdgeAnchorRank(3567, "Dwarven Fishing Pole", "Weapon", "Two-Handed Axes") == 4,
-  "Microbot fishing-pole name fallback was not classified as a profession tool")
+  "WoW fishing-pole name fallback was not classified as a profession tool")
 assert(ShirsInventory_GetEdgeAnchorRank(26471, "Apprentice Mining Pick", "Weapon", "Miscellaneous") == 4,
-  "Microbot apprentice mining pick was not classified as a profession tool")
+  "WoW apprentice mining pick was not classified as a profession tool")
 assert(ShirsInventory_GetEdgeAnchorRank(26474, "Artisan Mining Pick", "Weapon", "Miscellaneous") == 4,
-  "Microbot artisan mining pick was not classified as a profession tool")
+  "WoW artisan mining pick was not classified as a profession tool")
 assert(ShirsInventory_GetAdjacencyGroup(26085) == "world-buff-scrolls" and
   ShirsInventory_GetAdjacencyGroup(26086) == "world-buff-scrolls" and
   ShirsInventory_GetAdjacencyGroup(26087) == "world-buff-scrolls" and
@@ -328,7 +328,7 @@ assert(not ShirsInventory_IsQuestBorderItem("Weapon", 1),
 equippedBagLink = "|cffffffff|Hitem:2101:0:0:0|h[Light Quiver]|h|r"
 local originalGetItemInfo = GetItemInfo
 GetItemInfo = function(query)
-  -- Microbot does not resolve a colored hyperlink passed directly to
+  -- WoW does not resolve a colored hyperlink passed directly to
   -- GetItemInfo. The adapter must extract the item ID first.
   if query == 2101 then
     return "Light Quiver", equippedBagLink, 1, 1, "Quiver", "Quiver", 6, "INVTYPE_BAG", "texture"
@@ -430,7 +430,7 @@ end
 ShirsInventory_MoveCursorItem = pacingOriginalMoveCursorItem
 GetContainerItemInfo = pacingOriginalGetContainerItemInfo
 
--- Microbot may accept cursor transactions while its bag APIs keep exposing the
+-- WoW may accept cursor transactions while its bag APIs keep exposing the
 -- pre-move state until the Lua callback returns. Independent swaps must still
 -- share a bounded frame burst; dependent moves that reuse an unacknowledged
 -- endpoint must wait for the next exact full-state acknowledgement.
@@ -731,7 +731,7 @@ bags[BANK_CONTAINER] = nil
 ShirsInventory_ClearHearthstoneItems()
 
 -- Full movement regression with the exact generic item metadata exposed by
--- Microbot. Item IDs must carry specialty compatibility, just as Projectile
+-- WoW. Item IDs must carry specialty compatibility, just as Projectile
 -- subtype carries arrow/quiver compatibility. A normal reagent must stay out.
 slotCount = 3
 slotCounts[1] = 2
