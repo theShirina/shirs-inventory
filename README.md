@@ -78,7 +78,6 @@ Current release: **0.8.3**.
 
 - Category View keeps the window at your chosen scale instead of shrinking when the packed shelves are taller than the screen, and gains a vertical scrollbar plus mouse-wheel scrolling for tall layouts.
 - Expanding or collapsing Empty Slots no longer changes the rendered size, only the scroll range.
-- Live testing covered the scrollbar and wheel with the current inventory; the full overflow range could not be exercised with the items on hand. Please report any issues on GitHub or Discord.
 
 ## What it does
 
