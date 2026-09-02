@@ -4,8 +4,8 @@
 
 ### Added
 
-- Opening a profession book now records its learned crafts account-wide, allowing matching recipe items on other characters to show **Already known on this account**
-- The selected-item list now supports up to 50 item types instead of 30
+- Opening a profession book now records its learned crafts account-wide, allowing matching recipe items on other characters to show **Already known on this account**.
+- The selected-item list now supports up to 50 item types instead of 30.
 
 ## 0.8.2
 

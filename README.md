@@ -100,7 +100,7 @@ Current release: **0.8.3**.
 - Can submit pairwise-disjoint cursor moves in a repeating `4, 4, 4, 3` safety cycle. Each later move needs fresh identity, count, and lock checks on its own untouched endpoints; dependent moves wait for the prior burst's combined exact bag signature with a 0.01-second minimum check interval.
 - Keeps quest-bordered items at the opposite end of the occupied sorted block by default, with conjured items directly outside them.
 - Always anchors Hearthstone; Automatic mode adds Onyxia Scale Cloak, field services, pets and mounts, and profession tools at the same edge.
-- Lets each character switch to Selected mode and Ctrl-right-click up to 50 carried item types to place them directly beside Hearthstone. The manager has a visible `::` drag grip, source and drop-target feedback, Up/Down controls, remove, clear-all, and paging. Bank sorting stays unchanged.
+- Lets each character switch to Selected mode and Ctrl-right-click up to 50 carried item types to place them directly beside Hearthstone. The manager has a visible `::` drag grip, source and drop-target feedback, Top/Bottom controls, remove, clear-all, and paging. Bank sorting stays unchanged.
 - Can instead lock every carried slot occupied by a selected item type. Locked slots and stacks stay fixed while all other slots sort around them; bank sorting stays unchanged.
 - Keeps the four WoW world-buff scrolls next to each other in either sort mode and direction.
 - Sorts herbs and enchanting materials into their matching specialty bags while keeping incompatible profession reagents in normal bags.
