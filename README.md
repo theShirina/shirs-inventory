@@ -2,7 +2,15 @@
 
 A standalone bag addon for WoW 1.12 clients.
 
-Current release: **0.8.3**.
+Current release: **0.8.4**.
+
+## What's new in 0.8.4
+
+### Fixed
+
+- Holding Shift while a banker dialogue is open now leaves the standard dialogue available instead of selecting the deposit-box option automatically.
+
+[Download v0.8.4](https://github.com/theShirina/shirs-inventory/releases/tag/v0.8.4)
 
 ## What's new in 0.8.3
 
@@ -121,7 +129,7 @@ Current release: **0.8.3**.
 
 ## Download and install
 
-1. Download the ZIP from the [v0.8.3 release page](https://github.com/theShirina/shirs-inventory/releases/tag/v0.8.3).
+1. Download the ZIP from the [v0.8.4 release page](https://github.com/theShirina/shirs-inventory/releases/tag/v0.8.4).
 2. Extract the `ShirsInventory` folder into your client's `Interface/AddOns` folder.
 3. Restart the client.
 

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.8.4
+
+### Fixed
+
+- Holding Shift while a banker dialogue is open now leaves the standard dialogue available instead of selecting the deposit-box option automatically.
+
 ## 0.8.3
 
 ### Added

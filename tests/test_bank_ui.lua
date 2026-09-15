@@ -175,6 +175,19 @@ assert(not bankRangeButtons[2].bagRangeHighlight.visible and not bankRangeButton
   "bank bag slot highlights remained after hover ended")
 
 local selectedGossip
+local gossipOptionCalls, gossipSelectionCalls = 0, 0
+GetGossipOptions = function()
+  gossipOptionCalls = gossipOptionCalls + 1
+  return "I would like to check my deposit box.", "banker"
+end
+SelectGossipOption = function() gossipSelectionCalls = gossipSelectionCalls + 1 end
+IsShiftKeyDown = function() return true end
+assert(not ShirsInventory_HandleBankEvent("GOSSIP_SHOW", frame),
+  "Shift-held banker gossip should remain available for manual interaction")
+assert(gossipOptionCalls == 0, "Shift-held banker gossip queried the automatic option path")
+assert(gossipSelectionCalls == 0, "Shift-held banker gossip selected an option automatically")
+
+IsShiftKeyDown = function() return false end
 GetGossipOptions = function()
   return "Browse your goods", "vendor", "I would like to check my deposit box.", "banker"
 end
