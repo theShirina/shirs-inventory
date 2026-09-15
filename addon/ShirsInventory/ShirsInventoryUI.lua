@@ -3976,6 +3976,7 @@ function ShirsInventory_IsDepositBoxGossipOption(optionText, optionType)
 end
 
 function ShirsInventory_TryOpenBankFromGossip()
+  if IsShiftKeyDown and IsShiftKeyDown() then return false end
   if type(GetGossipOptions) ~= "function" or type(SelectGossipOption) ~= "function" then
     return false
   end
