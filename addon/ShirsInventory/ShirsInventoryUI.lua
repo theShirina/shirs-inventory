@@ -1483,6 +1483,59 @@ function ShirsInventory_RouteShiftClickSearch(bag, slot, link)
   return false
 end
 
+-- Guild vault click routing (Microbot client, Data/patch-3.mpq).
+-- Microbot's patched Interface\FrameXML\FrameXML.toc loads GuildBankFrame.xml, which loads
+-- GuildBankVault.lua. That file replaces ContainerFrameItemButton_OnClick with
+-- GuildVault_ContainerClick and owns two click paths on the stock bag buttons: a plain right-click
+-- deposits the carried item ("DEP"), and a plain left-click places a vault item the player has
+-- withdrawn ("WDR") into the clicked bag slot. Shir's Inventory hides the native container frames
+-- and runs its own item buttons, so those clicks never reach that wrapper. Forward only the clicks
+-- the wrapper would act on itself; every other click keeps the addon's behaviour, and a client
+-- without the vault never enters this path.
+function ShirsInventory_GuildVaultClickHandler()
+  if type(getglobal) ~= "function" then return nil end
+  local frame = getglobal("GuildBankFrame")
+  local state = getglobal("GuildVault")
+  local mode = getglobal("GuildVault_Mode")
+  local handler = getglobal("GuildVault_ContainerClick")
+  local original = getglobal("GuildVault_OriginalContainerClick")
+  if type(frame) ~= "table" or type(frame.IsVisible) ~= "function" then return nil end
+  if type(state) ~= "table" then return nil end
+  if type(mode) ~= "function" or type(handler) ~= "function" then return nil end
+  if type(original) ~= "function" then return nil end
+  if not frame:IsVisible() then return nil end
+  if mode() ~= "bank" then return nil end
+  return handler, state
+end
+
+-- The vault wrapper reads the bag from this:GetParent():GetID() and the slot from this:GetID(),
+-- while a Shir's item button carries the bag on the button itself. Supply exactly those two reads.
+function ShirsInventory_GuildVaultClickFrame(bag, slot)
+  local parent = { GetID = function() return bag end }
+  return { GetID = function() return slot end, GetParent = function() return parent end }
+end
+
+-- Returns the vault handler when the vault would act on this click itself, or nil when the click
+-- must keep the addon's own behaviour.
+function ShirsInventory_GuildVaultClaimClick(mouseButton, ignoreModifiers, bag)
+  if type(bag) ~= "number" or bag < 0 or bag > 4 then return nil end
+  local handler, state = ShirsInventory_GuildVaultClickHandler()
+  if not handler then return nil end
+  local shifted = type(IsShiftKeyDown) == "function" and IsShiftKeyDown()
+  local controlled = type(IsControlKeyDown) == "function" and IsControlKeyDown()
+  if not ignoreModifiers and (shifted or controlled) then return nil end
+  if state.held then
+    return handler, state
+  end
+  if mouseButton == "RightButton" then
+    if type(CursorHasItem) ~= "function" or CursorHasItem() then return nil end
+    -- Keep Alt+right-click as the addon's junk marking even though the stock path would deposit.
+    if type(IsAltKeyDown) == "function" and IsAltKeyDown() then return nil end
+    return handler, state
+  end
+  return nil
+end
+
 function ShirsInventory_HandleItemClick(button, mouseButton, ignoreModifiers)
   local bag, slot = button.bag, button.slot
   local keyring = ShirsInventory_GetKeyRingContainerID and ShirsInventory_GetKeyRingContainerID() or (KEYRING_CONTAINER or -2)
@@ -1507,6 +1560,14 @@ function ShirsInventory_HandleItemClick(button, mouseButton, ignoreModifiers)
     if mouseButton == "LeftButton" then
       return ShirsInventory_BeginCategoryEditDrag and ShirsInventory_BeginCategoryEditDrag(itemID) or false
     end
+    return true
+  end
+  local vaultHandler = ShirsInventory_GuildVaultClaimClick(mouseButton, ignoreModifiers, bag)
+  if vaultHandler then
+    local forwardedThis = this
+    this = ShirsInventory_GuildVaultClickFrame(bag, slot)
+    pcall(vaultHandler, mouseButton, ignoreModifiers)
+    this = forwardedThis
     return true
   end
   if not texture then
