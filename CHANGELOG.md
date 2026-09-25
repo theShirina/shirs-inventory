@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.8.5
+
+### Fixed
+
+- Right-clicking a bag item while the guild vault is open now deposits it into the open vault tab.
+- A vault item you withdraw can now be placed into a bag slot by left-clicking that slot or dragging the item onto it.
+
+Alt+right-click junk marking and Ctrl+right-click pinning do not apply to slots inside the guild vault. That is intended: the vault uses the client's own click handling for its slots. Both clicks still work on your bags.
+
 ## 0.8.4
 
 ### Fixed

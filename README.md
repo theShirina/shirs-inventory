@@ -2,7 +2,18 @@
 
 A standalone bag addon for WoW 1.12 clients.
 
-Current release: **0.8.4**.
+Current release: **0.8.5**.
+
+## What's new in 0.8.5
+
+### Fixed
+
+- Right-clicking a bag item while the guild vault is open now deposits it into the open vault tab.
+- A vault item you withdraw can now be placed into a bag slot by left-clicking that slot or dragging the item onto it.
+
+Alt+right-click junk marking and Ctrl+right-click pinning do not apply to slots inside the guild vault. That is intended: the vault uses the client's own click handling for its slots. Both clicks still work on your bags.
+
+[Download v0.8.5](https://github.com/theShirina/shirs-inventory/releases/tag/v0.8.5)
 
 ## What's new in 0.8.4
 
@@ -129,7 +140,7 @@ Current release: **0.8.4**.
 
 ## Download and install
 
-1. Download the ZIP from the [v0.8.4 release page](https://github.com/theShirina/shirs-inventory/releases/tag/v0.8.4).
+1. Download the ZIP from the [v0.8.5 release page](https://github.com/theShirina/shirs-inventory/releases/tag/v0.8.5).
 2. Extract the `ShirsInventory` folder into your client's `Interface/AddOns` folder.
 3. Restart the client.
 
