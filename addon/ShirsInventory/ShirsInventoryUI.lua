@@ -1517,7 +1517,7 @@ end
 
 -- Returns the vault handler when the vault would act on this click itself, or nil when the click
 -- must keep the addon's own behaviour.
-function ShirsInventory_GuildVaultClaimClick(mouseButton, ignoreModifiers, bag)
+function ShirsInventory_GuildVaultClaimClick(mouseButton, ignoreModifiers, bag, dropped)
   if type(bag) ~= "number" or bag < 0 or bag > 4 then return nil end
   local handler, state = ShirsInventory_GuildVaultClickHandler()
   if not handler then return nil end
@@ -1525,6 +1525,9 @@ function ShirsInventory_GuildVaultClaimClick(mouseButton, ignoreModifiers, bag)
   local controlled = type(IsControlKeyDown) == "function" and IsControlKeyDown()
   if not ignoreModifiers and (shifted or controlled) then return nil end
   if state.held then
+    -- A left-click or a drop places the withdrawn item; starting a drag on a bag item must keep the
+    -- addon's own pickup path so the vault's held item is not spent on it.
+    if mouseButton == "LeftButton" and ignoreModifiers and not dropped then return nil end
     return handler, state
   end
   if mouseButton == "RightButton" then
@@ -1536,7 +1539,7 @@ function ShirsInventory_GuildVaultClaimClick(mouseButton, ignoreModifiers, bag)
   return nil
 end
 
-function ShirsInventory_HandleItemClick(button, mouseButton, ignoreModifiers)
+function ShirsInventory_HandleItemClick(button, mouseButton, ignoreModifiers, dropped)
   local bag, slot = button.bag, button.slot
   local keyring = ShirsInventory_GetKeyRingContainerID and ShirsInventory_GetKeyRingContainerID() or (KEYRING_CONTAINER or -2)
   if bag == keyring then
@@ -1562,7 +1565,7 @@ function ShirsInventory_HandleItemClick(button, mouseButton, ignoreModifiers)
     end
     return true
   end
-  local vaultHandler = ShirsInventory_GuildVaultClaimClick(mouseButton, ignoreModifiers, bag)
+  local vaultHandler = ShirsInventory_GuildVaultClaimClick(mouseButton, ignoreModifiers, bag, dropped)
   if vaultHandler then
     local forwardedThis = this
     this = ShirsInventory_GuildVaultClickFrame(bag, slot)
@@ -2825,10 +2828,10 @@ local function ShirsInventory_CreateItemButton(index, ownerFrame, namePrefix, co
     end
   end)
   button:SetScript("OnReceiveDrag", function()
-    if not (ShirsInventory_GetCategoryEditMode and ShirsInventory_GetCategoryEditMode()) then
-      ShirsInventory_HandleItemClick(this, "LeftButton", true)
-    end
-  end)
+      if not (ShirsInventory_GetCategoryEditMode and ShirsInventory_GetCategoryEditMode()) then
+        ShirsInventory_HandleItemClick(this, "LeftButton", true, true)
+      end
+    end)
   button:SetScript("OnEnter", function() ShirsInventory_OnItemEnter(this) end)
   button:SetScript("OnLeave", function()
     GameTooltip:Hide()
