@@ -190,6 +190,26 @@ assert(ShirsInventory_HandleItemClick(button, "LeftButton") and
 assert(GuildVault.held == nil, "placing into an empty slot must clear the vault held state")
 itemPresent = true
 
+-- Starting a drag on a bag item while a vault item is withdrawn must keep the addon's pickup path.
+resetCounters()
+GuildVault.held = { tab = 3, slot = 1, count = 0, seen = "seen-1" }
+used, picked = 0, 0
+assert(ShirsInventory_HandleItemClick(button, "LeftButton", true) and forwardCalls == 0 and picked == 1,
+  "starting a drag on a bag item must not spend the withdrawn vault item")
+assert(GuildVault.held ~= nil, "starting a drag must leave the vault held state untouched")
+GuildVault.held = nil
+
+-- Dropping onto a bag slot places the withdrawn vault item there.
+resetCounters()
+GuildVault.held = { tab = 3, slot = 1, count = 0, seen = "seen-1" }
+used, picked = 0, 0
+button.bag, button.slot = 1, 5
+assert(ShirsInventory_HandleItemClick(button, "LeftButton", true, true) and
+  sent[1] == "WDR 3 1 0 1 5 seen-1",
+  "dropping a withdrawn vault item onto a bag slot did not reach the vault")
+assert(picked == 0, "placing a withdrawn item by drop must not also pick up the bag item")
+button.bag, button.slot = 0, 1
+
 -- Shift or Ctrl held must never deposit or place; the addon keeps its own meaning.
 resetCounters()
 used, picked = 0, 0
